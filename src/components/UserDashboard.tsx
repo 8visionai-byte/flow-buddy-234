@@ -13,7 +13,8 @@ const UserDashboard = () => {
 
   if (!currentUser) return null;
 
-  const myTasks = tasks.filter(t => t.assignedRole === currentUser.role && t.status !== 'locked');
+  const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
+  const myTasks = tasks.filter(t => t.assignedRole === currentUser.role && t.status !== 'locked' && activeProjectIds.includes(t.projectId));
   const todoTasks = myTasks.filter(t => t.status === 'todo');
   const doneTasks = myTasks.filter(t => t.status === 'done');
   const selectedTask = myTasks.find(t => t.id === selectedTaskId);
