@@ -13,7 +13,14 @@ const UserDashboard = () => {
 
   if (!currentUser) return null;
 
-  const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
+  const activeProjectIds = projects.filter(p => {
+    if (p.status !== 'active') return false;
+    // Non-admin roles only see projects they're assigned to
+    if (currentUser.role === 'influencer') return p.assignedInfluencerId === currentUser.id;
+    if (currentUser.role === 'montazysta') return p.assignedEditorId === currentUser.id;
+    if (currentUser.role === 'klient') return p.assignedClientId === currentUser.id;
+    return true;
+  }).map(p => p.id);
   const myTasks = tasks.filter(t => {
     if (!activeProjectIds.includes(t.projectId)) return false;
     // Check if current user's role is in the assignedRoles array

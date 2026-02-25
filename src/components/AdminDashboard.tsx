@@ -102,6 +102,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const influencers = users.filter(u => u.role === 'influencer');
   const editors = users.filter(u => u.role === 'montazysta');
+  const clients = users.filter(u => u.role === 'klient');
 
   const getDeleteProjectName = () => projects.find(p => p.id === deleteConfirm)?.name || '';
 
@@ -610,6 +611,21 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         <SelectContent className="bg-popover z-50">
                           <SelectItem value="none">— Brak —</SelectItem>
                           {editors.map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={project.assignedClientId || 'none'}
+                        onValueChange={v => assignToProject(project.id, 'assignedClientId', v === 'none' ? null : v)}
+                      >
+                        <SelectTrigger className="h-8 w-36 text-xs">
+                          <SelectValue placeholder="Klient" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover z-50">
+                          <SelectItem value="none">— Brak —</SelectItem>
+                          {clients.map(u => (
                             <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                           ))}
                         </SelectContent>

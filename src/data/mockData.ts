@@ -9,9 +9,9 @@ export const INITIAL_USERS: User[] = [
 ];
 
 export const INITIAL_PROJECTS: Project[] = [
-  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', publicationDate: null, priority: 'medium' },
-  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null, priority: 'medium' },
-  { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null, priority: 'medium' },
+  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', publicationDate: null, priority: 'medium' },
+  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, publicationDate: null, priority: 'medium' },
+  { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, publicationDate: null, priority: 'medium' },
 ];
 
 interface StageDefinition {
