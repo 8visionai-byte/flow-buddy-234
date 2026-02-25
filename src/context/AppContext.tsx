@@ -10,7 +10,7 @@ interface AppContextType {
   tasks: Task[];
   recordings: Recording[];
   projectNotes: ProjectNote[];
-  completeTask: (taskId: string, value: string) => void;
+  completeTask: (taskId: string, value: string, byRole?: UserRole) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
   addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate' | 'priority'>) => void;
@@ -40,19 +40,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
 
-  const completeTask = useCallback((taskId: string, value: string) => {
+  const completeTask = useCallback((taskId: string, value: string, byRole?: UserRole) => {
     setTasks(prev => {
       const now = new Date().toISOString();
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
 
-      const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: task.assignedRole, value, timestamp: now };
-      
+      const role = byRole || task.assignedRole;
+      const isMultiRole = task.assignedRoles.length > 1;
+
+      const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: role, value, timestamp: now };
+
       // Also propagate approval history back to the previous task (so influencer sees it)
       const prevTask = task.inputType === 'approval' ? prev.find(
         t => t.projectId === task.projectId && t.order === task.order - 1
       ) : null;
 
+      if (isMultiRole) {
+        const newCompletions = { ...task.roleCompletions, [role]: value };
+        const allDone = task.assignedRoles.every(r => newCompletions[r]);
+
+        if (allDone) {
+          // All roles completed — mark done and advance
+          const updated = prev.map(t => {
+            if (t.id === taskId) {
+              return { ...t, status: 'done' as const, value: JSON.stringify(newCompletions), completedAt: now, completedBy: role, history: [...t.history, entry], roleCompletions: newCompletions };
+            }
+            if (prevTask && t.id === prevTask.id) {
+              return { ...t, history: [...t.history, entry] };
+            }
+            return t;
+          });
+
+          const completedTask = updated.find(t => t.id === taskId)!;
+          const nextTask = updated.find(t => t.projectId === completedTask.projectId && t.order === completedTask.order + 1);
+          if (nextTask) {
+            const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+            return updated.map(t => t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t);
+          }
+          return updated;
+        } else {
+          // Partial completion — just update roleCompletions
+          return prev.map(t => {
+            if (t.id === taskId) {
+              return { ...t, roleCompletions: newCompletions, history: [...t.history, entry] };
+            }
+            return t;
+          });
+        }
+      }
+
+      // Single-role task — original logic
       const updated = prev.map(t => {
         if (t.id === taskId) {
           return { ...t, status: 'done' as const, value, completedAt: now, completedBy: t.assignedRole, history: [...t.history, entry] };

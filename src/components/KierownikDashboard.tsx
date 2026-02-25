@@ -46,7 +46,7 @@ const KierownikDashboard = () => {
   const activeProjects = projects.filter(p => p.status === 'active');
 
   const getProjectTasks = (projectId: string) =>
-    tasks.filter(t => t.projectId === projectId && t.assignedRole === 'kierownik_planu');
+    tasks.filter(t => t.projectId === projectId && t.assignedRoles.includes('kierownik_planu'));
 
   const getProjectRecordings = (projectId: string) =>
     recordings.filter(r => r.projectId === projectId);
@@ -78,7 +78,7 @@ const KierownikDashboard = () => {
   };
 
   const handleCompleteTask = (taskId: string) => {
-    completeTask(taskId, 'true');
+    completeTask(taskId, 'true', 'kierownik_planu');
   };
 
   return (
@@ -330,7 +330,7 @@ const KierownikDashboard = () => {
                   )}
 
                   {/* Uwagi przed montażem */}
-                  {uwagiTask && uwagiTask.status === 'todo' && (
+                  {uwagiTask && uwagiTask.status === 'todo' && !uwagiTask.roleCompletions['kierownik_planu'] && (
                     <div className="rounded-lg border border-border p-4 space-y-3">
                       <label className="block text-sm font-medium text-foreground">
                         <FileText className="inline mr-1.5 h-4 w-4" />
@@ -353,7 +353,7 @@ const KierownikDashboard = () => {
                         onClick={() => {
                           const val = (uwagiValues[uwagiTask.id] || '').trim();
                           if (!val) { setUwagiError('Wpisz uwagi'); return; }
-                          completeTask(uwagiTask.id, val);
+                          completeTask(uwagiTask.id, val, 'kierownik_planu');
                           setUwagiValues(prev => { const n = { ...prev }; delete n[uwagiTask.id]; return n; });
                         }}
                       >
@@ -362,14 +362,14 @@ const KierownikDashboard = () => {
                       </Button>
                     </div>
                   )}
-                  {uwagiTask && uwagiTask.status === 'done' && (
+                  {uwagiTask && (uwagiTask.status === 'done' || uwagiTask.roleCompletions['kierownik_planu']) && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
                       <div className="flex items-center gap-2 text-xs text-success mb-1">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Uwagi wysłane
                       </div>
-                      {uwagiTask.value && (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{uwagiTask.value}</p>
+                      {uwagiTask.roleCompletions['kierownik_planu'] && (
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{uwagiTask.roleCompletions['kierownik_planu']}</p>
                       )}
                     </div>
                   )}

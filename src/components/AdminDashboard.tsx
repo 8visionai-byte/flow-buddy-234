@@ -78,7 +78,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const isNagrywkaTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
-    return task?.assignedRole === 'kierownik_planu';
+    return task?.assignedRoles.includes('kierownik_planu');
   };
 
   const roleLabel = readOnly ? 'Kierownik Planu' : 'Panel Admina';
@@ -86,7 +86,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const renderSlaColumn = (task: typeof tasks[0]) => {
     const isActive = task.status === 'todo' || task.status === 'pending_client_approval' || task.status === 'needs_influencer_revision';
-    const isKierownik = task.assignedRole === 'kierownik_planu' || task.title === 'Określ rekwizyty';
+    const isKierownik = task.assignedRoles.includes('kierownik_planu') || task.title === 'Określ rekwizyty';
 
     // Done tasks: show frozen completion time
     if (task.status === 'done' && task.assignedAt && task.completedAt) {
@@ -219,7 +219,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const renderValueColumn = (task: typeof tasks[0]) => {
     const isActive = task.status === 'todo' || task.status === 'pending_client_approval' || task.status === 'needs_influencer_revision';
     const canInteract = readOnly ? isNagrywkaTask(task.id) && isActive : false;
-    const isKierownikConfirm = task.assignedRole === 'kierownik_planu' && task.title === 'Potwierdź nagranie';
+    const isKierownikConfirm = task.assignedRoles.includes('kierownik_planu') && task.title === 'Potwierdź nagranie';
+    const isAdminTask = task.assignedRoles.includes('admin');
+    const adminCompleted = task.roleCompletions['admin'];
 
     // Kierownik confirm done: show URL link + tooltip with note
     if (isKierownikConfirm && task.status === 'done' && task.value) {
@@ -253,8 +255,85 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       }
     }
 
+    // Multi-role task: show per-role completion status
+    if (task.assignedRoles.length > 1 && (task.status === 'todo' || task.status === 'done')) {
+      const completionInfo = task.assignedRoles.map(r => ({
+        role: r,
+        done: !!task.roleCompletions[r],
+        value: task.roleCompletions[r],
+      }));
+
+      // Admin can complete from table if not yet done
+      if (!readOnly && isAdminTask && task.status === 'todo' && !adminCompleted) {
+        if (task.title === 'Dodaj uwagi przed montażem') {
+          const val = adminTextInputs[task.id] || '';
+          return (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <input type="text" placeholder="Uwagi admina..." value={val}
+                  onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+                  className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
+                <Button size="sm" variant="default" className="h-7 px-2" disabled={!val.trim()} onClick={() => {
+                  completeTask(task.id, val.trim(), 'admin');
+                  setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+                }}>
+                  <Send className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {completionInfo.map(c => (
+                  <Badge key={c.role} variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
+                    {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        if (task.title === 'Akceptacja materiału') {
+          return (
+            <div className="space-y-1">
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true', 'admin')}>
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+                Zaakceptuj (Admin)
+              </Button>
+              <div className="flex gap-1 flex-wrap">
+                {completionInfo.map(c => (
+                  <Badge key={c.role} variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
+                    {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          );
+        }
+      }
+
+      // Show completion badges for multi-role tasks
+      return (
+        <div className="flex gap-1 flex-wrap">
+          {completionInfo.map(c => (
+            <TooltipProvider key={c.role}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0 cursor-help`}>
+                    {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
+                  </Badge>
+                </TooltipTrigger>
+                {c.value && (
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p className="text-xs">{c.value}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          ))}
+        </div>
+      );
+    }
+
     // Admin task: Ustaw termin planu zdjęciowego
-    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'todo') {
+    if (!readOnly && isAdminTask && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'todo') {
       return (
         <Popover>
           <PopoverTrigger asChild>
@@ -264,30 +343,24 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={undefined}
+            <Calendar mode="single" selected={undefined}
               onSelect={(date) => {
                 if (date) {
-                  // Set deadline on the "Określ rekwizyty" task for this project
                   const rekwizytyTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Określ rekwizyty');
                   if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
-                  // Also set on the Potwierdź nagranie task
                   const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
                   if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
-                  completeTask(task.id, date.toISOString());
+                  completeTask(task.id, date.toISOString(), 'admin');
                 }
               }}
-              initialFocus
-              className={cn("p-3 pointer-events-auto")}
+              initialFocus className={cn("p-3 pointer-events-auto")}
             />
           </PopoverContent>
         </Popover>
       );
     }
 
-    // Admin task: Ustaw termin - done, show selected date
-    if (task.assignedRole === 'admin' && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'done' && task.value) {
+    if (isAdminTask && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'done' && task.value) {
       return (
         <span className="text-xs text-muted-foreground">
           <CalendarClock className="inline mr-1 h-3 w-3" />
@@ -297,38 +370,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     }
 
     // Admin task: Wstaw link do frame.io
-    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Wstaw link do frame.io' && task.status === 'todo') {
+    if (!readOnly && isAdminTask && task.title === 'Wstaw link do frame.io' && task.status === 'todo') {
       const linkVal = adminLinkInputs[task.id] || '';
       return (
         <div className="flex items-center gap-1">
           <div className="relative flex-1">
             <LinkIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="url"
-              placeholder="https://frame.io/..."
-              value={linkVal}
+            <input type="url" placeholder="https://frame.io/..." value={linkVal}
               onChange={e => setAdminLinkInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
-              className="h-7 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            />
+              className="h-7 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
           </div>
-          <Button
-            size="sm"
-            variant="default"
-            className="h-7 px-2"
-            disabled={!linkVal.trim()}
-            onClick={() => {
-              completeTask(task.id, linkVal.trim());
-              setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-            }}
-          >
+          <Button size="sm" variant="default" className="h-7 px-2" disabled={!linkVal.trim()}
+            onClick={() => { completeTask(task.id, linkVal.trim(), 'admin'); setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; }); }}>
             <Send className="h-3 w-3" />
           </Button>
         </div>
       );
     }
 
-    // Admin task: Wstaw link done - show link
-    if (task.assignedRole === 'admin' && task.title === 'Wstaw link do frame.io' && task.status === 'done' && task.value) {
+    if (isAdminTask && task.title === 'Wstaw link do frame.io' && task.status === 'done' && task.value) {
       return (
         <a href={task.value} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
           <ExternalLink className="h-3 w-3" />
@@ -338,114 +398,53 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     }
 
     // Admin task: Nadaj priorytet
-    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Nadaj priorytet' && task.status === 'todo') {
+    if (!readOnly && isAdminTask && task.title === 'Nadaj priorytet' && task.status === 'todo') {
       return (
-        <Select onValueChange={(val: ProjectPriority) => {
-          setProjectPriority(task.projectId, val);
-          completeTask(task.id, val);
-        }}>
-          <SelectTrigger className="h-7 w-32 text-xs">
-            <SelectValue placeholder="Priorytet" />
-          </SelectTrigger>
+        <Select onValueChange={(val: ProjectPriority) => { setProjectPriority(task.projectId, val); completeTask(task.id, val, 'admin'); }}>
+          <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Priorytet" /></SelectTrigger>
           <SelectContent className="bg-popover z-50">
             {(['low', 'medium', 'high', 'urgent'] as ProjectPriority[]).map(p => (
-              <SelectItem key={p} value={p}>
-                <span className="flex items-center gap-1">
-                  <Flag className="h-3 w-3" />
-                  {PRIORITY_LABELS[p]}
-                </span>
-              </SelectItem>
+              <SelectItem key={p} value={p}><span className="flex items-center gap-1"><Flag className="h-3 w-3" />{PRIORITY_LABELS[p]}</span></SelectItem>
             ))}
           </SelectContent>
         </Select>
       );
     }
 
-    // Admin task: Nadaj priorytet done
     if (task.title === 'Nadaj priorytet' && task.status === 'done' && task.value) {
       return (
         <Badge variant="secondary" className={`${PRIORITY_COLORS[task.value as ProjectPriority] || ''} border-0 text-xs`}>
-          <Flag className="mr-1 h-3 w-3" />
-          {PRIORITY_LABELS[task.value as ProjectPriority] || task.value}
+          <Flag className="mr-1 h-3 w-3" />{PRIORITY_LABELS[task.value as ProjectPriority] || task.value}
         </Badge>
       );
     }
 
-    // Admin task: Dodaj uwagi przed montażem
-    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Dodaj uwagi przed montażem' && task.status === 'todo') {
-      const val = adminTextInputs[task.id] || '';
-      return (
-        <div className="flex items-center gap-1">
-          <input
-            type="text"
-            placeholder="Wpisz uwagi..."
-            value={val}
-            onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
-            className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <Button size="sm" variant="default" className="h-7 px-2" disabled={!val.trim()} onClick={() => {
-            completeTask(task.id, val.trim());
-            setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-          }}>
-            <Send className="h-3 w-3" />
-          </Button>
-        </div>
-      );
-    }
-
     // Admin task: Ustaw datę publikacji
-    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Ustaw datę publikacji' && task.status === 'todo') {
+    if (!readOnly && isAdminTask && task.title === 'Ustaw datę publikacji' && task.status === 'todo') {
       return (
         <Popover>
           <PopoverTrigger asChild>
-            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-              <CalendarIcon className="h-3 w-3" />
-              Wybierz datę
-            </Button>
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs"><CalendarIcon className="h-3 w-3" />Wybierz datę</Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={undefined}
-              onSelect={(date) => {
-                if (date) {
-                  setPublicationDate(task.projectId, date.toISOString());
-                  completeTask(task.id, date.toISOString());
-                }
-              }}
-              initialFocus
-              className={cn("p-3 pointer-events-auto")}
-            />
+            <Calendar mode="single" selected={undefined}
+              onSelect={(date) => { if (date) { setPublicationDate(task.projectId, date.toISOString()); completeTask(task.id, date.toISOString(), 'admin'); } }}
+              initialFocus className={cn("p-3 pointer-events-auto")} />
           </PopoverContent>
         </Popover>
       );
     }
 
-    // Admin task: Ustaw datę publikacji done
     if (task.title === 'Ustaw datę publikacji' && task.status === 'done' && task.value) {
       return (
-        <span className="text-xs text-muted-foreground">
-          <CalendarIcon className="inline mr-1 h-3 w-3" />
-          {format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })}
-        </span>
-      );
-    }
-
-    // Admin task: Akceptacja materiału
-    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Akceptacja materiału' && task.status === 'todo') {
-      return (
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
-          <CheckCircle2 className="mr-1 h-3 w-3" />
-          Zaakceptuj
-        </Button>
+        <span className="text-xs text-muted-foreground"><CalendarIcon className="inline mr-1 h-3 w-3" />{format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })}</span>
       );
     }
 
     if (canInteract && task.status === 'todo' && task.inputType === 'boolean') {
       return (
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
-          <CheckCircle2 className="mr-1 h-3 w-3" />
-          Potwierdź
+          <CheckCircle2 className="mr-1 h-3 w-3" />Potwierdź
         </Button>
       );
     }
@@ -473,7 +472,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       <div className="flex-1 overflow-auto p-4 md:p-6">
         {/* Admin pending tasks panel */}
         {!readOnly && (() => {
-          const adminTasks = tasks.filter(t => t.assignedRole === 'admin' && (t.status === 'todo'));
+          const adminTasks = tasks.filter(t => t.assignedRoles.includes('admin') && t.status === 'todo' && !t.roleCompletions['admin']);
           if (adminTasks.length === 0) return null;
           return (
             <div className="mb-6 rounded-xl border-2 border-primary/30 bg-primary/5 p-4 md:p-6 animate-fade-in">
@@ -510,7 +509,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                                   if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
                                   const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
                                   if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
-                                  completeTask(task.id, date.toISOString());
+                                   completeTask(task.id, date.toISOString(), 'admin');
                                 }
                               }}
                               initialFocus
@@ -537,7 +536,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                             className="h-7 px-2"
                             disabled={!(adminLinkInputs[task.id] || '').trim()}
                             onClick={() => {
-                              completeTask(task.id, (adminLinkInputs[task.id] || '').trim());
+                              completeTask(task.id, (adminLinkInputs[task.id] || '').trim(), 'admin');
                               setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
                             }}
                           >
@@ -548,7 +547,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       {task.title === 'Nadaj priorytet' && (
                         <Select onValueChange={(val: ProjectPriority) => {
                           setProjectPriority(task.projectId, val);
-                          completeTask(task.id, val);
+                          completeTask(task.id, val, 'admin');
                         }}>
                           <SelectTrigger className="h-7 w-32 text-xs">
                             <SelectValue placeholder="Priorytet" />
@@ -570,7 +569,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                             className="h-7 w-40 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                           />
                           <Button size="sm" variant="default" className="h-7 px-2" disabled={!(adminTextInputs[task.id] || '').trim()} onClick={() => {
-                            completeTask(task.id, (adminTextInputs[task.id] || '').trim());
+                            completeTask(task.id, (adminTextInputs[task.id] || '').trim(), 'admin');
                             setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
                           }}>
                             <Send className="h-3 w-3" />
@@ -592,7 +591,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                               onSelect={(date) => {
                                 if (date) {
                                   setPublicationDate(task.projectId, date.toISOString());
-                                  completeTask(task.id, date.toISOString());
+                                  completeTask(task.id, date.toISOString(), 'admin');
                                 }
                               }}
                               initialFocus
@@ -602,7 +601,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         </Popover>
                       )}
                       {task.title === 'Akceptacja materiału' && (
-                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
+                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true', 'admin')}>
                           <CheckCircle2 className="mr-1 h-3 w-3" />
                           Zaakceptuj
                         </Button>
@@ -753,13 +752,18 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     {projectTasks.map(task => (
                       <tr key={task.id} className={`border-b border-border last:border-0 ${task.status === 'locked' ? 'opacity-40' : ''}`}>
                         <td className="flex items-center gap-2 px-4 py-2.5">
+                          <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{task.order + 1}.</span>
                           {statusIcon(task.status)}
                           <span className="font-medium text-foreground">{task.title}</span>
                         </td>
                         <td className="px-4 py-2.5">
-                          <Badge variant="secondary" className={`${ROLE_COLORS[task.assignedRole]} border-0 text-xs`}>
-                            {ROLE_LABELS[task.assignedRole]}
-                          </Badge>
+                          <div className="flex gap-1 flex-wrap">
+                            {task.assignedRoles.map(r => (
+                              <Badge key={r} variant="secondary" className={`${ROLE_COLORS[r]} border-0 text-xs`}>
+                                {ROLE_LABELS[r]}
+                              </Badge>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-4 py-2.5">{statusBadge(task.status)}</td>
                         <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
