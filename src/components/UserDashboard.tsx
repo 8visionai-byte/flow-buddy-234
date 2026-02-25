@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { ROLE_LABELS } from '@/types';
 import TaskCard from '@/components/TaskCard';
+import CompletedTaskCard from '@/components/CompletedTaskCard';
 import { CheckCircle2, Circle, Lock, LogOut, Menu, X, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -89,10 +90,16 @@ const UserDashboard = () => {
                 Ukończone ({doneTasks.length})
               </div>
               {doneTasks.map(task => (
-                <div key={task.id} className="mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                <button
+                  key={task.id}
+                  onClick={() => { setSelectedTaskId(task.id); setSidebarOpen(false); }}
+                  className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
+                    selectedTaskId === task.id ? 'bg-success/10 text-success' : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
                   <span className="truncate">{task.title}</span>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -118,7 +125,11 @@ const UserDashboard = () => {
             </div>
           ) : selectedTask ? (
             <div className="w-full max-w-lg">
-              <TaskCard task={selectedTask} projectName={getProject(selectedTask.projectId)?.name || ''} />
+              {selectedTask.status === 'done' ? (
+                <CompletedTaskCard task={selectedTask} projectName={getProject(selectedTask.projectId)?.name || ''} />
+              ) : (
+                <TaskCard task={selectedTask} projectName={getProject(selectedTask.projectId)?.name || ''} />
+              )}
             </div>
           ) : (
             <div className="text-center text-muted-foreground">
