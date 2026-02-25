@@ -20,7 +20,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     { role: 'klient', title: 'Zaakceptuj pomysł', description: 'Przejrzyj pomysł influencera i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
     { role: 'influencer', title: 'Dodaj link do scenariusza', description: 'Wklej link do dokumentu ze scenariuszem.', inputType: 'url' },
     { role: 'klient', title: 'Zaakceptuj scenariusz', description: 'Przejrzyj scenariusz i zatwierdź lub poproś o zmiany.', inputType: 'approval' },
-    { role: 'kierownik_planu', title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
+    { role: 'influencer', title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
     { role: 'kierownik_planu', title: 'Potwierdź nagranie', description: 'Potwierdź, że nagranie się odbyło.', inputType: 'boolean' },
     { role: 'influencer', title: 'Dodaj uwagi przed montażem', description: 'Wpisz swoje uwagi i sugestie do montażu.', inputType: 'text' },
     { role: 'montazysta', title: 'Wgraj surówkę', description: 'Wklej link do surowego materiału.', inputType: 'url' },

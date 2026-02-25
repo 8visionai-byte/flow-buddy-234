@@ -84,7 +84,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const renderSlaColumn = (task: typeof tasks[0]) => {
     const isActive = task.status === 'todo' || task.status === 'pending_client_approval' || task.status === 'needs_influencer_revision';
-    const isKierownik = task.assignedRole === 'kierownik_planu';
+    const isKierownik = task.assignedRole === 'kierownik_planu' || task.title === 'Określ rekwizyty';
 
     // Done tasks: show frozen completion time
     if (task.status === 'done' && task.assignedAt && task.completedAt) {

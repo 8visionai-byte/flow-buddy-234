@@ -274,14 +274,15 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   }
 
   // === DEFAULT VIEWS ===
-  const deadlineDisplay = task.assignedRole === 'kierownik_planu' && task.deadlineDate ? (
+  const usesDeadline = task.assignedRole === 'kierownik_planu' || task.title === 'Określ rekwizyty';
+  const deadlineDisplay = usesDeadline && task.deadlineDate ? (
     <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
       new Date(task.deadlineDate) < new Date() ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
     }`}>
       <CalendarClock className="h-4 w-4" />
       Termin: {format(new Date(task.deadlineDate), 'dd.MM.yyyy', { locale: pl })}
     </div>
-  ) : task.assignedRole === 'kierownik_planu' ? (
+  ) : usesDeadline ? (
     <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
       <CalendarClock className="h-4 w-4" />
       Brak przypisanego terminu — skontaktuj się z Adminem
@@ -292,7 +293,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{projectName}</span>
-        {task.assignedRole !== 'kierownik_planu' && <SlaTimer assignedAt={task.assignedAt} compact />}
+        {!usesDeadline && <SlaTimer assignedAt={task.assignedAt} compact />}
       </div>
       <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
       <p className="mb-4 text-sm text-muted-foreground">{task.description}</p>
