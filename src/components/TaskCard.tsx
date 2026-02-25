@@ -1,12 +1,75 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Task } from '@/types';
+import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare } from 'lucide-react';
 import SlaTimer from '@/components/SlaTimer';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
+
+const actionLabels: Record<TaskHistoryEntry['action'], string> = {
+  submitted: 'Przesłano',
+  approved: 'Zaakceptowano',
+  rejected: 'Odrzucono z uwagami',
+  resubmitted: 'Poprawiono i wysłano ponownie',
+};
+
+const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
+  submitted: <Send className="h-3.5 w-3.5 text-primary" />,
+  approved: <ThumbsUp className="h-3.5 w-3.5 text-success" />,
+  rejected: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
+  resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
+};
+
+function formatTimestamp(iso: string | null): string {
+  if (!iso) return '—';
+  return format(new Date(iso), "dd.MM.yyyy, HH:mm", { locale: pl });
+}
+
+const HistoryAccordion = ({ history }: { history: TaskHistoryEntry[] }) => {
+  if (history.length === 0) return null;
+  return (
+    <Accordion type="single" collapsible className="w-full mt-4">
+      <AccordionItem value="history" className="border-border">
+        <AccordionTrigger className="text-sm font-medium text-muted-foreground hover:text-foreground hover:no-underline">
+          Historia ustaleń ({history.length})
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-3 pt-2">
+            {history.map((entry, i) => (
+              <div key={i} className="flex gap-3 text-sm">
+                <div className="mt-0.5 shrink-0">{actionIcons[entry.action]}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-foreground">{actionLabels[entry.action]}</span>
+                    <Badge variant="secondary" className="text-[10px] border-0">{ROLE_LABELS[entry.by]}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
+                  </div>
+                  {entry.value && (
+                    <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>
+                  )}
+                  {entry.feedback && (
+                    <p className="mt-1 text-destructive whitespace-pre-wrap text-xs">Uwagi: {entry.feedback}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+};
 
 interface TaskCardProps {
   task: Task;
@@ -128,6 +191,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             </div>
           </div>
         )}
+
+        <HistoryAccordion history={task.history} />
       </div>
     );
   }
@@ -189,6 +254,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             Wyślij ponownie
           </Button>
         </div>
+
+        <HistoryAccordion history={task.history} />
       </div>
     );
   }
