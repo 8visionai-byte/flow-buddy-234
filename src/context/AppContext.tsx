@@ -32,25 +32,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const completeTask = useCallback((taskId: string, value: string) => {
     setTasks(prev => {
       const now = new Date().toISOString();
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+
+      const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: task.assignedRole, value, timestamp: now };
+      
       const updated = prev.map(t => {
         if (t.id === taskId) {
-          const entry: TaskHistoryEntry = { action: t.inputType === 'approval' ? 'approved' : 'submitted', by: t.assignedRole, value, timestamp: now };
           return { ...t, status: 'done' as const, value, completedAt: now, completedBy: t.assignedRole, history: [...t.history, entry] };
         }
         return t;
       });
 
-      const completedTask = updated.find(t => t.id === taskId);
-      if (completedTask) {
-        const nextTask = updated.find(
-          t => t.projectId === completedTask.projectId && t.order === completedTask.order + 1
+      const completedTask = updated.find(t => t.id === taskId)!;
+      const nextTask = updated.find(
+        t => t.projectId === completedTask.projectId && t.order === completedTask.order + 1
+      );
+      if (nextTask) {
+        const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+        return updated.map(t =>
+          t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now, history: [...t.history, entry] } : t
         );
-        if (nextTask) {
-          const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
-          return updated.map(t =>
-            t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t
-          );
-        }
       }
 
       return updated;
@@ -82,6 +84,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             assignedAt: now,
             completedAt: null,
             completedBy: null,
+            history: [...t.history, entry],
           };
         }
         return t;
@@ -107,7 +110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return { ...t, status: 'done' as const, value: newValue, completedAt: now, completedBy: t.assignedRole, clientFeedback: null, history: [...t.history, entry] };
         }
         if (nextTask && t.id === nextTask.id) {
-          return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, assignedAt: now };
+          return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, assignedAt: now, history: [...t.history, entry] };
         }
         return t;
       });
