@@ -23,6 +23,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     { role: 'influencer', title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
     { role: 'kierownik_planu', title: 'Potwierdź nagranie', description: 'Potwierdź, że nagranie się odbyło.', inputType: 'boolean' },
     { role: 'influencer', title: 'Dodaj uwagi przed montażem', description: 'Wpisz swoje uwagi i sugestie do montażu.', inputType: 'text' },
+    { role: 'kierownik_planu', title: 'Dodaj uwagi przed montażem', description: 'Wpisz uwagi z planu zdjęciowego istotne dla montażu.', inputType: 'text' },
     { role: 'montazysta', title: 'Wgraj surówkę', description: 'Wklej link do surowego materiału.', inputType: 'url' },
     { role: 'montazysta', title: 'Wgraj zmontowany film', description: 'Wklej link do zmontowanego filmu.', inputType: 'url' },
     { role: 'klient', title: 'Weryfikuj film na frame.io', description: 'Przejrzyj zmontowany film i zaakceptuj.', inputType: 'approval' },
