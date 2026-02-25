@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList, Calendar as CalendarIcon, Flag, FileText } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList, Calendar as CalendarIcon, Flag, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import AddProjectDialog from '@/components/AddProjectDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import {
@@ -42,6 +42,16 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+
+  const toggleProject = (projectId: string) => {
+    setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
 
   if (!currentUser) return null;
 
@@ -523,6 +533,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           const pendingAdminTasks = adminTasks.filter(t => isAdminTaskActionable(t));
           const blockingAdminTasks = adminTasks.filter(t => isAdminTaskBlocking(t));
           const doneAdminTasks = adminTasks.filter(t => isAdminTaskDone(t));
+          const isExpanded = expandedProjects.has(project.id);
 
           return (
             <div
@@ -531,107 +542,48 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 isFrozen ? 'border-muted opacity-60' : 'border-border'
               }`}
             >
-              <div className="flex items-start justify-between border-b border-border px-4 py-3 md:px-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-semibold text-foreground">{project.name}</h2>
-                    {isFrozen && (
-                      <Badge variant="secondary" className="gap-1 border-0 bg-muted text-muted-foreground text-xs">
-                        <Snowflake className="h-3 w-3" />
-                        Zamrożony
-                      </Badge>
-                    )}
-                    {project.priority && project.priority !== 'medium' && (
-                      <Badge variant="secondary" className={`${PRIORITY_COLORS[project.priority]} border-0 text-xs gap-1`}>
-                        <Flag className="h-3 w-3" />
-                        {PRIORITY_LABELS[project.priority]}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Klient: {project.clientName} · {project.company || '—'} · {project.clientEmail} · {project.clientPhone || '—'}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Data publikacji:</span>
-                    {!readOnly ? (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1">
-                            {project.publicationDate
-                              ? format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl })
-                              : 'Ustaw datę'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={project.publicationDate ? new Date(project.publicationDate) : undefined}
-                            onSelect={(date) => setPublicationDate(project.id, date ? date.toISOString() : null)}
-                            initialFocus
-                            className={cn("p-3 pointer-events-auto")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      <span className="text-xs font-medium text-foreground">
-                        {project.publicationDate
-                          ? format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl })
-                          : '—'}
-                      </span>
-                    )}
+              {/* Collapsible Header */}
+              <div
+                className="flex items-center justify-between px-4 py-3 md:px-6 cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => toggleProject(project.id)}
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="font-semibold text-foreground">{project.name}</h2>
+                      {isFrozen && (
+                        <Badge variant="secondary" className="gap-1 border-0 bg-muted text-muted-foreground text-xs">
+                          <Snowflake className="h-3 w-3" />
+                          Zamrożony
+                        </Badge>
+                      )}
+                      {project.priority && project.priority !== 'medium' && (
+                        <Badge variant="secondary" className={`${PRIORITY_COLORS[project.priority]} border-0 text-xs gap-1`}>
+                          <Flag className="h-3 w-3" />
+                          {PRIORITY_LABELS[project.priority]}
+                        </Badge>
+                      )}
+                      {blockingAdminTasks.length > 0 && (
+                        <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs animate-pulse">
+                          {blockingAdminTasks.length} blokuje!
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Klient: {project.clientName} · {project.company || '—'} · {project.clientPhone || '—'}
+                      {project.publicationDate && (
+                        <span className="ml-2">
+                          <CalendarIcon className="inline h-3 w-3 mr-0.5" />
+                          Publikacja: {format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl })}
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
 
                 {!readOnly && (
-                  <div className="flex items-center gap-2 ml-4">
-                    <div className="hidden md:flex items-center gap-2">
-                      <Select
-                        value={project.assignedInfluencerId || 'none'}
-                        onValueChange={v => assignToProject(project.id, 'assignedInfluencerId', v === 'none' ? null : v)}
-                      >
-                        <SelectTrigger className="h-8 w-36 text-xs">
-                          <SelectValue placeholder="Influencer" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover z-50">
-                          <SelectItem value="none">— Brak —</SelectItem>
-                          {influencers.map(u => (
-                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Select
-                        value={project.assignedEditorId || 'none'}
-                        onValueChange={v => assignToProject(project.id, 'assignedEditorId', v === 'none' ? null : v)}
-                      >
-                        <SelectTrigger className="h-8 w-36 text-xs">
-                          <SelectValue placeholder="Montażysta" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover z-50">
-                          <SelectItem value="none">— Brak —</SelectItem>
-                          {editors.map(u => (
-                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Select
-                        value={project.assignedClientId || 'none'}
-                        onValueChange={v => assignToProject(project.id, 'assignedClientId', v === 'none' ? null : v)}
-                      >
-                        <SelectTrigger className="h-8 w-36 text-xs">
-                          <SelectValue placeholder="Klient" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover z-50">
-                          <SelectItem value="none">— Brak —</SelectItem>
-                          {clients.map(u => (
-                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
+                  <div className="flex items-center gap-2 ml-4" onClick={e => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -656,6 +608,80 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   </div>
                 )}
               </div>
+
+              {/* Expanded Content */}
+              {isExpanded && (
+                <>
+              {/* Assignment selects */}
+              {!readOnly && (
+                <div className="border-t border-border px-4 py-2 md:px-6 flex items-center gap-2 flex-wrap bg-muted/20">
+                  <span className="text-xs text-muted-foreground font-medium mr-1">Przypisani:</span>
+                  <Select
+                    value={project.assignedInfluencerId || 'none'}
+                    onValueChange={v => assignToProject(project.id, 'assignedInfluencerId', v === 'none' ? null : v)}
+                  >
+                    <SelectTrigger className="h-7 w-36 text-xs">
+                      <SelectValue placeholder="Influencer" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover z-50">
+                      <SelectItem value="none">— Brak —</SelectItem>
+                      {influencers.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={project.assignedEditorId || 'none'}
+                    onValueChange={v => assignToProject(project.id, 'assignedEditorId', v === 'none' ? null : v)}
+                  >
+                    <SelectTrigger className="h-7 w-36 text-xs">
+                      <SelectValue placeholder="Montażysta" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover z-50">
+                      <SelectItem value="none">— Brak —</SelectItem>
+                      {editors.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={project.assignedClientId || 'none'}
+                    onValueChange={v => assignToProject(project.id, 'assignedClientId', v === 'none' ? null : v)}
+                  >
+                    <SelectTrigger className="h-7 w-36 text-xs">
+                      <SelectValue placeholder="Klient" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover z-50">
+                      <SelectItem value="none">— Brak —</SelectItem>
+                      {clients.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-1 ml-auto">
+                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Publikacja:</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1">
+                          {project.publicationDate
+                            ? format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl })
+                            : 'Ustaw datę'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={project.publicationDate ? new Date(project.publicationDate) : undefined}
+                          onSelect={(date) => setPublicationDate(project.id, date ? date.toISOString() : null)}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+              )}
 
               {/* Per-project Admin Tasks Panel */}
               {!readOnly && adminTasks.length > 0 && (
@@ -745,9 +771,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                           key={task.id}
                           className={cn(
                             "border-b border-border last:border-0",
-                            // Non-admin locked tasks are dimmed
                             !isAdminTask && task.status === 'locked' && 'opacity-40',
-                            // Admin task highlighting - blocking (red) > actionable (blue) > done (green)
                             adminBlocking && 'bg-destructive/5 border-l-2 border-l-destructive',
                             !adminBlocking && adminActionable && 'bg-primary/5 border-l-2 border-l-primary',
                             adminDone && 'bg-success/5 border-l-2 border-l-success',
@@ -801,6 +825,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   </tbody>
                 </table>
               </div>
+              </>
+              )}
             </div>
           );
         })}
