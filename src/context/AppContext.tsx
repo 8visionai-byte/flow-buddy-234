@@ -35,7 +35,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
         if (nextTask) {
           return updated.map(t =>
-            t.id === nextTask.id ? { ...t, status: 'todo' as const } : t
+            t.id === nextTask.id ? { ...t, status: 'todo' as const, assignedAt: new Date().toISOString() } : t
           );
         }
       }

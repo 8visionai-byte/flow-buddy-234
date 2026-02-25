@@ -38,8 +38,9 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     title: stage.title,
     description: stage.description,
     inputType: stage.inputType,
-    status: i < currentStage ? 'done' : i === currentStage ? 'todo' : 'locked',
+    status: i < currentStage ? 'done' as const : i === currentStage ? 'todo' as const : 'locked' as const,
     value: i < currentStage ? (stage.inputType === 'boolean' ? 'true' : stage.inputType === 'url' ? 'https://example.com/link' : 'Przykładowa wartość') : null,
+    assignedAt: i === currentStage ? new Date().toISOString() : i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
     completedAt: i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
     completedBy: i < currentStage ? stage.role : null,
   }));
