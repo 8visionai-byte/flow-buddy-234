@@ -9,12 +9,12 @@ export const USERS: User[] = [
 ];
 
 export const PROJECTS: Project[] = [
-  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientName: 'Anna', currentStageIndex: 2 },
-  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientName: 'Anna', currentStageIndex: 0 },
-  { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', currentStageIndex: 5 },
+  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0 },
+  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0 },
+  { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0 },
 ];
 
-function createTasksForProject(projectId: string, currentStage: number): Task[] {
+export function createTasksForProject(projectId: string, currentStage: number): Task[] {
   const stages: { role: Task['assignedRole']; title: string; description: string; inputType: Task['inputType'] }[] = [
     { role: 'influencer', title: 'Dodaj pomysł / temat', description: 'Wpisz temat lub pomysł na film.', inputType: 'text' },
     { role: 'klient', title: 'Zaakceptuj pomysł', description: 'Przejrzyj pomysł i zaakceptuj lub odrzuć.', inputType: 'boolean' },

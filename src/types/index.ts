@@ -27,6 +27,9 @@ export interface Project {
   id: string;
   name: string;
   clientName: string;
+  company: string;
+  clientEmail: string;
+  clientPhone: string;
   currentStageIndex: number;
 }
 

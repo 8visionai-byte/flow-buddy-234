@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { PROJECTS } from '@/data/mockData';
 import { ROLE_LABELS } from '@/types';
 import TaskCard from '@/components/TaskCard';
 import { CheckCircle2, Circle, Lock, LogOut, Menu, X } from 'lucide-react';
@@ -8,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const UserDashboard = () => {
-  const { currentUser, setCurrentUser, tasks } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects } = useApp();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -20,7 +19,7 @@ const UserDashboard = () => {
   const selectedTask = myTasks.find(t => t.id === selectedTaskId);
   const allDone = todoTasks.length === 0;
 
-  const getProject = (projectId: string) => PROJECTS.find(p => p.id === projectId);
+  const getProject = (projectId: string) => projects.find(p => p.id === projectId);
 
   return (
     <div className="flex h-screen bg-background">
