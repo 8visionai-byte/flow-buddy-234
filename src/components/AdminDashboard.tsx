@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send } from 'lucide-react';
 import AddProjectDialog from '@/components/AddProjectDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import {
@@ -40,6 +40,7 @@ interface AdminDashboardProps {
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
   const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask, reopenTask, setTaskDeadline } = useApp();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
 
   if (!currentUser) return null;
 
@@ -249,6 +250,90 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       } catch {
         // Not JSON, render normally
       }
+    }
+
+    // Admin task: Ustaw termin planu zdjęciowego
+    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'todo') {
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
+              <CalendarClock className="h-3 w-3" />
+              Wybierz datę
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={undefined}
+              onSelect={(date) => {
+                if (date) {
+                  // Set deadline on the "Określ rekwizyty" task for this project
+                  const rekwizytyTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Określ rekwizyty');
+                  if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
+                  // Also set on the Potwierdź nagranie task
+                  const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
+                  if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
+                  completeTask(task.id, date.toISOString());
+                }
+              }}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    // Admin task: Ustaw termin - done, show selected date
+    if (task.assignedRole === 'admin' && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'done' && task.value) {
+      return (
+        <span className="text-xs text-muted-foreground">
+          <CalendarClock className="inline mr-1 h-3 w-3" />
+          {format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })}
+        </span>
+      );
+    }
+
+    // Admin task: Wstaw link do frame.io
+    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Wstaw link do frame.io' && task.status === 'todo') {
+      const linkVal = adminLinkInputs[task.id] || '';
+      return (
+        <div className="flex items-center gap-1">
+          <div className="relative flex-1">
+            <LinkIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="url"
+              placeholder="https://frame.io/..."
+              value={linkVal}
+              onChange={e => setAdminLinkInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+              className="h-7 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="default"
+            className="h-7 px-2"
+            disabled={!linkVal.trim()}
+            onClick={() => {
+              completeTask(task.id, linkVal.trim());
+              setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+            }}
+          >
+            <Send className="h-3 w-3" />
+          </Button>
+        </div>
+      );
+    }
+
+    // Admin task: Wstaw link done - show link
+    if (task.assignedRole === 'admin' && task.title === 'Wstaw link do frame.io' && task.status === 'done' && task.value) {
+      return (
+        <a href={task.value} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+          <ExternalLink className="h-3 w-3" />
+          frame.io
+        </a>
+      );
     }
 
     if (canInteract && task.status === 'todo' && task.inputType === 'boolean') {
