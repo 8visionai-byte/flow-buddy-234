@@ -1,6 +1,6 @@
 import { User, Project, Task } from '@/types';
 
-export const USERS: User[] = [
+export const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Marcin (Admin)', role: 'admin' },
   { id: 'u2', name: 'Anna (Klient)', role: 'klient' },
   { id: 'u3', name: 'Tomek (Influencer)', role: 'influencer' },
@@ -8,10 +8,10 @@ export const USERS: User[] = [
   { id: 'u5', name: 'Ola (Kierownik Planu)', role: 'kierownik_planu' },
 ];
 
-export const PROJECTS: Project[] = [
-  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0 },
-  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0 },
-  { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0 },
+export const INITIAL_PROJECTS: Project[] = [
+  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4' },
+  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null },
+  { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null },
 ];
 
 export function createTasksForProject(projectId: string, currentStage: number): Task[] {
@@ -47,5 +47,5 @@ export function createTasksForProject(projectId: string, currentStage: number): 
 }
 
 export function getInitialTasks(): Task[] {
-  return PROJECTS.flatMap(p => createTasksForProject(p.id, p.currentStageIndex));
+  return INITIAL_PROJECTS.flatMap(p => createTasksForProject(p.id, p.currentStageIndex));
 }

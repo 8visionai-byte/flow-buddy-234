@@ -1,10 +1,9 @@
 import { useApp } from '@/context/AppContext';
-import { USERS } from '@/data/mockData';
 import { ROLE_LABELS } from '@/types';
 import { User, ChevronRight } from 'lucide-react';
 
 const RoleSelector = () => {
-  const { setCurrentUser } = useApp();
+  const { setCurrentUser, users } = useApp();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -18,7 +17,7 @@ const RoleSelector = () => {
         </div>
 
         <div className="space-y-2">
-          {USERS.map(user => (
+          {users.map(user => (
             <button
               key={user.id}
               onClick={() => setCurrentUser(user)}

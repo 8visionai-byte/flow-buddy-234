@@ -8,6 +8,7 @@ export interface User {
 
 export type TaskStatus = 'locked' | 'todo' | 'done';
 export type InputType = 'boolean' | 'text' | 'url';
+export type ProjectStatus = 'active' | 'frozen';
 
 export interface Task {
   id: string;
@@ -32,6 +33,9 @@ export interface Project {
   clientEmail: string;
   clientPhone: string;
   currentStageIndex: number;
+  status: ProjectStatus;
+  assignedInfluencerId: string | null;
+  assignedEditorId: string | null;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

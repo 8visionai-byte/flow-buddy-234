@@ -1,22 +1,29 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'; // v2
-import { User, Task } from '@/types';
-import { USERS, PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
-import type { Project } from '@/types';
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { User, Task, Project, UserRole } from '@/types';
+import { INITIAL_USERS, INITIAL_PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 
 interface AppContextType {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+  users: User[];
   projects: Project[];
   tasks: Task[];
   completeTask: (taskId: string, value: string) => void;
-  addProject: (project: Omit<Project, 'id' | 'currentStageIndex'>) => void;
+  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId'>) => void;
+  deleteProject: (projectId: string) => void;
+  toggleFreezeProject: (projectId: string) => void;
+  assignToProject: (projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId', userId: string | null) => void;
+  addUser: (user: Omit<User, 'id'>) => void;
+  updateUser: (id: string, data: Partial<Omit<User, 'id'>>) => void;
+  deleteUser: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [projects, setProjects] = useState<Project[]>(PROJECTS);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [tasks, setTasks] = useState<Task[]>(getInitialTasks());
 
   const completeTask = useCallback((taskId: string, value: string) => {
@@ -46,16 +53,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     console.log(`[Webhook Ready] Task ${taskId} completed with value: ${value}`);
   }, []);
 
-  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex'>) => {
+  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId'>) => {
     const id = `p${Date.now()}`;
-    const newProject: Project = { ...data, id, currentStageIndex: 0 };
+    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null };
     setProjects(prev => [...prev, newProject]);
     const newTasks = createTasksForProject(id, 0);
     setTasks(prev => [...prev, ...newTasks]);
   }, []);
 
+  const deleteProject = useCallback((projectId: string) => {
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    setTasks(prev => prev.filter(t => t.projectId !== projectId));
+  }, []);
+
+  const toggleFreezeProject = useCallback((projectId: string) => {
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, status: p.status === 'frozen' ? 'active' as const : 'frozen' as const } : p
+    ));
+  }, []);
+
+  const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId', userId: string | null) => {
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, [field]: userId } : p
+    ));
+  }, []);
+
+  const addUser = useCallback((data: Omit<User, 'id'>) => {
+    const id = `u${Date.now()}`;
+    setUsers(prev => [...prev, { ...data, id }]);
+  }, []);
+
+  const updateUser = useCallback((id: string, data: Partial<Omit<User, 'id'>>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+  }, []);
+
+  const deleteUser = useCallback((id: string) => {
+    setUsers(prev => prev.filter(u => u.id !== id));
+  }, []);
+
   return (
-    <AppContext.Provider value={{ currentUser, setCurrentUser, projects, tasks, completeTask, addProject }}>
+    <AppContext.Provider value={{
+      currentUser, setCurrentUser, users, projects, tasks,
+      completeTask, addProject, deleteProject, toggleFreezeProject, assignToProject,
+      addUser, updateUser, deleteUser,
+    }}>
       {children}
     </AppContext.Provider>
   );

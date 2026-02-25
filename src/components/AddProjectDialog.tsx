@@ -19,7 +19,7 @@ const AddProjectDialog = () => {
     clientPhone: '',
   });
 
-  const isValid = form.name.trim() && form.clientName.trim() && form.clientEmail.trim();
+  const isValid = form.name.trim().length > 0 && form.clientName.trim().length > 0 && form.clientEmail.trim().length > 0;
 
   const handleSubmit = () => {
     if (!isValid) return;
