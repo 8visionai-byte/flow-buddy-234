@@ -13,7 +13,7 @@ interface AppContextType {
   completeTask: (taskId: string, value: string) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
-  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId'>) => void;
+  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate'>) => void;
   reopenTask: (taskId: string) => void;
   deleteProject: (projectId: string) => void;
   toggleFreezeProject: (projectId: string) => void;
@@ -26,6 +26,7 @@ interface AppContextType {
   deleteRecording: (recordingId: string) => void;
   addProjectNote: (projectId: string, content: string) => void;
   deleteProjectNote: (noteId: string) => void;
+  setPublicationDate: (projectId: string, date: string | null) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -153,9 +154,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId'>) => {
+  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate'>) => {
     const id = `p${Date.now()}`;
-    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null };
+    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null };
     setProjects(prev => [...prev, newProject]);
     const newTasks = createTasksForProject(id, 0);
     setTasks(prev => [...prev, ...newTasks]);
@@ -215,13 +216,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjectNotes(prev => prev.filter(n => n.id !== noteId));
   }, []);
 
+  const setPublicationDate = useCallback((projectId: string, date: string | null) => {
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, publicationDate: date } : p));
+  }, []);
+
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, projects, tasks, recordings, projectNotes,
       completeTask, rejectTask, resubmitTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser, setTaskDeadline,
-      addRecording, deleteRecording, addProjectNote, deleteProjectNote,
+      addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate,
     }}>
       {children}
     </AppContext.Provider>

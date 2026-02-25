@@ -63,6 +63,7 @@ export interface Project {
   status: ProjectStatus;
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
+  publicationDate: string | null;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

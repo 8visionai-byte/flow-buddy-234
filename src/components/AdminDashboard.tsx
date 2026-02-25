@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList, Calendar as CalendarIcon } from 'lucide-react';
 import AddProjectDialog from '@/components/AddProjectDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import {
@@ -38,7 +38,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
-  const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask, reopenTask, setTaskDeadline } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask, reopenTask, setTaskDeadline, setPublicationDate } = useApp();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
 
@@ -366,6 +366,87 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       </header>
 
       <div className="flex-1 overflow-auto p-4 md:p-6">
+        {/* Admin pending tasks panel */}
+        {!readOnly && (() => {
+          const adminTasks = tasks.filter(t => t.assignedRole === 'admin' && (t.status === 'todo'));
+          if (adminTasks.length === 0) return null;
+          return (
+            <div className="mb-6 rounded-xl border-2 border-primary/30 bg-primary/5 p-4 md:p-6 animate-fade-in">
+              <div className="flex items-center gap-2 mb-3">
+                <ClipboardList className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold text-foreground">Twoje zadania do wykonania</h2>
+                <Badge variant="secondary" className="bg-primary/10 text-primary border-0">{adminTasks.length}</Badge>
+              </div>
+              <div className="space-y-2">
+                {adminTasks.map(task => {
+                  const project = projects.find(p => p.id === task.projectId);
+                  return (
+                    <div key={task.id} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+                      <Circle className="h-4 w-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-foreground">{task.title}</span>
+                        <span className="text-xs text-muted-foreground ml-2">— {project?.name}</span>
+                      </div>
+                      {task.title === 'Ustaw termin planu zdjęciowego' && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button size="sm" variant="default" className="h-7 gap-1 text-xs">
+                              <CalendarClock className="h-3 w-3" />
+                              Wybierz datę
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                              mode="single"
+                              selected={undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  const rekwizytyTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Określ rekwizyty');
+                                  if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
+                                  const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
+                                  if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
+                                  completeTask(task.id, date.toISOString());
+                                }
+                              }}
+                              initialFocus
+                              className={cn("p-3 pointer-events-auto")}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                      {task.title === 'Wstaw link do frame.io' && (
+                        <div className="flex items-center gap-1">
+                          <div className="relative">
+                            <LinkIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                              type="url"
+                              placeholder="https://frame.io/..."
+                              value={adminLinkInputs[task.id] || ''}
+                              onChange={e => setAdminLinkInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+                              className="h-7 w-40 rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 px-2"
+                            disabled={!(adminLinkInputs[task.id] || '').trim()}
+                            onClick={() => {
+                              completeTask(task.id, (adminLinkInputs[task.id] || '').trim());
+                              setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+                            }}
+                          >
+                            <Send className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
         {projects.map(project => {
           const projectTasks = getTasksForProject(project.id);
           const isFrozen = project.status === 'frozen';
@@ -391,6 +472,36 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   <p className="text-xs text-muted-foreground">
                     Klient: {project.clientName} · {project.company || '—'} · {project.clientEmail} · {project.clientPhone || '—'}
                   </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Data publikacji:</span>
+                    {!readOnly ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1">
+                            {project.publicationDate
+                              ? format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl })
+                              : 'Ustaw datę'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={project.publicationDate ? new Date(project.publicationDate) : undefined}
+                            onSelect={(date) => setPublicationDate(project.id, date ? date.toISOString() : null)}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <span className="text-xs font-medium text-foreground">
+                        {project.publicationDate
+                          ? format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl })
+                          : '—'}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {!readOnly && (
