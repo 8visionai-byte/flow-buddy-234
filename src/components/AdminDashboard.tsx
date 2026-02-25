@@ -205,7 +205,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       const remaining = SLA_MS - elapsed;
       const overdue = remaining < 0;
       return (
-        <span className={`text-xs font-medium ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+        <span className={`text-xs font-medium ${overdue ? 'text-destructive' : 'text-success'}`}>
           {overdue ? `+${formatDurationFromMs(elapsed - SLA_MS)} opóźnienia` : `Pozostało: ${formatDurationFromMs(remaining)}`}
         </span>
       );
