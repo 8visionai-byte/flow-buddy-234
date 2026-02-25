@@ -45,6 +45,13 @@ export interface Recording {
   createdAt: string;
 }
 
+export interface ProjectNote {
+  id: string;
+  projectId: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
