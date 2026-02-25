@@ -13,11 +13,11 @@ interface AppContextType {
   completeTask: (taskId: string, value: string, byRole?: UserRole) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
-  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate' | 'priority'>) => void;
+  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'publicationDate' | 'priority'>) => void;
   reopenTask: (taskId: string) => void;
   deleteProject: (projectId: string) => void;
   toggleFreezeProject: (projectId: string) => void;
-  assignToProject: (projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId', userId: string | null) => void;
+  assignToProject: (projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId', userId: string | null) => void;
   addUser: (user: Omit<User, 'id'>) => void;
   updateUser: (id: string, data: Partial<Omit<User, 'id'>>) => void;
   deleteUser: (id: string) => void;
@@ -193,9 +193,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate' | 'priority'>) => {
+  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'publicationDate' | 'priority'>) => {
     const id = `p${Date.now()}`;
-    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null, priority: 'medium' };
+    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, publicationDate: null, priority: 'medium' };
     setProjects(prev => [...prev, newProject]);
     const newTasks = createTasksForProject(id, 0);
     setTasks(prev => [...prev, ...newTasks]);
@@ -212,7 +212,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ));
   }, []);
 
-  const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId', userId: string | null) => {
+  const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId', userId: string | null) => {
     setProjects(prev => prev.map(p =>
       p.id === projectId ? { ...p, [field]: userId } : p
     ));

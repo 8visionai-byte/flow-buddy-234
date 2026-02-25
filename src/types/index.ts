@@ -66,6 +66,7 @@ export interface Project {
   status: ProjectStatus;
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
+  assignedClientId: string | null;
   publicationDate: string | null;
   priority: ProjectPriority;
 }
