@@ -37,6 +37,7 @@ export const PIPELINE_STAGES: StageDefinition[] = [
   { roles: ['klient'], title: 'Weryfikuj film na frame.io', description: 'Przejrzyj zmontowany film i zaakceptuj.', inputType: 'approval' },
   { roles: ['montazysta'], title: 'Wgraj poprawki', description: 'Wgraj poprawiony film po uwagach klienta.', inputType: 'url' },
   { roles: ['klient', 'admin'], title: 'Akceptacja materiału', description: 'Finalna akceptacja gotowego materiału. Klient może dodać komentarz.', inputType: 'approval' },
+  { roles: ['influencer'], title: 'Opisy i tytuły do publikacji', description: 'Uzupełnij opis na Facebooka, Twittera, Instagrama oraz tytuł na YouTube.', inputType: 'social_descriptions' },
   { roles: ['admin'], title: 'Ustaw datę publikacji', description: 'Wybierz datę publikacji filmu.', inputType: 'boolean' },
 ];
 
@@ -51,7 +52,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     description: stage.description,
     inputType: stage.inputType,
     status: i < currentStage ? 'done' as const : i === currentStage ? 'todo' as const : 'locked' as const,
-    value: i < currentStage ? (stage.inputType === 'boolean' ? 'true' : stage.inputType === 'url' ? 'https://example.com/link' : stage.inputType === 'approval' ? 'approved' : 'Przykładowa wartość') : null,
+    value: i < currentStage ? (stage.inputType === 'boolean' ? 'true' : stage.inputType === 'url' ? 'https://example.com/link' : stage.inputType === 'approval' ? 'approved' : stage.inputType === 'social_descriptions' ? '{"facebook":"Opis FB","twitter":"Tweet","instagram":"Opis IG","youtube":"Tytuł YT"}' : 'Przykładowa wartość') : null,
     previousValue: null,
     clientFeedback: null,
     assignedAt: i === currentStage ? new Date().toISOString() : i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
