@@ -8,6 +8,7 @@ export interface User {
 
 export type TaskStatus = 'locked' | 'todo' | 'done' | 'pending_client_approval' | 'needs_influencer_revision';
 export type InputType = 'boolean' | 'text' | 'url' | 'approval';
+export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStatus = 'active' | 'frozen';
 
 export interface TaskHistoryEntry {
@@ -64,7 +65,22 @@ export interface Project {
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
   publicationDate: string | null;
+  priority: ProjectPriority;
 }
+
+export const PRIORITY_LABELS: Record<ProjectPriority, string> = {
+  low: 'Niski',
+  medium: 'Średni',
+  high: 'Wysoki',
+  urgent: 'Pilny',
+};
+
+export const PRIORITY_COLORS: Record<ProjectPriority, string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-primary/10 text-primary',
+  high: 'bg-warning/10 text-warning',
+  urgent: 'bg-destructive/10 text-destructive',
+};
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
