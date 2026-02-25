@@ -24,6 +24,7 @@ export interface Task {
   projectId: string;
   order: number;
   assignedRole: UserRole;
+  assignedRoles: UserRole[];
   title: string;
   description: string;
   status: TaskStatus;
@@ -36,6 +37,7 @@ export interface Task {
   completedBy: string | null;
   deadlineDate: string | null;
   history: TaskHistoryEntry[];
+  roleCompletions: Record<string, string>;
 }
 
 export interface Recording {
@@ -68,20 +70,6 @@ export interface Project {
   priority: ProjectPriority;
 }
 
-export const PRIORITY_LABELS: Record<ProjectPriority, string> = {
-  low: 'Niski',
-  medium: 'Średni',
-  high: 'Wysoki',
-  urgent: 'Pilny',
-};
-
-export const PRIORITY_COLORS: Record<ProjectPriority, string> = {
-  low: 'bg-muted text-muted-foreground',
-  medium: 'bg-primary/10 text-primary',
-  high: 'bg-warning/10 text-warning',
-  urgent: 'bg-destructive/10 text-destructive',
-};
-
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
   klient: 'Klient',
@@ -96,4 +84,18 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   influencer: 'bg-warning text-warning-foreground',
   montazysta: 'bg-destructive text-destructive-foreground',
   kierownik_planu: 'bg-secondary text-secondary-foreground',
+};
+
+export const PRIORITY_LABELS: Record<ProjectPriority, string> = {
+  low: 'Niski',
+  medium: 'Średni',
+  high: 'Wysoki',
+  urgent: 'Pilny',
+};
+
+export const PRIORITY_COLORS: Record<ProjectPriority, string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-primary/10 text-primary',
+  high: 'bg-warning/10 text-warning',
+  urgent: 'bg-destructive/10 text-destructive',
 };

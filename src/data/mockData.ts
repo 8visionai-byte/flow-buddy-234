@@ -1,4 +1,4 @@
-import { User, Project, Task } from '@/types';
+import { User, Project, Task, UserRole } from '@/types';
 
 export const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Marcin (Admin)', role: 'admin' },
@@ -14,34 +14,39 @@ export const INITIAL_PROJECTS: Project[] = [
   { id: 'p3', name: '5 trików na produktywność', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null, priority: 'medium' },
 ];
 
-export function createTasksForProject(projectId: string, currentStage: number): Task[] {
-  const stages: { role: Task['assignedRole']; title: string; description: string; inputType: Task['inputType'] }[] = [
-    { role: 'influencer', title: 'Dodaj pomysł / temat', description: 'Wpisz temat lub pomysł na film.', inputType: 'text' },
-    { role: 'klient', title: 'Zaakceptuj pomysł', description: 'Przejrzyj pomysł influencera i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
-    { role: 'influencer', title: 'Dodaj link do scenariusza', description: 'Wklej link do dokumentu ze scenariuszem.', inputType: 'url' },
-    { role: 'klient', title: 'Zaakceptuj scenariusz', description: 'Przejrzyj scenariusz i zatwierdź lub poproś o zmiany.', inputType: 'approval' },
-    { role: 'influencer', title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
-    { role: 'admin', title: 'Ustaw termin planu zdjęciowego', description: 'Wybierz datę planu zdjęciowego w kalendarzu (zazwyczaj 3 dni przed nagraniem).', inputType: 'boolean' },
-    { role: 'admin', title: 'Nadaj priorytet', description: 'Ustaw priorytet projektu.', inputType: 'text' },
-    { role: 'kierownik_planu', title: 'Potwierdź nagranie', description: 'Potwierdź, że nagranie się odbyło.', inputType: 'boolean' },
-    { role: 'influencer', title: 'Dodaj uwagi przed montażem', description: 'Wpisz swoje uwagi i sugestie do montażu.', inputType: 'text' },
-    { role: 'kierownik_planu', title: 'Dodaj uwagi przed montażem', description: 'Wpisz uwagi z planu zdjęciowego istotne dla montażu.', inputType: 'text' },
-    { role: 'admin', title: 'Dodaj uwagi przed montażem', description: 'Wpisz uwagi admina istotne dla montażu.', inputType: 'text' },
-    { role: 'admin', title: 'Wstaw link do frame.io', description: 'Wklej link do filmu na frame.io dla montażysty.', inputType: 'url' },
-    { role: 'montazysta', title: 'Wgraj surówkę', description: 'Wklej link do surowego materiału.', inputType: 'url' },
-    { role: 'montazysta', title: 'Wgraj zmontowany film', description: 'Wklej link do zmontowanego filmu.', inputType: 'url' },
-    { role: 'klient', title: 'Weryfikuj film na frame.io', description: 'Przejrzyj zmontowany film i zaakceptuj.', inputType: 'approval' },
-    { role: 'montazysta', title: 'Wgraj poprawki', description: 'Wgraj poprawiony film po uwagach klienta.', inputType: 'url' },
-    { role: 'admin', title: 'Akceptacja materiału', description: 'Finalna akceptacja materiału przez admina.', inputType: 'boolean' },
-    { role: 'influencer', title: 'Akceptacja materiału', description: 'Finalna akceptacja materiału przez influencera.', inputType: 'boolean' },
-    { role: 'admin', title: 'Ustaw datę publikacji', description: 'Wybierz datę publikacji filmu.', inputType: 'boolean' },
-  ];
+interface StageDefinition {
+  roles: UserRole[];
+  title: string;
+  description: string;
+  inputType: Task['inputType'];
+}
 
-  return stages.map((stage, i) => ({
+export const PIPELINE_STAGES: StageDefinition[] = [
+  { roles: ['influencer'], title: 'Dodaj pomysł / temat', description: 'Wpisz temat lub pomysł na film.', inputType: 'text' },
+  { roles: ['klient'], title: 'Zaakceptuj pomysł', description: 'Przejrzyj pomysł influencera i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
+  { roles: ['influencer'], title: 'Dodaj link do scenariusza', description: 'Wklej link do dokumentu ze scenariuszem.', inputType: 'url' },
+  { roles: ['klient'], title: 'Zaakceptuj scenariusz', description: 'Przejrzyj scenariusz i zatwierdź lub poproś o zmiany.', inputType: 'approval' },
+  { roles: ['influencer'], title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
+  { roles: ['admin'], title: 'Ustaw termin planu zdjęciowego', description: 'Wybierz datę planu zdjęciowego w kalendarzu.', inputType: 'boolean' },
+  { roles: ['admin'], title: 'Nadaj priorytet', description: 'Ustaw priorytet projektu.', inputType: 'text' },
+  { roles: ['kierownik_planu'], title: 'Potwierdź nagranie', description: 'Potwierdź, że nagranie się odbyło.', inputType: 'boolean' },
+  { roles: ['influencer', 'kierownik_planu', 'admin'], title: 'Dodaj uwagi przed montażem', description: 'Wpisz uwagi istotne dla montażu.', inputType: 'text' },
+  { roles: ['admin'], title: 'Wstaw link do frame.io', description: 'Wklej link do filmu na frame.io dla montażysty.', inputType: 'url' },
+  { roles: ['montazysta'], title: 'Wgraj surówkę', description: 'Wklej link do surowego materiału.', inputType: 'url' },
+  { roles: ['montazysta'], title: 'Wgraj zmontowany film', description: 'Wklej link do zmontowanego filmu.', inputType: 'url' },
+  { roles: ['klient'], title: 'Weryfikuj film na frame.io', description: 'Przejrzyj zmontowany film i zaakceptuj.', inputType: 'approval' },
+  { roles: ['montazysta'], title: 'Wgraj poprawki', description: 'Wgraj poprawiony film po uwagach klienta.', inputType: 'url' },
+  { roles: ['admin', 'influencer'], title: 'Akceptacja materiału', description: 'Finalna akceptacja gotowego materiału.', inputType: 'boolean' },
+  { roles: ['admin'], title: 'Ustaw datę publikacji', description: 'Wybierz datę publikacji filmu.', inputType: 'boolean' },
+];
+
+export function createTasksForProject(projectId: string, currentStage: number): Task[] {
+  return PIPELINE_STAGES.map((stage, i) => ({
     id: `${projectId}-t${i}`,
     projectId,
     order: i,
-    assignedRole: stage.role,
+    assignedRole: stage.roles[0],
+    assignedRoles: stage.roles,
     title: stage.title,
     description: stage.description,
     inputType: stage.inputType,
@@ -51,9 +56,10 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     clientFeedback: null,
     assignedAt: i === currentStage ? new Date().toISOString() : i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
     completedAt: i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
-    completedBy: i < currentStage ? stage.role : null,
+    completedBy: i < currentStage ? stage.roles[0] : null,
     deadlineDate: null,
     history: [],
+    roleCompletions: {},
   }));
 }
 

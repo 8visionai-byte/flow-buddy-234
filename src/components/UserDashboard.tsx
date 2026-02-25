@@ -16,9 +16,12 @@ const UserDashboard = () => {
   const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
   const myTasks = tasks.filter(t => {
     if (!activeProjectIds.includes(t.projectId)) return false;
-    if (t.assignedRole !== currentUser.role) return false;
-    // Show tasks that are todo, done, pending_client_approval (for clients), or needs_influencer_revision (for influencers)
+    // Check if current user's role is in the assignedRoles array
+    if (!t.assignedRoles.includes(currentUser.role)) return false;
+    // Show tasks that are todo, done, pending_client_approval, or needs_influencer_revision
     if (t.status === 'locked') return false;
+    // For multi-role tasks in 'todo' status, hide if this role already completed
+    if (t.status === 'todo' && t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return false;
     return true;
   });
   

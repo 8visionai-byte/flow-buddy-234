@@ -10,8 +10,9 @@ const RoleSelector = () => {
   const getActiveTaskCount = (userRole: string) => {
     return tasks.filter(t =>
       activeProjectIds.includes(t.projectId) &&
-      t.assignedRole === userRole &&
-      (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision')
+      t.assignedRoles.includes(userRole as any) &&
+      (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision') &&
+      !(t.assignedRoles.length > 1 && t.roleCompletions[userRole])
     ).length;
   };
   return (

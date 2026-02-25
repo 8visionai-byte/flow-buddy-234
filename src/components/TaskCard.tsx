@@ -79,7 +79,7 @@ interface TaskCardProps {
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
 const TaskCard = ({ task, projectName }: TaskCardProps) => {
-  const { completeTask, rejectTask, resubmitTask } = useApp();
+  const { completeTask, rejectTask, resubmitTask, currentUser } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -87,7 +87,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   const [noteUrl, setNoteUrl] = useState('');
   const [noteText, setNoteText] = useState('');
 
-  const isKierownikConfirm = task.assignedRole === 'kierownik_planu' && task.title === 'Potwierdź nagranie';
+  const isKierownikConfirm = task.assignedRoles.includes('kierownik_planu') && task.title === 'Potwierdź nagranie';
 
   const handleSubmit = () => {
     if (isKierownikConfirm) {
@@ -109,11 +109,11 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     }
     setError('');
     const value = task.inputType === 'boolean' ? 'true' : inputValue;
-    completeTask(task.id, value);
+    completeTask(task.id, value, currentUser?.role);
   };
 
   const handleApprove = () => {
-    completeTask(task.id, 'approved');
+    completeTask(task.id, 'approved', currentUser?.role);
   };
 
   const handleReject = () => {
@@ -274,7 +274,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   }
 
   // === DEFAULT VIEWS ===
-  const usesDeadline = task.assignedRole === 'kierownik_planu' || task.title === 'Określ rekwizyty';
+  const usesDeadline = task.assignedRoles.includes('kierownik_planu') || task.title === 'Określ rekwizyty';
   const deadlineDisplay = usesDeadline && task.deadlineDate ? (
     <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
       new Date(task.deadlineDate) < new Date() ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
