@@ -24,16 +24,20 @@ import {
   CheckCircle2,
   X,
   Lock,
+  MessageSquare,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
 const KierownikDashboard = () => {
-  const { currentUser, setCurrentUser, projects, tasks, recordings, addRecording, deleteRecording, completeTask } = useApp();
+  const { currentUser, setCurrentUser, projects, tasks, recordings, projectNotes, addRecording, deleteRecording, addProjectNote, deleteProjectNote, completeTask } = useApp();
   const [addingForProject, setAddingForProject] = useState<string | null>(null);
+  const [addingNoteForProject, setAddingNoteForProject] = useState<string | null>(null);
   const [recUrl, setRecUrl] = useState('');
   const [recNote, setRecNote] = useState('');
   const [error, setError] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+  const [noteError, setNoteError] = useState('');
   const [uwagiValues, setUwagiValues] = useState<Record<string, string>>({});
   const [uwagiError, setUwagiError] = useState('');
 
@@ -47,6 +51,9 @@ const KierownikDashboard = () => {
   const getProjectRecordings = (projectId: string) =>
     recordings.filter(r => r.projectId === projectId);
 
+  const getProjectNotes = (projectId: string) =>
+    projectNotes.filter(n => n.projectId === projectId);
+
   const handleAddRecording = (projectId: string) => {
     if (!recUrl.trim() && !recNote.trim()) {
       setError('Podaj link lub opis nagrania');
@@ -57,6 +64,17 @@ const KierownikDashboard = () => {
     setRecUrl('');
     setRecNote('');
     setAddingForProject(null);
+  };
+
+  const handleAddNote = (projectId: string) => {
+    if (!noteContent.trim()) {
+      setNoteError('Wpisz treść uwagi');
+      return;
+    }
+    setNoteError('');
+    addProjectNote(projectId, noteContent.trim());
+    setNoteContent('');
+    setAddingNoteForProject(null);
   };
 
   const handleCompleteTask = (taskId: string) => {
@@ -88,9 +106,11 @@ const KierownikDashboard = () => {
           activeProjects.map(project => {
             const projectTasks = getProjectTasks(project.id);
             const projectRecordings = getProjectRecordings(project.id);
+            const projectProjectNotes = getProjectNotes(project.id);
             const confirmTask = projectTasks.find(t => t.title === 'Potwierdź nagranie');
             const uwagiTask = projectTasks.find(t => t.title === 'Dodaj uwagi przed montażem');
             const isAdding = addingForProject === project.id;
+            const isAddingNote = addingNoteForProject === project.id;
 
             return (
               <Card key={project.id} className="overflow-hidden">
@@ -226,6 +246,70 @@ const KierownikDashboard = () => {
                       Dodaj nagranie ({projectRecordings.length})
                     </Button>
                   )}
+
+                  {/* Uwagi z nagrania */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <MessageSquare className="h-4 w-4" />
+                      Uwagi z nagrania ({projectProjectNotes.length})
+                    </div>
+                    {projectProjectNotes.map((note, i) => (
+                      <div key={note.id} className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground">
+                          {i + 1}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="text-sm text-foreground whitespace-pre-wrap">{note.content}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {format(new Date(note.createdAt), 'dd.MM.yyyy, HH:mm', { locale: pl })}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteProjectNote(note.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    {isAddingNote ? (
+                      <div className="rounded-lg border border-secondary/40 bg-secondary/10 p-4 space-y-3">
+                        <Textarea
+                          placeholder="Wpisz uwagę lub sugestię z nagrania..."
+                          value={noteContent}
+                          onChange={e => { setNoteContent(e.target.value); setNoteError(''); }}
+                          rows={3}
+                        />
+                        {noteError && <p className="text-xs text-destructive">{noteError}</p>}
+                        <div className="flex gap-2">
+                          <Button onClick={() => handleAddNote(project.id)} className="flex-1" size="sm">
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Zapisz uwagę
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setAddingNoteForProject(null); setNoteContent(''); setNoteError(''); }}
+                          >
+                            <X className="mr-1 h-3 w-3" />
+                            Anuluj
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2"
+                        onClick={() => setAddingNoteForProject(project.id)}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Dodaj uwagę
+                      </Button>
+                    )}
+                  </div>
 
                   {/* Confirm recording task button */}
                   {confirmTask && confirmTask.status === 'todo' && (

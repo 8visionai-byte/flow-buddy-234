@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { User, Task, Project, UserRole, TaskHistoryEntry, Recording } from '@/types';
+import { User, Task, Project, UserRole, TaskHistoryEntry, Recording, ProjectNote } from '@/types';
 import { INITIAL_USERS, INITIAL_PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 
 interface AppContextType {
@@ -9,6 +9,7 @@ interface AppContextType {
   projects: Project[];
   tasks: Task[];
   recordings: Recording[];
+  projectNotes: ProjectNote[];
   completeTask: (taskId: string, value: string) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
@@ -23,6 +24,8 @@ interface AppContextType {
   setTaskDeadline: (taskId: string, date: string | null) => void;
   addRecording: (projectId: string, url: string, note: string) => void;
   deleteRecording: (recordingId: string) => void;
+  addProjectNote: (projectId: string, content: string) => void;
+  deleteProjectNote: (noteId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -33,6 +36,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [tasks, setTasks] = useState<Task[]>(getInitialTasks());
   const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
 
   const completeTask = useCallback((taskId: string, value: string) => {
     setTasks(prev => {
@@ -202,13 +206,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRecordings(prev => prev.filter(r => r.id !== recordingId));
   }, []);
 
+  const addProjectNote = useCallback((projectId: string, content: string) => {
+    const newNote: ProjectNote = { id: `note${Date.now()}`, projectId, content, createdAt: new Date().toISOString() };
+    setProjectNotes(prev => [...prev, newNote]);
+  }, []);
+
+  const deleteProjectNote = useCallback((noteId: string) => {
+    setProjectNotes(prev => prev.filter(n => n.id !== noteId));
+  }, []);
+
   return (
     <AppContext.Provider value={{
-      currentUser, setCurrentUser, users, projects, tasks, recordings,
+      currentUser, setCurrentUser, users, projects, tasks, recordings, projectNotes,
       completeTask, rejectTask, resubmitTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser, setTaskDeadline,
-      addRecording, deleteRecording,
+      addRecording, deleteRecording, addProjectNote, deleteProjectNote,
     }}>
       {children}
     </AppContext.Provider>
