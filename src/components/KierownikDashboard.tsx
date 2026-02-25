@@ -23,6 +23,7 @@ import {
   ExternalLink,
   CheckCircle2,
   X,
+  Lock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -33,6 +34,8 @@ const KierownikDashboard = () => {
   const [recUrl, setRecUrl] = useState('');
   const [recNote, setRecNote] = useState('');
   const [error, setError] = useState('');
+  const [uwagiValues, setUwagiValues] = useState<Record<string, string>>({});
+  const [uwagiError, setUwagiError] = useState('');
 
   if (!currentUser) return null;
 
@@ -86,6 +89,7 @@ const KierownikDashboard = () => {
             const projectTasks = getProjectTasks(project.id);
             const projectRecordings = getProjectRecordings(project.id);
             const confirmTask = projectTasks.find(t => t.title === 'Potwierdź nagranie');
+            const uwagiTask = projectTasks.find(t => t.title === 'Dodaj uwagi przed montażem');
             const isAdding = addingForProject === project.id;
 
             return (
@@ -238,6 +242,57 @@ const KierownikDashboard = () => {
                     <div className="flex items-center gap-2 text-xs text-success">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Nagrania potwierdzone
+                    </div>
+                  )}
+
+                  {/* Uwagi przed montażem */}
+                  {uwagiTask && uwagiTask.status === 'todo' && (
+                    <div className="rounded-lg border border-border p-4 space-y-3">
+                      <label className="block text-sm font-medium text-foreground">
+                        <FileText className="inline mr-1.5 h-4 w-4" />
+                        Uwagi przed montażem
+                      </label>
+                      <Textarea
+                        placeholder="Wpisz uwagi z planu zdjęciowego..."
+                        value={uwagiValues[uwagiTask.id] || ''}
+                        onChange={e => {
+                          setUwagiValues(prev => ({ ...prev, [uwagiTask.id]: e.target.value }));
+                          setUwagiError('');
+                        }}
+                        rows={3}
+                      />
+                      {uwagiError && <p className="text-xs text-destructive">{uwagiError}</p>}
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={!(uwagiValues[uwagiTask.id] || '').trim()}
+                        onClick={() => {
+                          const val = (uwagiValues[uwagiTask.id] || '').trim();
+                          if (!val) { setUwagiError('Wpisz uwagi'); return; }
+                          completeTask(uwagiTask.id, val);
+                          setUwagiValues(prev => { const n = { ...prev }; delete n[uwagiTask.id]; return n; });
+                        }}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Wyślij uwagi
+                      </Button>
+                    </div>
+                  )}
+                  {uwagiTask && uwagiTask.status === 'done' && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3">
+                      <div className="flex items-center gap-2 text-xs text-success mb-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Uwagi wysłane
+                      </div>
+                      {uwagiTask.value && (
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{uwagiTask.value}</p>
+                      )}
+                    </div>
+                  )}
+                  {uwagiTask && uwagiTask.status === 'locked' && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Lock className="h-3 w-3" />
+                      Uwagi przed montażem — odblokowane po potwierdzeniu nagrań
                     </div>
                   )}
                 </CardContent>
