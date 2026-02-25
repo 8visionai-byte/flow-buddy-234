@@ -8,6 +8,7 @@ const Index = () => {
 
   if (!currentUser) return <RoleSelector />;
   if (currentUser.role === 'admin') return <AdminDashboard />;
+  if (currentUser.role === 'kierownik_planu') return <AdminDashboard readOnly />;
   return <UserDashboard />;
 };
 

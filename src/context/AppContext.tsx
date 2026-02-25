@@ -9,6 +9,8 @@ interface AppContextType {
   projects: Project[];
   tasks: Task[];
   completeTask: (taskId: string, value: string) => void;
+  rejectTask: (taskId: string, feedback: string) => void;
+  resubmitTask: (taskId: string, newValue: string) => void;
   addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId'>) => void;
   deleteProject: (projectId: string) => void;
   toggleFreezeProject: (projectId: string) => void;
@@ -30,6 +32,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTasks(prev => {
       const updated = prev.map(t => {
         if (t.id === taskId) {
+          // If this is an approval-type task (inputType === 'approval'), accepting means done
           return { ...t, status: 'done' as const, value, completedAt: new Date().toISOString(), completedBy: t.assignedRole };
         }
         return t;
@@ -37,20 +40,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const completedTask = updated.find(t => t.id === taskId);
       if (completedTask) {
+        // For text/url tasks that feed into an approval step:
+        // If the NEXT task is an approval task, set it to pending_client_approval
         const nextTask = updated.find(
           t => t.projectId === completedTask.projectId && t.order === completedTask.order + 1
         );
         if (nextTask) {
+          const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
           return updated.map(t =>
-            t.id === nextTask.id ? { ...t, status: 'todo' as const, assignedAt: new Date().toISOString() } : t
+            t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: new Date().toISOString() } : t
           );
         }
       }
 
       return updated;
     });
+  }, []);
 
-    console.log(`[Webhook Ready] Task ${taskId} completed with value: ${value}`);
+  // Client rejects: task bounces back to influencer
+  const rejectTask = useCallback((taskId: string, feedback: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+
+      // Find the preceding task (the one influencer submitted)
+      const prevTask = prev.find(
+        t => t.projectId === task.projectId && t.order === task.order - 1
+      );
+
+      return prev.map(t => {
+        if (t.id === taskId) {
+          // Mark current approval task as needing revision (reset it)
+          return { ...t, status: 'locked' as const, clientFeedback: feedback, assignedAt: null };
+        }
+        if (prevTask && t.id === prevTask.id) {
+          // Reopen the influencer's task with feedback
+          return {
+            ...t,
+            status: 'needs_influencer_revision' as const,
+            clientFeedback: feedback,
+            assignedAt: new Date().toISOString(),
+            completedAt: null,
+            completedBy: null,
+          };
+        }
+        return t;
+      });
+    });
+  }, []);
+
+  // Influencer resubmits after revision
+  const resubmitTask = useCallback((taskId: string, newValue: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+
+      const nextTask = prev.find(
+        t => t.projectId === task.projectId && t.order === task.order + 1
+      );
+
+      return prev.map(t => {
+        if (t.id === taskId) {
+          return { ...t, status: 'done' as const, value: newValue, completedAt: new Date().toISOString(), completedBy: t.assignedRole, clientFeedback: null };
+        }
+        if (nextTask && t.id === nextTask.id) {
+          return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, assignedAt: new Date().toISOString() };
+        }
+        return t;
+      });
+    });
   }, []);
 
   const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId'>) => {
@@ -94,7 +152,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, projects, tasks,
-      completeTask, addProject, deleteProject, toggleFreezeProject, assignToProject,
+      completeTask, rejectTask, resubmitTask,
+      addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser,
     }}>
       {children}

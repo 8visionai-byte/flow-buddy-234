@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { ROLE_LABELS } from '@/types';
 import TaskCard from '@/components/TaskCard';
-import { CheckCircle2, Circle, Lock, LogOut, Menu, X } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, LogOut, Menu, X, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 const UserDashboard = () => {
   const { currentUser, setCurrentUser, tasks, projects } = useApp();
@@ -14,22 +13,33 @@ const UserDashboard = () => {
   if (!currentUser) return null;
 
   const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
-  const myTasks = tasks.filter(t => t.assignedRole === currentUser.role && t.status !== 'locked' && activeProjectIds.includes(t.projectId));
-  const todoTasks = myTasks.filter(t => t.status === 'todo');
+  const myTasks = tasks.filter(t => {
+    if (!activeProjectIds.includes(t.projectId)) return false;
+    if (t.assignedRole !== currentUser.role) return false;
+    // Show tasks that are todo, done, pending_client_approval (for clients), or needs_influencer_revision (for influencers)
+    if (t.status === 'locked') return false;
+    return true;
+  });
+  
+  const activeTasks = myTasks.filter(t => t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision');
   const doneTasks = myTasks.filter(t => t.status === 'done');
   const selectedTask = myTasks.find(t => t.id === selectedTaskId);
-  const allDone = todoTasks.length === 0;
+  const allDone = activeTasks.length === 0;
 
   const getProject = (projectId: string) => projects.find(p => p.id === projectId);
 
+  const taskIcon = (status: string) => {
+    if (status === 'needs_influencer_revision') return <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />;
+    if (status === 'pending_client_approval') return <Circle className="h-4 w-4 shrink-0 text-warning" />;
+    return <Circle className="h-4 w-4 shrink-0 text-primary" />;
+  };
+
   return (
     <div className="flex h-screen bg-background">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-card transition-transform md:relative md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between border-b border-border p-4">
           <div>
@@ -47,12 +57,12 @@ const UserDashboard = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
-          {todoTasks.length > 0 && (
+          {activeTasks.length > 0 && (
             <div className="mb-4">
               <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Do zrobienia ({todoTasks.length})
+                Do zrobienia ({activeTasks.length})
               </div>
-              {todoTasks.map(task => (
+              {activeTasks.map(task => (
                 <button
                   key={task.id}
                   onClick={() => { setSelectedTaskId(task.id); setSidebarOpen(false); }}
@@ -60,11 +70,14 @@ const UserDashboard = () => {
                     selectedTaskId === task.id ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
                   }`}
                 >
-                  <Circle className="h-4 w-4 shrink-0 text-primary" />
+                  {taskIcon(task.status)}
                   <div className="flex-1 truncate">
                     <div className="truncate font-medium">{task.title}</div>
                     <div className="truncate text-xs text-muted-foreground">{getProject(task.projectId)?.name}</div>
                   </div>
+                  {task.status === 'needs_influencer_revision' && (
+                    <span className="text-[10px] font-medium text-destructive">POPRAW</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -86,7 +99,6 @@ const UserDashboard = () => {
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex flex-1 flex-col">
         <header className="flex items-center border-b border-border px-4 py-3 md:px-6">
           <Button variant="ghost" size="icon" className="mr-2 md:hidden" onClick={() => setSidebarOpen(true)}>
