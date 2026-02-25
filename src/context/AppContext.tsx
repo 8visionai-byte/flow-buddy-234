@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { User, Task } from '@/types';
-import { USERS, PROJECTS, getInitialTasks } from '@/data/mockData';
+import { USERS, PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 import type { Project } from '@/types';
 
 interface AppContextType {
@@ -9,13 +9,14 @@ interface AppContextType {
   projects: Project[];
   tasks: Task[];
   completeTask: (taskId: string, value: string) => void;
+  addProject: (project: Omit<Project, 'id' | 'currentStageIndex'>) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [projects] = useState<Project[]>(PROJECTS);
+  const [projects, setProjects] = useState<Project[]>(PROJECTS);
   const [tasks, setTasks] = useState<Task[]>(getInitialTasks());
 
   const completeTask = useCallback((taskId: string, value: string) => {
@@ -27,7 +28,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return t;
       });
 
-      // Unlock next task in same project
       const completedTask = updated.find(t => t.id === taskId);
       if (completedTask) {
         const nextTask = updated.find(
@@ -43,12 +43,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return updated;
     });
 
-    // Webhook placeholder
     console.log(`[Webhook Ready] Task ${taskId} completed with value: ${value}`);
   }, []);
 
+  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex'>) => {
+    const id = `p${Date.now()}`;
+    const newProject: Project = { ...data, id, currentStageIndex: 0 };
+    setProjects(prev => [...prev, newProject]);
+    const newTasks = createTasksForProject(id, 0);
+    setTasks(prev => [...prev, ...newTasks]);
+  }, []);
+
   return (
-    <AppContext.Provider value={{ currentUser, setCurrentUser, projects, tasks, completeTask }}>
+    <AppContext.Provider value={{ currentUser, setCurrentUser, projects, tasks, completeTask, addProject }}>
       {children}
     </AppContext.Provider>
   );

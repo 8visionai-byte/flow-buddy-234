@@ -1,9 +1,9 @@
 import { useApp } from '@/context/AppContext';
-import { PROJECTS } from '@/data/mockData';
 import { ROLE_LABELS, ROLE_COLORS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LogOut, CheckCircle2, Circle, Lock } from 'lucide-react';
+import AddProjectDialog from '@/components/AddProjectDialog';
 
 const AdminDashboard = () => {
   const { currentUser, setCurrentUser, tasks, projects } = useApp();
@@ -34,6 +34,7 @@ const AdminDashboard = () => {
           <p className="text-xs text-muted-foreground">Widok helikoptera — wszystkie projekty</p>
         </div>
         <div className="flex items-center gap-3">
+          <AddProjectDialog />
           <span className="hidden text-sm text-muted-foreground sm:inline">{currentUser.name}</span>
           <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
             <LogOut className="h-4 w-4" />
@@ -49,7 +50,9 @@ const AdminDashboard = () => {
             <div key={project.id} className="mb-6 animate-fade-in rounded-xl border border-border bg-card shadow-sm">
               <div className="border-b border-border px-4 py-3 md:px-6">
                 <h2 className="font-semibold text-foreground">{project.name}</h2>
-                <p className="text-xs text-muted-foreground">Klient: {project.clientName}</p>
+                <p className="text-xs text-muted-foreground">
+                  Klient: {project.clientName} · {project.company || '—'} · {project.clientEmail} · {project.clientPhone || '—'}
+                </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-sm">
