@@ -115,21 +115,21 @@ const UserDashboard = () => {
         </header>
 
         <div className="flex flex-1 items-center justify-center p-4 md:p-8">
-          {allDone ? (
-            <div className="animate-fade-in text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
-                <CheckCircle2 className="h-8 w-8 text-success" />
-              </div>
-              <h2 className="text-xl font-semibold text-foreground">Wszystko gotowe!</h2>
-              <p className="mt-2 text-sm text-muted-foreground">Oczekuj na kolejne kroki od zespołu.</p>
-            </div>
-          ) : selectedTask ? (
+          {selectedTask ? (
             <div className="w-full max-w-lg">
               {selectedTask.status === 'done' ? (
                 <CompletedTaskCard task={selectedTask} projectName={getProject(selectedTask.projectId)?.name || ''} />
               ) : (
                 <TaskCard task={selectedTask} projectName={getProject(selectedTask.projectId)?.name || ''} />
               )}
+            </div>
+          ) : allDone && doneTasks.length === 0 ? (
+            <div className="animate-fade-in text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
+                <CheckCircle2 className="h-8 w-8 text-success" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Wszystko gotowe!</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Oczekuj na kolejne kroki od zespołu.</p>
             </div>
           ) : (
             <div className="text-center text-muted-foreground">
