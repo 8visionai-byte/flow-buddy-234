@@ -63,6 +63,27 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     return task.status === 'done';
   };
 
+  // Check if the pipeline is currently blocked waiting for this admin task
+  const isAdminTaskBlocking = (task: typeof tasks[0]) => {
+    if (!task.assignedRoles.includes('admin')) return false;
+    if (isAdminTaskDone(task)) return false;
+    // The task is blocking if its natural pipeline status would be 'todo' or 'pending_client_approval'
+    // i.e., all previous tasks in the project are done
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    for (const pt of projectTasks) {
+      if (pt.order < task.order) {
+        // For multi-role tasks, check if all roles completed
+        if (pt.assignedRoles.length > 1) {
+          const allDone = pt.assignedRoles.every(r => pt.roleCompletions[r]);
+          if (!allDone && pt.status !== 'done') return false;
+        } else if (pt.status !== 'done') {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
   const statusIcon = (status: string) => {
     if (status === 'done') return <CheckCircle2 className="h-4 w-4 text-success" />;
     if (status === 'todo') return <Circle className="h-4 w-4 text-primary" />;
@@ -499,6 +520,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           const isFrozen = project.status === 'frozen';
           const adminTasks = getAdminTasksForProject(project.id);
           const pendingAdminTasks = adminTasks.filter(t => isAdminTaskActionable(t));
+          const blockingAdminTasks = adminTasks.filter(t => isAdminTaskBlocking(t));
           const doneAdminTasks = adminTasks.filter(t => isAdminTaskDone(t));
 
           return (
@@ -625,7 +647,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   <div className="flex items-center gap-2 mb-2">
                     <ClipboardList className="h-4 w-4 text-primary" />
                     <span className="text-sm font-semibold text-foreground">Zadania Admina</span>
-                    {pendingAdminTasks.length > 0 && (
+                    {blockingAdminTasks.length > 0 && (
+                      <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs animate-pulse">
+                        {blockingAdminTasks.length} blokuje proces!
+                      </Badge>
+                    )}
+                    {blockingAdminTasks.length === 0 && pendingAdminTasks.length > 0 && (
                       <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">
                         {pendingAdminTasks.length} do zrobienia
                       </Badge>
@@ -640,26 +667,31 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     {adminTasks.map(task => {
                       const actionable = isAdminTaskActionable(task);
                       const done = isAdminTaskDone(task);
+                      const blocking = isAdminTaskBlocking(task);
                       return (
                         <div
                           key={task.id}
                           className={cn(
                             "flex items-center gap-3 rounded-lg border p-3 transition-colors",
-                            actionable && "border-primary/40 bg-primary/10 shadow-sm",
+                            blocking && "border-destructive/60 bg-destructive/10 shadow-md ring-1 ring-destructive/20",
+                            !blocking && actionable && "border-primary/40 bg-primary/10 shadow-sm",
                             done && "border-success/40 bg-success/10",
-                            !actionable && !done && "border-border bg-card opacity-60"
+                            !actionable && !done && !blocking && "border-border bg-card opacity-60"
                           )}
                         >
                           {done ? (
                             <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                          ) : blocking ? (
+                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 animate-pulse" />
                           ) : actionable ? (
                             <Circle className="h-4 w-4 text-primary shrink-0 animate-pulse" />
                           ) : (
                             <Lock className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium text-foreground truncate">
+                            <div className={cn("text-xs font-medium truncate", blocking ? "text-destructive" : "text-foreground")}>
                               {task.order + 1}. {task.title}
+                              {blocking && <span className="ml-1 text-[10px] font-bold">(Proces czeka!)</span>}
                             </div>
                             <div className="mt-1">
                               {(actionable || done) && renderAdminAction(task)}
@@ -690,6 +722,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       const isAdminTask = task.assignedRoles.includes('admin');
                       const adminActionable = isAdminTask && isAdminTaskActionable(task);
                       const adminDone = isAdminTask && isAdminTaskDone(task);
+                      const adminBlocking = isAdminTask && isAdminTaskBlocking(task);
 
                       return (
                         <tr
@@ -698,8 +731,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                             "border-b border-border last:border-0",
                             // Non-admin locked tasks are dimmed
                             !isAdminTask && task.status === 'locked' && 'opacity-40',
-                            // Admin task highlighting
-                            adminActionable && 'bg-primary/5 border-l-2 border-l-primary',
+                            // Admin task highlighting - blocking (red) > actionable (blue) > done (green)
+                            adminBlocking && 'bg-destructive/5 border-l-2 border-l-destructive',
+                            !adminBlocking && adminActionable && 'bg-primary/5 border-l-2 border-l-primary',
                             adminDone && 'bg-success/5 border-l-2 border-l-success',
                           )}
                         >
@@ -707,10 +741,11 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                             <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{task.order + 1}.</span>
                             {isAdminTask ? (
                               adminDone ? <CheckCircle2 className="h-4 w-4 text-success" /> :
+                              adminBlocking ? <AlertTriangle className="h-4 w-4 text-destructive animate-pulse" /> :
                               adminActionable ? <Circle className="h-4 w-4 text-primary" /> :
                               statusIcon(task.status)
                             ) : statusIcon(task.status)}
-                            <span className={cn("font-medium", adminActionable && "text-primary", adminDone && "text-success", !isAdminTask && "text-foreground")}>{task.title}</span>
+                            <span className={cn("font-medium", adminBlocking && "text-destructive font-semibold", !adminBlocking && adminActionable && "text-primary", adminDone && "text-success", !isAdminTask && "text-foreground")}>{task.title}</span>
                           </td>
                           <td className="px-4 py-2.5">
                             <div className="flex gap-1 flex-wrap">
@@ -724,6 +759,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                           <td className="px-4 py-2.5">
                             {isAdminTask ? (
                               adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> :
+                              adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> :
                               adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> :
                               statusBadge(task.status)
                             ) : statusBadge(task.status)}
