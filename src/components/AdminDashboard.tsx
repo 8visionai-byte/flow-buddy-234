@@ -48,6 +48,21 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const getTasksForProject = (projectId: string) =>
     tasks.filter(t => t.projectId === projectId).sort((a, b) => a.order - b.order);
 
+  // Check if an admin task is effectively actionable (admin can always act)
+  const isAdminTaskActionable = (task: typeof tasks[0]) => {
+    if (!task.assignedRoles.includes('admin')) return false;
+    // Multi-role: admin part not done yet
+    if (task.assignedRoles.length > 1) return !task.roleCompletions['admin'];
+    // Single-role admin task: not done yet
+    return task.status !== 'done';
+  };
+
+  const isAdminTaskDone = (task: typeof tasks[0]) => {
+    if (!task.assignedRoles.includes('admin')) return false;
+    if (task.assignedRoles.length > 1) return !!task.roleCompletions['admin'];
+    return task.status === 'done';
+  };
+
   const statusIcon = (status: string) => {
     if (status === 'done') return <CheckCircle2 className="h-4 w-4 text-success" />;
     if (status === 'todo') return <Circle className="h-4 w-4 text-primary" />;
@@ -84,11 +99,165 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const roleLabel = readOnly ? 'Kierownik Planu' : 'Panel Admina';
   const roleSubtitle = readOnly ? 'Widok tylko do odczytu' : 'Widok helikoptera — wszystkie projekty';
 
+  // Render admin task inline action (used in both the per-project panel and table)
+  const renderAdminAction = (task: typeof tasks[0], compact = false) => {
+    const adminDone = isAdminTaskDone(task);
+    
+    if (adminDone) {
+      // Show completed value
+      if (task.title === 'Ustaw termin planu zdjęciowego' && task.value) {
+        return (
+          <span className="text-xs text-success font-medium">
+            <CalendarClock className="inline mr-1 h-3 w-3" />
+            {format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })} ✓
+          </span>
+        );
+      }
+      if (task.title === 'Wstaw link do frame.io' && task.value) {
+        return (
+          <a href={task.value} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-success hover:underline">
+            <ExternalLink className="h-3 w-3" />
+            frame.io ✓
+          </a>
+        );
+      }
+      if (task.title === 'Nadaj priorytet' && task.value) {
+        return (
+          <Badge variant="secondary" className={`${PRIORITY_COLORS[task.value as ProjectPriority] || ''} border-0 text-xs`}>
+            <Flag className="mr-1 h-3 w-3" />{PRIORITY_LABELS[task.value as ProjectPriority] || task.value} ✓
+          </Badge>
+        );
+      }
+      if (task.title === 'Ustaw datę publikacji' && task.value) {
+        return (
+          <span className="text-xs text-success font-medium">
+            <CalendarIcon className="inline mr-1 h-3 w-3" />
+            {format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })} ✓
+          </span>
+        );
+      }
+      if (task.title === 'Dodaj uwagi przed montażem') {
+        return <span className="text-xs text-success font-medium">Uwagi dodane ✓</span>;
+      }
+      if (task.title === 'Akceptacja materiału') {
+        return <span className="text-xs text-success font-medium">Zaakceptowano ✓</span>;
+      }
+      return <span className="text-xs text-success">Wykonane ✓</span>;
+    }
+
+    // Actionable controls
+    if (task.title === 'Ustaw termin planu zdjęciowego') {
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="default" className={`h-7 gap-1 text-xs ${compact ? '' : 'min-w-[120px]'}`}>
+              <CalendarClock className="h-3 w-3" />
+              Wybierz datę
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="single"
+              selected={undefined}
+              onSelect={(date) => {
+                if (date) {
+                  const rekwizytyTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Określ rekwizyty');
+                  if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
+                  const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
+                  if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
+                  completeTask(task.id, date.toISOString(), 'admin');
+                }
+              }}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    if (task.title === 'Wstaw link do frame.io') {
+      const linkVal = adminLinkInputs[task.id] || '';
+      return (
+        <div className="flex items-center gap-1">
+          <div className="relative flex-1">
+            <LinkIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+            <input type="url" placeholder="https://frame.io/..." value={linkVal}
+              onChange={e => setAdminLinkInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+              className="h-7 w-full min-w-[140px] rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
+          </div>
+          <Button size="sm" variant="default" className="h-7 px-2" disabled={!linkVal.trim()}
+            onClick={() => { completeTask(task.id, linkVal.trim(), 'admin'); setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; }); }}>
+            <Send className="h-3 w-3" />
+          </Button>
+        </div>
+      );
+    }
+
+    if (task.title === 'Nadaj priorytet') {
+      return (
+        <Select onValueChange={(val: ProjectPriority) => { setProjectPriority(task.projectId, val); completeTask(task.id, val, 'admin'); }}>
+          <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Priorytet" /></SelectTrigger>
+          <SelectContent className="bg-popover z-50">
+            {(['low', 'medium', 'high', 'urgent'] as ProjectPriority[]).map(p => (
+              <SelectItem key={p} value={p}><span className="flex items-center gap-1"><Flag className="h-3 w-3" />{PRIORITY_LABELS[p]}</span></SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    if (task.title === 'Dodaj uwagi przed montażem') {
+      const val = adminTextInputs[task.id] || '';
+      return (
+        <div className="flex items-center gap-1">
+          <input type="text" placeholder="Uwagi admina..." value={val}
+            onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+            className="h-7 w-full min-w-[140px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
+          <Button size="sm" variant="default" className="h-7 px-2" disabled={!val.trim()} onClick={() => {
+            completeTask(task.id, val.trim(), 'admin');
+            setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+          }}>
+            <Send className="h-3 w-3" />
+          </Button>
+        </div>
+      );
+    }
+
+    if (task.title === 'Ustaw datę publikacji') {
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="default" className={`h-7 gap-1 text-xs ${compact ? '' : 'min-w-[120px]'}`}>
+              <CalendarIcon className="h-3 w-3" />
+              Wybierz datę
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar mode="single" selected={undefined}
+              onSelect={(date) => { if (date) { setPublicationDate(task.projectId, date.toISOString()); completeTask(task.id, date.toISOString(), 'admin'); } }}
+              initialFocus className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    if (task.title === 'Akceptacja materiału') {
+      return (
+        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true', 'admin')}>
+          <CheckCircle2 className="mr-1 h-3 w-3" />
+          Zaakceptuj
+        </Button>
+      );
+    }
+
+    return null;
+  };
+
   const renderSlaColumn = (task: typeof tasks[0]) => {
     const isActive = task.status === 'todo' || task.status === 'pending_client_approval' || task.status === 'needs_influencer_revision';
     const isKierownik = task.assignedRoles.includes('kierownik_planu') || task.title === 'Określ rekwizyty';
 
-    // Done tasks: show frozen completion time
     if (task.status === 'done' && task.assignedAt && task.completedAt) {
       const durationMs = differenceInMilliseconds(new Date(task.completedAt), new Date(task.assignedAt));
       const overdue = isKierownik
@@ -103,7 +272,6 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       );
     }
 
-    // Kierownik locked: show "set deadline" button for admin
     if (isKierownik && !isActive && task.status === 'locked') {
       if (task.deadlineDate) {
         return (
@@ -122,15 +290,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={undefined}
-                onSelect={(date) => {
-                  if (date) setTaskDeadline(task.id, date.toISOString());
-                }}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
+              <Calendar mode="single" selected={undefined}
+                onSelect={(date) => { if (date) setTaskDeadline(task.id, date.toISOString()); }}
+                initialFocus className={cn("p-3 pointer-events-auto")} />
             </PopoverContent>
           </Popover>
         );
@@ -138,7 +300,6 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       return <span className="text-xs text-muted-foreground">—</span>;
     }
 
-    // Kierownik active: show deadline date
     if (isKierownik && isActive) {
       if (task.deadlineDate) {
         const deadlinePassed = new Date(task.deadlineDate) < new Date();
@@ -154,15 +315,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={new Date(task.deadlineDate)}
-                    onSelect={(date) => {
-                      if (date) setTaskDeadline(task.id, date.toISOString());
-                    }}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
+                  <Calendar mode="single" selected={new Date(task.deadlineDate)}
+                    onSelect={(date) => { if (date) setTaskDeadline(task.id, date.toISOString()); }}
+                    initialFocus className={cn("p-3 pointer-events-auto")} />
                 </PopoverContent>
               </Popover>
             )}
@@ -185,15 +340,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={undefined}
-                onSelect={(date) => {
-                  if (date) setTaskDeadline(task.id, date.toISOString());
-                }}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
+              <Calendar mode="single" selected={undefined}
+                onSelect={(date) => { if (date) setTaskDeadline(task.id, date.toISOString()); }}
+                initialFocus className={cn("p-3 pointer-events-auto")} />
             </PopoverContent>
           </Popover>
         );
@@ -201,7 +350,6 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       return <span className="text-xs text-muted-foreground">Brak terminu</span>;
     }
 
-    // Active non-kierownik: live SLA timer
     if (isActive && task.assignedAt) {
       const elapsed = Date.now() - new Date(task.assignedAt).getTime();
       const remaining = SLA_MS - elapsed;
@@ -221,9 +369,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const canInteract = readOnly ? isNagrywkaTask(task.id) && isActive : false;
     const isKierownikConfirm = task.assignedRoles.includes('kierownik_planu') && task.title === 'Potwierdź nagranie';
     const isAdminTask = task.assignedRoles.includes('admin');
-    const adminCompleted = task.roleCompletions['admin'];
 
-    // Kierownik confirm done: show URL link + tooltip with note
+    // Kierownik confirm done
     if (isKierownikConfirm && task.status === 'done' && task.value) {
       try {
         const parsed = JSON.parse(task.value);
@@ -251,65 +398,34 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           );
         }
       } catch {
-        // Not JSON, render normally
+        // Not JSON
       }
     }
 
-    // Multi-role task: show per-role completion status
-    if (task.assignedRoles.length > 1 && (task.status === 'todo' || task.status === 'done')) {
+    // Multi-role task: show per-role completion + admin inline action
+    if (task.assignedRoles.length > 1 && (task.status === 'todo' || task.status === 'done' || (isAdminTask && task.status === 'locked'))) {
       const completionInfo = task.assignedRoles.map(r => ({
         role: r,
         done: !!task.roleCompletions[r],
         value: task.roleCompletions[r],
       }));
 
-      // Admin can complete from table if not yet done
-      if (!readOnly && isAdminTask && task.status === 'todo' && !adminCompleted) {
-        if (task.title === 'Dodaj uwagi przed montażem') {
-          const val = adminTextInputs[task.id] || '';
-          return (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1">
-                <input type="text" placeholder="Uwagi admina..." value={val}
-                  onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
-                  className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
-                <Button size="sm" variant="default" className="h-7 px-2" disabled={!val.trim()} onClick={() => {
-                  completeTask(task.id, val.trim(), 'admin');
-                  setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-                }}>
-                  <Send className="h-3 w-3" />
-                </Button>
-              </div>
-              <div className="flex gap-1 flex-wrap">
-                {completionInfo.map(c => (
-                  <Badge key={c.role} variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
-                    {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
-                  </Badge>
-                ))}
-              </div>
+      // Admin can act from table regardless of task status
+      if (!readOnly && isAdminTask && !task.roleCompletions['admin']) {
+        return (
+          <div className="space-y-1">
+            {renderAdminAction(task, true)}
+            <div className="flex gap-1 flex-wrap">
+              {completionInfo.map(c => (
+                <Badge key={c.role} variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
+                  {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
+                </Badge>
+              ))}
             </div>
-          );
-        }
-        if (task.title === 'Akceptacja materiału') {
-          return (
-            <div className="space-y-1">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true', 'admin')}>
-                <CheckCircle2 className="mr-1 h-3 w-3" />
-                Zaakceptuj (Admin)
-              </Button>
-              <div className="flex gap-1 flex-wrap">
-                {completionInfo.map(c => (
-                  <Badge key={c.role} variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
-                    {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          );
-        }
+          </div>
+        );
       }
 
-      // Show completion badges for multi-role tasks
       return (
         <div className="flex gap-1 flex-wrap">
           {completionInfo.map(c => (
@@ -332,113 +448,14 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       );
     }
 
-    // Admin task: Ustaw termin planu zdjęciowego
-    if (!readOnly && isAdminTask && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'todo') {
-      return (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-              <CalendarClock className="h-3 w-3" />
-              Wybierz datę
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={undefined}
-              onSelect={(date) => {
-                if (date) {
-                  const rekwizytyTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Określ rekwizyty');
-                  if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
-                  const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
-                  if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
-                  completeTask(task.id, date.toISOString(), 'admin');
-                }
-              }}
-              initialFocus className={cn("p-3 pointer-events-auto")}
-            />
-          </PopoverContent>
-        </Popover>
-      );
-    }
-
-    if (isAdminTask && task.title === 'Ustaw termin planu zdjęciowego' && task.status === 'done' && task.value) {
-      return (
-        <span className="text-xs text-muted-foreground">
-          <CalendarClock className="inline mr-1 h-3 w-3" />
-          {format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })}
-        </span>
-      );
-    }
-
-    // Admin task: Wstaw link do frame.io
-    if (!readOnly && isAdminTask && task.title === 'Wstaw link do frame.io' && task.status === 'todo') {
-      const linkVal = adminLinkInputs[task.id] || '';
-      return (
-        <div className="flex items-center gap-1">
-          <div className="relative flex-1">
-            <LinkIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            <input type="url" placeholder="https://frame.io/..." value={linkVal}
-              onChange={e => setAdminLinkInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
-              className="h-7 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
-          </div>
-          <Button size="sm" variant="default" className="h-7 px-2" disabled={!linkVal.trim()}
-            onClick={() => { completeTask(task.id, linkVal.trim(), 'admin'); setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; }); }}>
-            <Send className="h-3 w-3" />
-          </Button>
-        </div>
-      );
-    }
-
-    if (isAdminTask && task.title === 'Wstaw link do frame.io' && task.status === 'done' && task.value) {
-      return (
-        <a href={task.value} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-          <ExternalLink className="h-3 w-3" />
-          frame.io
-        </a>
-      );
-    }
-
-    // Admin task: Nadaj priorytet
-    if (!readOnly && isAdminTask && task.title === 'Nadaj priorytet' && task.status === 'todo') {
-      return (
-        <Select onValueChange={(val: ProjectPriority) => { setProjectPriority(task.projectId, val); completeTask(task.id, val, 'admin'); }}>
-          <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Priorytet" /></SelectTrigger>
-          <SelectContent className="bg-popover z-50">
-            {(['low', 'medium', 'high', 'urgent'] as ProjectPriority[]).map(p => (
-              <SelectItem key={p} value={p}><span className="flex items-center gap-1"><Flag className="h-3 w-3" />{PRIORITY_LABELS[p]}</span></SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      );
-    }
-
-    if (task.title === 'Nadaj priorytet' && task.status === 'done' && task.value) {
-      return (
-        <Badge variant="secondary" className={`${PRIORITY_COLORS[task.value as ProjectPriority] || ''} border-0 text-xs`}>
-          <Flag className="mr-1 h-3 w-3" />{PRIORITY_LABELS[task.value as ProjectPriority] || task.value}
-        </Badge>
-      );
-    }
-
-    // Admin task: Ustaw datę publikacji
-    if (!readOnly && isAdminTask && task.title === 'Ustaw datę publikacji' && task.status === 'todo') {
-      return (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs"><CalendarIcon className="h-3 w-3" />Wybierz datę</Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={undefined}
-              onSelect={(date) => { if (date) { setPublicationDate(task.projectId, date.toISOString()); completeTask(task.id, date.toISOString(), 'admin'); } }}
-              initialFocus className={cn("p-3 pointer-events-auto")} />
-          </PopoverContent>
-        </Popover>
-      );
-    }
-
-    if (task.title === 'Ustaw datę publikacji' && task.status === 'done' && task.value) {
-      return (
-        <span className="text-xs text-muted-foreground"><CalendarIcon className="inline mr-1 h-3 w-3" />{format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })}</span>
-      );
+    // Single-role admin tasks: always show action regardless of lock status
+    if (!readOnly && isAdminTask && task.assignedRoles.length === 1) {
+      if (isAdminTaskActionable(task)) {
+        return renderAdminAction(task, true);
+      }
+      if (isAdminTaskDone(task)) {
+        return renderAdminAction(task, true);
+      }
     }
 
     if (canInteract && task.status === 'todo' && task.inputType === 'boolean') {
@@ -450,6 +467,13 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     }
 
     return <span className="truncate">{task.value || '—'}</span>;
+  };
+
+  // Get admin tasks for a specific project
+  const getAdminTasksForProject = (projectId: string) => {
+    return tasks
+      .filter(t => t.projectId === projectId && t.assignedRoles.includes('admin'))
+      .sort((a, b) => a.order - b.order);
   };
 
   return (
@@ -470,152 +494,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       </header>
 
       <div className="flex-1 overflow-auto p-4 md:p-6">
-        {/* Admin pending tasks panel */}
-        {!readOnly && (() => {
-          const adminTasks = tasks.filter(t => t.assignedRoles.includes('admin') && t.status === 'todo' && !t.roleCompletions['admin']);
-          if (adminTasks.length === 0) return null;
-          return (
-            <div className="mb-6 rounded-xl border-2 border-primary/30 bg-primary/5 p-4 md:p-6 animate-fade-in">
-              <div className="flex items-center gap-2 mb-3">
-                <ClipboardList className="h-5 w-5 text-primary" />
-                <h2 className="font-semibold text-foreground">Twoje zadania do wykonania</h2>
-                <Badge variant="secondary" className="bg-primary/10 text-primary border-0">{adminTasks.length}</Badge>
-              </div>
-              <div className="space-y-2">
-                {adminTasks.map(task => {
-                  const project = projects.find(p => p.id === task.projectId);
-                  return (
-                    <div key={task.id} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                      <Circle className="h-4 w-4 text-primary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-foreground">{task.title}</span>
-                        <span className="text-xs text-muted-foreground ml-2">— {project?.name}</span>
-                      </div>
-                      {task.title === 'Ustaw termin planu zdjęciowego' && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button size="sm" variant="default" className="h-7 gap-1 text-xs">
-                              <CalendarClock className="h-3 w-3" />
-                              Wybierz datę
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                              mode="single"
-                              selected={undefined}
-                              onSelect={(date) => {
-                                if (date) {
-                                  const rekwizytyTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Określ rekwizyty');
-                                  if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
-                                  const confirmTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Potwierdź nagranie');
-                                  if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
-                                   completeTask(task.id, date.toISOString(), 'admin');
-                                }
-                              }}
-                              initialFocus
-                              className={cn("p-3 pointer-events-auto")}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      )}
-                      {task.title === 'Wstaw link do frame.io' && (
-                        <div className="flex items-center gap-1">
-                          <div className="relative">
-                            <LinkIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                              type="url"
-                              placeholder="https://frame.io/..."
-                              value={adminLinkInputs[task.id] || ''}
-                              onChange={e => setAdminLinkInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
-                              className="h-7 w-40 rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-7 px-2"
-                            disabled={!(adminLinkInputs[task.id] || '').trim()}
-                            onClick={() => {
-                              completeTask(task.id, (adminLinkInputs[task.id] || '').trim(), 'admin');
-                              setAdminLinkInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-                            }}
-                          >
-                            <Send className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                      {task.title === 'Nadaj priorytet' && (
-                        <Select onValueChange={(val: ProjectPriority) => {
-                          setProjectPriority(task.projectId, val);
-                          completeTask(task.id, val, 'admin');
-                        }}>
-                          <SelectTrigger className="h-7 w-32 text-xs">
-                            <SelectValue placeholder="Priorytet" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover z-50">
-                            {(['low', 'medium', 'high', 'urgent'] as ProjectPriority[]).map(p => (
-                              <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {task.title === 'Dodaj uwagi przed montażem' && (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            placeholder="Uwagi..."
-                            value={adminTextInputs[task.id] || ''}
-                            onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
-                            className="h-7 w-40 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
-                          <Button size="sm" variant="default" className="h-7 px-2" disabled={!(adminTextInputs[task.id] || '').trim()} onClick={() => {
-                            completeTask(task.id, (adminTextInputs[task.id] || '').trim(), 'admin');
-                            setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-                          }}>
-                            <Send className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                      {task.title === 'Ustaw datę publikacji' && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button size="sm" variant="default" className="h-7 gap-1 text-xs">
-                              <CalendarIcon className="h-3 w-3" />
-                              Wybierz datę
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                              mode="single"
-                              selected={undefined}
-                              onSelect={(date) => {
-                                if (date) {
-                                  setPublicationDate(task.projectId, date.toISOString());
-                                  completeTask(task.id, date.toISOString(), 'admin');
-                                }
-                              }}
-                              initialFocus
-                              className={cn("p-3 pointer-events-auto")}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      )}
-                      {task.title === 'Akceptacja materiału' && (
-                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true', 'admin')}>
-                          <CheckCircle2 className="mr-1 h-3 w-3" />
-                          Zaakceptuj
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
         {projects.map(project => {
           const projectTasks = getTasksForProject(project.id);
           const isFrozen = project.status === 'frozen';
+          const adminTasks = getAdminTasksForProject(project.id);
+          const pendingAdminTasks = adminTasks.filter(t => isAdminTaskActionable(t));
+          const doneAdminTasks = adminTasks.filter(t => isAdminTaskDone(t));
 
           return (
             <div
@@ -735,6 +619,59 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 )}
               </div>
 
+              {/* Per-project Admin Tasks Panel */}
+              {!readOnly && adminTasks.length > 0 && (
+                <div className="border-b border-border bg-primary/5 px-4 py-3 md:px-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ClipboardList className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">Zadania Admina</span>
+                    {pendingAdminTasks.length > 0 && (
+                      <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">
+                        {pendingAdminTasks.length} do zrobienia
+                      </Badge>
+                    )}
+                    {pendingAdminTasks.length === 0 && (
+                      <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">
+                        Wszystko gotowe ✓
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {adminTasks.map(task => {
+                      const actionable = isAdminTaskActionable(task);
+                      const done = isAdminTaskDone(task);
+                      return (
+                        <div
+                          key={task.id}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg border p-3 transition-colors",
+                            actionable && "border-primary/40 bg-primary/10 shadow-sm",
+                            done && "border-success/40 bg-success/10",
+                            !actionable && !done && "border-border bg-card opacity-60"
+                          )}
+                        >
+                          {done ? (
+                            <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                          ) : actionable ? (
+                            <Circle className="h-4 w-4 text-primary shrink-0 animate-pulse" />
+                          ) : (
+                            <Lock className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-foreground truncate">
+                              {task.order + 1}. {task.title}
+                            </div>
+                            <div className="mt-1">
+                              {(actionable || done) && renderAdminAction(task)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[750px] text-sm">
                   <thead>
@@ -749,40 +686,66 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     </tr>
                   </thead>
                   <tbody>
-                    {projectTasks.map(task => (
-                      <tr key={task.id} className={`border-b border-border last:border-0 ${task.status === 'locked' ? 'opacity-40' : ''}`}>
-                        <td className="flex items-center gap-2 px-4 py-2.5">
-                          <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{task.order + 1}.</span>
-                          {statusIcon(task.status)}
-                          <span className="font-medium text-foreground">{task.title}</span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex gap-1 flex-wrap">
-                            {task.assignedRoles.map(r => (
-                              <Badge key={r} variant="secondary" className={`${ROLE_COLORS[r]} border-0 text-xs`}>
-                                {ROLE_LABELS[r]}
-                              </Badge>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5">{statusBadge(task.status)}</td>
-                        <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
-                        <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
-                          {renderValueColumn(task)}
-                        </td>
-                        {!readOnly && (
-                          <td className="px-4 py-2.5 text-right">
-                            {task.status === 'done' && (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-foreground" onClick={() => reopenTask(task.id)} title="Odblokuj do ponownej weryfikacji">
-                                <RotateCcw className="mr-1 h-3 w-3" />
-                                Odblokuj
-                              </Button>
-                            )}
+                    {projectTasks.map(task => {
+                      const isAdminTask = task.assignedRoles.includes('admin');
+                      const adminActionable = isAdminTask && isAdminTaskActionable(task);
+                      const adminDone = isAdminTask && isAdminTaskDone(task);
+
+                      return (
+                        <tr
+                          key={task.id}
+                          className={cn(
+                            "border-b border-border last:border-0",
+                            // Non-admin locked tasks are dimmed
+                            !isAdminTask && task.status === 'locked' && 'opacity-40',
+                            // Admin task highlighting
+                            adminActionable && 'bg-primary/5 border-l-2 border-l-primary',
+                            adminDone && 'bg-success/5 border-l-2 border-l-success',
+                          )}
+                        >
+                          <td className="flex items-center gap-2 px-4 py-2.5">
+                            <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{task.order + 1}.</span>
+                            {isAdminTask ? (
+                              adminDone ? <CheckCircle2 className="h-4 w-4 text-success" /> :
+                              adminActionable ? <Circle className="h-4 w-4 text-primary" /> :
+                              statusIcon(task.status)
+                            ) : statusIcon(task.status)}
+                            <span className={cn("font-medium", adminActionable && "text-primary", adminDone && "text-success", !isAdminTask && "text-foreground")}>{task.title}</span>
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          <td className="px-4 py-2.5">
+                            <div className="flex gap-1 flex-wrap">
+                              {task.assignedRoles.map(r => (
+                                <Badge key={r} variant="secondary" className={`${ROLE_COLORS[r]} border-0 text-xs`}>
+                                  {ROLE_LABELS[r]}
+                                </Badge>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {isAdminTask ? (
+                              adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> :
+                              adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> :
+                              statusBadge(task.status)
+                            ) : statusBadge(task.status)}
+                          </td>
+                          <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
+                          <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
+                          <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
+                            {renderValueColumn(task)}
+                          </td>
+                          {!readOnly && (
+                            <td className="px-4 py-2.5 text-right">
+                              {task.status === 'done' && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-foreground" onClick={() => reopenTask(task.id)} title="Odblokuj do ponownej weryfikacji">
+                                  <RotateCcw className="mr-1 h-3 w-3" />
+                                  Odblokuj
+                                </Button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
