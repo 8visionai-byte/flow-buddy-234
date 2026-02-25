@@ -37,9 +37,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: task.assignedRole, value, timestamp: now };
       
+      // Also propagate approval history back to the previous task (so influencer sees it)
+      const prevTask = task.inputType === 'approval' ? prev.find(
+        t => t.projectId === task.projectId && t.order === task.order - 1
+      ) : null;
+
       const updated = prev.map(t => {
         if (t.id === taskId) {
           return { ...t, status: 'done' as const, value, completedAt: now, completedBy: t.assignedRole, history: [...t.history, entry] };
+        }
+        if (prevTask && t.id === prevTask.id) {
+          return { ...t, history: [...t.history, entry] };
         }
         return t;
       });
