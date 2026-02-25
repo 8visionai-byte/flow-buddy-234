@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { User, Task, Project, UserRole, TaskHistoryEntry } from '@/types';
+import { User, Task, Project, UserRole, TaskHistoryEntry, Recording } from '@/types';
 import { INITIAL_USERS, INITIAL_PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 
 interface AppContextType {
@@ -8,6 +8,7 @@ interface AppContextType {
   users: User[];
   projects: Project[];
   tasks: Task[];
+  recordings: Recording[];
   completeTask: (taskId: string, value: string) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
@@ -20,6 +21,8 @@ interface AppContextType {
   updateUser: (id: string, data: Partial<Omit<User, 'id'>>) => void;
   deleteUser: (id: string) => void;
   setTaskDeadline: (taskId: string, date: string | null) => void;
+  addRecording: (projectId: string, url: string, note: string) => void;
+  deleteRecording: (recordingId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -29,6 +32,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [tasks, setTasks] = useState<Task[]>(getInitialTasks());
+  const [recordings, setRecordings] = useState<Recording[]>([]);
 
   const completeTask = useCallback((taskId: string, value: string) => {
     setTasks(prev => {
@@ -189,12 +193,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ));
   }, []);
 
+  const addRecording = useCallback((projectId: string, url: string, note: string) => {
+    const newRec: Recording = { id: `rec${Date.now()}`, projectId, url, note, createdAt: new Date().toISOString() };
+    setRecordings(prev => [...prev, newRec]);
+  }, []);
+
+  const deleteRecording = useCallback((recordingId: string) => {
+    setRecordings(prev => prev.filter(r => r.id !== recordingId));
+  }, []);
+
   return (
     <AppContext.Provider value={{
-      currentUser, setCurrentUser, users, projects, tasks,
+      currentUser, setCurrentUser, users, projects, tasks, recordings,
       completeTask, rejectTask, resubmitTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser, setTaskDeadline,
+      addRecording, deleteRecording,
     }}>
       {children}
     </AppContext.Provider>

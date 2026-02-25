@@ -37,6 +37,14 @@ export interface Task {
   history: TaskHistoryEntry[];
 }
 
+export interface Recording {
+  id: string;
+  projectId: string;
+  url: string;
+  note: string;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
