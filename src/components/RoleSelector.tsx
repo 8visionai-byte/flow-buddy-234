@@ -1,10 +1,19 @@
 import { useApp } from '@/context/AppContext';
 import { ROLE_LABELS } from '@/types';
-import { User, ChevronRight } from 'lucide-react';
+import { User, ChevronRight, Bell } from 'lucide-react';
 
 const RoleSelector = () => {
-  const { setCurrentUser, users } = useApp();
+  const { setCurrentUser, users, tasks, projects } = useApp();
 
+  const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
+
+  const getActiveTaskCount = (userRole: string) => {
+    return tasks.filter(t =>
+      activeProjectIds.includes(t.projectId) &&
+      t.assignedRole === userRole &&
+      (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision')
+    ).length;
+  };
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">
@@ -30,6 +39,11 @@ const RoleSelector = () => {
                 <div className="font-medium text-foreground">{user.name}</div>
                 <div className="text-xs text-muted-foreground">{ROLE_LABELS[user.role]}</div>
               </div>
+              {getActiveTaskCount(user.role) > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                  {getActiveTaskCount(user.role)}
+                </span>
+              )}
               <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </button>
           ))}
