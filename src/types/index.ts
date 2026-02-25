@@ -6,8 +6,8 @@ export interface User {
   role: UserRole;
 }
 
-export type TaskStatus = 'locked' | 'todo' | 'done';
-export type InputType = 'boolean' | 'text' | 'url';
+export type TaskStatus = 'locked' | 'todo' | 'done' | 'pending_client_approval' | 'needs_influencer_revision';
+export type InputType = 'boolean' | 'text' | 'url' | 'approval';
 export type ProjectStatus = 'active' | 'frozen';
 
 export interface Task {
@@ -20,6 +20,8 @@ export interface Task {
   status: TaskStatus;
   inputType: InputType;
   value: string | null;
+  previousValue: string | null;
+  clientFeedback: string | null;
   assignedAt: string | null;
   completedAt: string | null;
   completedBy: string | null;
