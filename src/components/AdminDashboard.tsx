@@ -3,7 +3,7 @@ import { useApp } from '@/context/AppContext';
 import { ROLE_LABELS, ROLE_COLORS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw } from 'lucide-react';
 import AddProjectDialog from '@/components/AddProjectDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import SlaTimer from '@/components/SlaTimer';
@@ -24,7 +24,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
-  const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask, reopenTask } = useApp();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   if (!currentUser) return null;
@@ -183,6 +183,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Czas na zadanie</th>
                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Typ</th>
                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Wartość</th>
+                      {!readOnly && <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Akcje</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -220,6 +221,16 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                               task.value || '—'
                             )}
                           </td>
+                          {!readOnly && (
+                            <td className="px-4 py-2.5 text-right">
+                              {task.status === 'done' && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-foreground" onClick={() => reopenTask(task.id)} title="Odblokuj do ponownej weryfikacji">
+                                  <RotateCcw className="mr-1 h-3 w-3" />
+                                  Odblokuj
+                                </Button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
