@@ -55,6 +55,13 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
       </div>
 
       {/* Accepted value */}
+      {task.value === 'approved' && task.previousValue && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
+          <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana propozycja</div>
+          <p className="text-sm text-foreground whitespace-pre-wrap">{task.previousValue}</p>
+        </div>
+      )}
+
       {task.value && task.value !== 'true' && task.value !== 'approved' && (
         <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
           <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana treść</div>
