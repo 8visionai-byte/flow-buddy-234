@@ -36,7 +36,7 @@ export const PIPELINE_STAGES: StageDefinition[] = [
   { roles: ['montazysta'], title: 'Wgraj zmontowany film', description: 'Wklej link do zmontowanego filmu.', inputType: 'url' },
   { roles: ['klient'], title: 'Weryfikuj film na frame.io', description: 'Przejrzyj zmontowany film i zaakceptuj.', inputType: 'approval' },
   { roles: ['montazysta'], title: 'Wgraj poprawki', description: 'Wgraj poprawiony film po uwagach klienta.', inputType: 'url' },
-  { roles: ['admin', 'influencer'], title: 'Akceptacja materiału', description: 'Finalna akceptacja gotowego materiału.', inputType: 'boolean' },
+  { roles: ['klient', 'admin'], title: 'Akceptacja materiału', description: 'Finalna akceptacja gotowego materiału. Klient może dodać komentarz.', inputType: 'approval' },
   { roles: ['admin'], title: 'Ustaw datę publikacji', description: 'Wybierz datę publikacji filmu.', inputType: 'boolean' },
 ];
 
