@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LogOut, CheckCircle2, Circle, Lock } from 'lucide-react';
 import AddProjectDialog from '@/components/AddProjectDialog';
+import SlaTimer from '@/components/SlaTimer';
 
 const AdminDashboard = () => {
   const { currentUser, setCurrentUser, tasks, projects } = useApp();
@@ -57,13 +58,14 @@ const AdminDashboard = () => {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Etap</th>
-                      <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Rola</th>
-                      <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
-                      <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Typ</th>
-                      <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Wartość</th>
-                    </tr>
+                     <tr className="border-b border-border bg-muted/50">
+                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Etap</th>
+                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Rola</th>
+                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Czas na zadanie</th>
+                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Typ</th>
+                       <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Wartość</th>
+                     </tr>
                   </thead>
                   <tbody>
                     {projectTasks.map(task => (
@@ -78,6 +80,13 @@ const AdminDashboard = () => {
                           </Badge>
                         </td>
                         <td className="px-4 py-2.5">{statusBadge(task.status)}</td>
+                        <td className="px-4 py-2.5">
+                          {task.status === 'todo' ? (
+                            <SlaTimer assignedAt={task.assignedAt} compact />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
                         <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
                           {task.value || '—'}

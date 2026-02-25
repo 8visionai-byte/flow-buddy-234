@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle } from 'lucide-react';
+import SlaTimer from '@/components/SlaTimer';
 
 interface TaskCardProps {
   task: Task;
@@ -39,7 +40,10 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
 
   return (
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
-      <div className="mb-1 text-xs font-medium text-muted-foreground">{projectName}</div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">{projectName}</span>
+        <SlaTimer assignedAt={task.assignedAt} compact />
+      </div>
       <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
       <p className="mb-6 text-sm text-muted-foreground">{task.description}</p>
 
