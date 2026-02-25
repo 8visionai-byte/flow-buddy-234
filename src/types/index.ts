@@ -7,7 +7,7 @@ export interface User {
 }
 
 export type TaskStatus = 'locked' | 'todo' | 'done' | 'pending_client_approval' | 'needs_influencer_revision';
-export type InputType = 'boolean' | 'text' | 'url' | 'approval';
+export type InputType = 'boolean' | 'text' | 'url' | 'approval' | 'social_descriptions';
 export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStatus = 'active' | 'frozen';
 

@@ -86,6 +86,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   const [error, setError] = useState('');
   const [noteUrl, setNoteUrl] = useState('');
   const [noteText, setNoteText] = useState('');
+  const [socialFields, setSocialFields] = useState({ facebook: '', twitter: '', instagram: '', youtube: '' });
 
   const isKierownikConfirm = task.assignedRoles.includes('kierownik_planu') && task.title === 'Potwierdź nagranie';
 
@@ -97,6 +98,16 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
       }
       const jsonValue = JSON.stringify({ url: noteUrl.trim(), note: noteText.trim() });
       completeTask(task.id, jsonValue);
+      return;
+    }
+    if (task.inputType === 'social_descriptions') {
+      const { facebook, twitter, instagram, youtube } = socialFields;
+      if (!facebook.trim() || !twitter.trim() || !instagram.trim() || !youtube.trim()) {
+        setError('Wypełnij wszystkie cztery pola');
+        return;
+      }
+      setError('');
+      completeTask(task.id, JSON.stringify(socialFields), currentUser?.role);
       return;
     }
     if (task.inputType === 'url' && !URL_REGEX.test(inputValue)) {
@@ -377,6 +388,35 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           <Button onClick={handleSubmit} className="w-full" disabled={isSubmitDisabled}>
             <FileText className="mr-2 h-4 w-4" />
             Wyślij
+          </Button>
+        </div>
+      ) : task.inputType === 'social_descriptions' ? (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Opis na Facebooka</label>
+            <Textarea placeholder="Opis posta na Facebooka..." value={socialFields.facebook} onChange={e => { setSocialFields(p => ({ ...p, facebook: e.target.value })); setError(''); }} rows={2} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Opis na Twittera</label>
+            <Textarea placeholder="Treść tweeta..." value={socialFields.twitter} onChange={e => { setSocialFields(p => ({ ...p, twitter: e.target.value })); setError(''); }} rows={2} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Opis na Instagrama</label>
+            <Textarea placeholder="Opis posta na Instagrama..." value={socialFields.instagram} onChange={e => { setSocialFields(p => ({ ...p, instagram: e.target.value })); setError(''); }} rows={2} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Tytuł na YouTube</label>
+            <Input placeholder="Tytuł filmu na YouTube..." value={socialFields.youtube} onChange={e => { setSocialFields(p => ({ ...p, youtube: e.target.value })); setError(''); }} />
+          </div>
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-destructive">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {error}
+            </div>
+          )}
+          <Button onClick={handleSubmit} className="w-full" disabled={!socialFields.facebook.trim() || !socialFields.twitter.trim() || !socialFields.instagram.trim() || !socialFields.youtube.trim()}>
+            <FileText className="mr-2 h-4 w-4" />
+            Wyślij opisy
           </Button>
         </div>
       ) : null}
