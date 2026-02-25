@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { User, Task, Project, UserRole, TaskHistoryEntry, Recording, ProjectNote } from '@/types';
+import { User, Task, Project, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority } from '@/types';
 import { INITIAL_USERS, INITIAL_PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 
 interface AppContextType {
@@ -13,7 +13,7 @@ interface AppContextType {
   completeTask: (taskId: string, value: string) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
-  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate'>) => void;
+  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate' | 'priority'>) => void;
   reopenTask: (taskId: string) => void;
   deleteProject: (projectId: string) => void;
   toggleFreezeProject: (projectId: string) => void;
@@ -27,6 +27,7 @@ interface AppContextType {
   addProjectNote: (projectId: string, content: string) => void;
   deleteProjectNote: (noteId: string) => void;
   setPublicationDate: (projectId: string, date: string | null) => void;
+  setProjectPriority: (projectId: string, priority: ProjectPriority) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -154,9 +155,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate'>) => {
+  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'publicationDate' | 'priority'>) => {
     const id = `p${Date.now()}`;
-    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null };
+    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, publicationDate: null, priority: 'medium' };
     setProjects(prev => [...prev, newProject]);
     const newTasks = createTasksForProject(id, 0);
     setTasks(prev => [...prev, ...newTasks]);
@@ -220,13 +221,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, publicationDate: date } : p));
   }, []);
 
+  const setProjectPriority = useCallback((projectId: string, priority: ProjectPriority) => {
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, priority } : p));
+  }, []);
+
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, projects, tasks, recordings, projectNotes,
       completeTask, rejectTask, resubmitTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser, setTaskDeadline,
-      addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate,
+      addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority,
     }}>
       {children}
     </AppContext.Provider>

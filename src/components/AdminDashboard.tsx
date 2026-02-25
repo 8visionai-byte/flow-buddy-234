@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { ROLE_LABELS, ROLE_COLORS } from '@/types';
+import { ROLE_LABELS, ROLE_COLORS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList, Calendar as CalendarIcon } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle, RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList, Calendar as CalendarIcon, Flag, FileText } from 'lucide-react';
 import AddProjectDialog from '@/components/AddProjectDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import {
@@ -38,9 +38,10 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
-  const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask, reopenTask, setTaskDeadline, setPublicationDate } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, users, deleteProject, toggleFreezeProject, assignToProject, completeTask, reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority } = useApp();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
+  const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
 
   if (!currentUser) return null;
 
@@ -336,6 +337,110 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       );
     }
 
+    // Admin task: Nadaj priorytet
+    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Nadaj priorytet' && task.status === 'todo') {
+      return (
+        <Select onValueChange={(val: ProjectPriority) => {
+          setProjectPriority(task.projectId, val);
+          completeTask(task.id, val);
+        }}>
+          <SelectTrigger className="h-7 w-32 text-xs">
+            <SelectValue placeholder="Priorytet" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover z-50">
+            {(['low', 'medium', 'high', 'urgent'] as ProjectPriority[]).map(p => (
+              <SelectItem key={p} value={p}>
+                <span className="flex items-center gap-1">
+                  <Flag className="h-3 w-3" />
+                  {PRIORITY_LABELS[p]}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    // Admin task: Nadaj priorytet done
+    if (task.title === 'Nadaj priorytet' && task.status === 'done' && task.value) {
+      return (
+        <Badge variant="secondary" className={`${PRIORITY_COLORS[task.value as ProjectPriority] || ''} border-0 text-xs`}>
+          <Flag className="mr-1 h-3 w-3" />
+          {PRIORITY_LABELS[task.value as ProjectPriority] || task.value}
+        </Badge>
+      );
+    }
+
+    // Admin task: Dodaj uwagi przed montażem
+    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Dodaj uwagi przed montażem' && task.status === 'todo') {
+      const val = adminTextInputs[task.id] || '';
+      return (
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            placeholder="Wpisz uwagi..."
+            value={val}
+            onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+            className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <Button size="sm" variant="default" className="h-7 px-2" disabled={!val.trim()} onClick={() => {
+            completeTask(task.id, val.trim());
+            setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+          }}>
+            <Send className="h-3 w-3" />
+          </Button>
+        </div>
+      );
+    }
+
+    // Admin task: Ustaw datę publikacji
+    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Ustaw datę publikacji' && task.status === 'todo') {
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
+              <CalendarIcon className="h-3 w-3" />
+              Wybierz datę
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={undefined}
+              onSelect={(date) => {
+                if (date) {
+                  setPublicationDate(task.projectId, date.toISOString());
+                  completeTask(task.id, date.toISOString());
+                }
+              }}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    // Admin task: Ustaw datę publikacji done
+    if (task.title === 'Ustaw datę publikacji' && task.status === 'done' && task.value) {
+      return (
+        <span className="text-xs text-muted-foreground">
+          <CalendarIcon className="inline mr-1 h-3 w-3" />
+          {format(new Date(task.value), 'dd.MM.yyyy', { locale: pl })}
+        </span>
+      );
+    }
+
+    // Admin task: Akceptacja materiału
+    if (!readOnly && task.assignedRole === 'admin' && task.title === 'Akceptacja materiału' && task.status === 'todo') {
+      return (
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
+          <CheckCircle2 className="mr-1 h-3 w-3" />
+          Zaakceptuj
+        </Button>
+      );
+    }
+
     if (canInteract && task.status === 'todo' && task.inputType === 'boolean') {
       return (
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
@@ -440,6 +545,68 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                           </Button>
                         </div>
                       )}
+                      {task.title === 'Nadaj priorytet' && (
+                        <Select onValueChange={(val: ProjectPriority) => {
+                          setProjectPriority(task.projectId, val);
+                          completeTask(task.id, val);
+                        }}>
+                          <SelectTrigger className="h-7 w-32 text-xs">
+                            <SelectValue placeholder="Priorytet" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-popover z-50">
+                            {(['low', 'medium', 'high', 'urgent'] as ProjectPriority[]).map(p => (
+                              <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {task.title === 'Dodaj uwagi przed montażem' && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            placeholder="Uwagi..."
+                            value={adminTextInputs[task.id] || ''}
+                            onChange={e => setAdminTextInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+                            className="h-7 w-40 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                          <Button size="sm" variant="default" className="h-7 px-2" disabled={!(adminTextInputs[task.id] || '').trim()} onClick={() => {
+                            completeTask(task.id, (adminTextInputs[task.id] || '').trim());
+                            setAdminTextInputs(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+                          }}>
+                            <Send className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      {task.title === 'Ustaw datę publikacji' && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button size="sm" variant="default" className="h-7 gap-1 text-xs">
+                              <CalendarIcon className="h-3 w-3" />
+                              Wybierz datę
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                              mode="single"
+                              selected={undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  setPublicationDate(task.projectId, date.toISOString());
+                                  completeTask(task.id, date.toISOString());
+                                }
+                              }}
+                              initialFocus
+                              className={cn("p-3 pointer-events-auto")}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                      {task.title === 'Akceptacja materiału' && (
+                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
+                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                          Zaakceptuj
+                        </Button>
+                      )}
                     </div>
                   );
                 })}
@@ -466,6 +633,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       <Badge variant="secondary" className="gap-1 border-0 bg-muted text-muted-foreground text-xs">
                         <Snowflake className="h-3 w-3" />
                         Zamrożony
+                      </Badge>
+                    )}
+                    {project.priority && project.priority !== 'medium' && (
+                      <Badge variant="secondary" className={`${PRIORITY_COLORS[project.priority]} border-0 text-xs gap-1`}>
+                        <Flag className="h-3 w-3" />
+                        {PRIORITY_LABELS[project.priority]}
                       </Badge>
                     )}
                   </div>
