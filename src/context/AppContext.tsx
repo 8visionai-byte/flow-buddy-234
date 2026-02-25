@@ -19,6 +19,7 @@ interface AppContextType {
   addUser: (user: Omit<User, 'id'>) => void;
   updateUser: (id: string, data: Partial<Omit<User, 'id'>>) => void;
   deleteUser: (id: string) => void;
+  setTaskDeadline: (taskId: string, date: string | null) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -182,12 +183,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUsers(prev => prev.filter(u => u.id !== id));
   }, []);
 
+  const setTaskDeadline = useCallback((taskId: string, date: string | null) => {
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, deadlineDate: date } : t
+    ));
+  }, []);
+
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, projects, tasks,
       completeTask, rejectTask, resubmitTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
-      addUser, updateUser, deleteUser,
+      addUser, updateUser, deleteUser, setTaskDeadline,
     }}>
       {children}
     </AppContext.Provider>

@@ -12,7 +12,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare, CalendarClock } from 'lucide-react';
 import SlaTimer from '@/components/SlaTimer';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -84,8 +84,21 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [error, setError] = useState('');
+  const [noteUrl, setNoteUrl] = useState('');
+  const [noteText, setNoteText] = useState('');
+
+  const isKierownikConfirm = task.assignedRole === 'kierownik_planu' && task.title === 'Potwierdź nagranie';
 
   const handleSubmit = () => {
+    if (isKierownikConfirm) {
+      if (noteUrl.trim() && !URL_REGEX.test(noteUrl)) {
+        setError('Podaj poprawny adres URL (https://...)');
+        return;
+      }
+      const jsonValue = JSON.stringify({ url: noteUrl.trim(), note: noteText.trim() });
+      completeTask(task.id, jsonValue);
+      return;
+    }
     if (task.inputType === 'url' && !URL_REGEX.test(inputValue)) {
       setError('Podaj poprawny adres URL (https://...)');
       return;
@@ -261,23 +274,71 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   }
 
   // === DEFAULT VIEWS ===
+  const deadlineDisplay = task.assignedRole === 'kierownik_planu' && task.deadlineDate ? (
+    <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+      new Date(task.deadlineDate) < new Date() ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+    }`}>
+      <CalendarClock className="h-4 w-4" />
+      Termin: {format(new Date(task.deadlineDate), 'dd.MM.yyyy', { locale: pl })}
+    </div>
+  ) : task.assignedRole === 'kierownik_planu' ? (
+    <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+      <CalendarClock className="h-4 w-4" />
+      Brak przypisanego terminu — skontaktuj się z Adminem
+    </div>
+  ) : null;
+
   return (
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{projectName}</span>
-        <SlaTimer assignedAt={task.assignedAt} compact />
+        {task.assignedRole !== 'kierownik_planu' && <SlaTimer assignedAt={task.assignedAt} compact />}
       </div>
       <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
-      <p className="mb-6 text-sm text-muted-foreground">{task.description}</p>
+      <p className="mb-4 text-sm text-muted-foreground">{task.description}</p>
 
-      {task.inputType === 'boolean' && (
+      {deadlineDisplay}
+
+      {isKierownikConfirm ? (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Link do nagrania (opcjonalnie)</label>
+            <div className="relative">
+              <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="https://..."
+                value={noteUrl}
+                onChange={e => { setNoteUrl(e.target.value); setError(''); }}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Notatka / opis</label>
+            <Textarea
+              placeholder="Krótki opis nagrania..."
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              rows={3}
+            />
+          </div>
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-destructive">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {error}
+            </div>
+          )}
+          <Button onClick={handleSubmit} className="w-full" size="lg">
+            <CheckCircle2 className="mr-2 h-5 w-5" />
+            Potwierdź nagranie
+          </Button>
+        </div>
+      ) : task.inputType === 'boolean' ? (
         <Button onClick={handleSubmit} className="w-full" size="lg">
           <CheckCircle2 className="mr-2 h-5 w-5" />
           Akceptuję
         </Button>
-      )}
-
-      {task.inputType === 'url' && (
+      ) : task.inputType === 'url' ? (
         <div className="space-y-3">
           <div className="relative">
             <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -298,9 +359,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             Wyślij link
           </Button>
         </div>
-      )}
-
-      {task.inputType === 'text' && (
+      ) : task.inputType === 'text' ? (
         <div className="space-y-3">
           <Textarea
             placeholder="Wpisz tutaj..."
@@ -319,7 +378,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             Wyślij
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

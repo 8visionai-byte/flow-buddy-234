@@ -45,6 +45,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     assignedAt: i === currentStage ? new Date().toISOString() : i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
     completedAt: i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,
     completedBy: i < currentStage ? stage.role : null,
+    deadlineDate: null,
     history: [],
   }));
 }
