@@ -33,6 +33,7 @@ export interface Task {
   assignedAt: string | null;
   completedAt: string | null;
   completedBy: string | null;
+  deadlineDate: string | null;
   history: TaskHistoryEntry[];
 }
 
