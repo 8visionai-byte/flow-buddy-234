@@ -60,7 +60,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (nextTask) {
         const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
         return updated.map(t =>
-          t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now, history: [...t.history, entry] } : t
+          t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t
         );
       }
 
