@@ -562,12 +562,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           const blockingAdminTasks = adminTasks.filter(t => isAdminTaskBlocking(t));
           const doneAdminTasks = adminTasks.filter(t => isAdminTaskDone(t));
           const isExpanded = expandedProjects.has(project.id);
+          const allTasksDone = projectTasks.every(t => t.status === 'done');
+          const isProjectComplete = allTasksDone && projectTasks.length > 0;
 
           return (
             <div
               key={project.id}
-              className={`mb-6 animate-fade-in rounded-xl border bg-card shadow-sm ${
-                isFrozen ? 'border-muted opacity-60' : 'border-border'
+              className={`mb-6 animate-fade-in rounded-xl border shadow-sm ${
+                isProjectComplete ? 'border-success bg-success/5 ring-1 ring-success/20' :
+                isFrozen ? 'border-muted opacity-60 bg-card' : 'border-border bg-card'
               }`}
             >
               {/* Collapsible Header */}
@@ -579,7 +582,13 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="font-semibold text-foreground">{project.name}</h2>
+                      <h2 className={cn("font-semibold", isProjectComplete ? "text-success" : "text-foreground")}>{project.name}</h2>
+                      {isProjectComplete && (
+                        <Badge variant="secondary" className="gap-1 border-0 bg-success/15 text-success text-xs font-bold">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Projekt zakończony
+                        </Badge>
+                      )}
                       {isFrozen && (
                         <Badge variant="secondary" className="gap-1 border-0 bg-muted text-muted-foreground text-xs">
                           <Snowflake className="h-3 w-3" />
@@ -592,7 +601,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                           {PRIORITY_LABELS[project.priority]}
                         </Badge>
                       )}
-                      {blockingAdminTasks.length > 0 && (
+                      {!isProjectComplete && blockingAdminTasks.length > 0 && (
                         <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs animate-pulse">
                           {blockingAdminTasks.length} blokuje!
                         </Badge>
@@ -616,7 +625,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         <div className="flex items-center gap-2 mt-1.5">
                           <div className="relative h-2 flex-1 max-w-xs overflow-hidden rounded-full bg-secondary">
                             <div
-                              className="h-full rounded-full bg-primary transition-all"
+                              className={cn("h-full rounded-full transition-all", pct === 100 ? "bg-success" : "bg-primary")}
                               style={{ width: `${pct}%` }}
                             />
                           </div>
