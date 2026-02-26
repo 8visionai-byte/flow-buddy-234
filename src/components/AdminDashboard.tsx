@@ -78,12 +78,17 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const isAdminTaskBlocking = (task: typeof tasks[0]) => {
     if (!task.assignedRoles.includes('admin')) return false;
     if (isAdminTaskDone(task)) return false;
-    // The task is blocking if its natural pipeline status would be 'todo' or 'pending_client_approval'
-    // i.e., all previous tasks in the project are done
+    
+    // If the task's pipeline status is already 'todo' or 'pending_client_approval',
+    // the pipeline has reached it — it's blocking if admin hasn't acted
+    if (task.status === 'todo' || task.status === 'pending_client_approval') {
+      return true;
+    }
+    
+    // For locked admin tasks: check if all previous tasks in the pipeline are done
     const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
     for (const pt of projectTasks) {
       if (pt.order < task.order) {
-        // For multi-role tasks, check if all roles completed
         if (pt.assignedRoles.length > 1) {
           const allDone = pt.assignedRoles.every(r => pt.roleCompletions[r]);
           if (!allDone && pt.status !== 'done') return false;
