@@ -586,7 +586,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     </p>
                     {!isExpanded && (() => {
                       const pTasks = getTasksForProject(project.id);
-                      const doneTasks = pTasks.filter(t => t.status === 'done').length;
+                      const doneTasks = pTasks.filter(t => t.status === 'done' || isAdminTaskDone(t)).length;
                       const total = pTasks.length;
                       const pct = total > 0 ? Math.round((doneTasks / total) * 100) : 0;
                       return (
