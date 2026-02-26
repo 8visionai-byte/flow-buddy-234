@@ -14,7 +14,7 @@ const RoleSelector = () => {
       if (user.role === 'influencer') return p.assignedInfluencerId === user.id;
       if (user.role === 'montazysta') return p.assignedEditorId === user.id;
       if (user.role === 'klient') return p.assignedClientId === user.id;
-      return true; // kierownik_planu sees all
+      if (user.role === 'kierownik_planu') return p.assignedKierownikId === user.id;
     }).map(p => p.id);
   };
 
