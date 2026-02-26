@@ -579,6 +579,23 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         </span>
                       )}
                     </p>
+                    {!isExpanded && (() => {
+                      const pTasks = getTasksForProject(project.id);
+                      const doneTasks = pTasks.filter(t => t.status === 'done').length;
+                      const total = pTasks.length;
+                      const pct = total > 0 ? Math.round((doneTasks / total) * 100) : 0;
+                      return (
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <div className="relative h-2 flex-1 max-w-xs overflow-hidden rounded-full bg-secondary">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{doneTasks}/{total} ({pct}%)</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
