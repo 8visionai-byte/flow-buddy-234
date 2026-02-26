@@ -1,6 +1,34 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, Task, Project, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority } from '@/types';
 import { INITIAL_USERS, INITIAL_PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
+
+// localStorage helpers
+const STORAGE_KEYS = {
+  currentUser: 'yads_currentUser',
+  users: 'yads_users',
+  projects: 'yads_projects',
+  tasks: 'yads_tasks',
+  recordings: 'yads_recordings',
+  projectNotes: 'yads_projectNotes',
+} as const;
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {
+    console.warn(`Failed to load ${key} from localStorage`, e);
+  }
+  return fallback;
+}
+
+function saveToStorage(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Failed to save ${key} to localStorage`, e);
+  }
+}
 
 interface AppContextType {
   currentUser: User | null;
@@ -33,12 +61,20 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [tasks, setTasks] = useState<Task[]>(getInitialTasks());
-  const [recordings, setRecordings] = useState<Recording[]>([]);
-  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => loadFromStorage(STORAGE_KEYS.currentUser, null));
+  const [users, setUsers] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.users, INITIAL_USERS));
+  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage(STORAGE_KEYS.projects, INITIAL_PROJECTS));
+  const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage(STORAGE_KEYS.tasks, getInitialTasks()));
+  const [recordings, setRecordings] = useState<Recording[]>(() => loadFromStorage(STORAGE_KEYS.recordings, []));
+  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>(() => loadFromStorage(STORAGE_KEYS.projectNotes, []));
+
+  // Persist to localStorage on every change
+  useEffect(() => { saveToStorage(STORAGE_KEYS.currentUser, currentUser); }, [currentUser]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.users, users); }, [users]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.projects, projects); }, [projects]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.tasks, tasks); }, [tasks]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.recordings, recordings); }, [recordings]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.projectNotes, projectNotes); }, [projectNotes]);
 
   const completeTask = useCallback((taskId: string, value: string, byRole?: UserRole) => {
     setTasks(prev => {
