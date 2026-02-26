@@ -43,7 +43,7 @@ const KierownikDashboard = () => {
 
   if (!currentUser) return null;
 
-  const activeProjects = projects.filter(p => p.status === 'active');
+  const activeProjects = projects.filter(p => p.status === 'active' && p.assignedKierownikId === currentUser.id);
 
   const getProjectTasks = (projectId: string) =>
     tasks.filter(t => t.projectId === projectId && t.assignedRoles.includes('kierownik_planu'));
@@ -73,6 +73,11 @@ const KierownikDashboard = () => {
     }
     setNoteError('');
     addProjectNote(projectId, noteContent.trim());
+    // Auto-complete kierownik_planu part of "Dodaj uwagi przed montażem"
+    const uwagiTask = tasks.find(t => t.projectId === projectId && t.title === 'Dodaj uwagi przed montażem');
+    if (uwagiTask && !uwagiTask.roleCompletions['kierownik_planu']) {
+      completeTask(uwagiTask.id, noteContent.trim(), 'kierownik_planu');
+    }
     setNoteContent('');
     setAddingNoteForProject(null);
   };
