@@ -86,9 +86,12 @@ const KierownikDashboard = () => {
       {/* Header */}
       <header className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">Panel Kierownika Planu</h1>
-            <p className="text-xs text-muted-foreground">{currentUser.name} · {ROLE_LABELS[currentUser.role]}</p>
+          <div className="flex items-center gap-3">
+            <img src="/images/yads-logo.png" alt="YADS" className="h-8 w-auto rounded" />
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Panel Kierownika Planu</h1>
+              <p className="text-xs text-muted-foreground">{currentUser.name} · {ROLE_LABELS[currentUser.role]}</p>
+            </div>
           </div>
           <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
             <LogOut className="h-4 w-4" />

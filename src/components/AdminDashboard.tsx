@@ -530,9 +530,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   return (
     <div className="flex h-screen flex-col bg-background">
       <header className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6">
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">{roleLabel}</h1>
-          <p className="text-xs text-muted-foreground">{roleSubtitle}</p>
+        <div className="flex items-center gap-3">
+          <img src="/images/yads-logo.png" alt="YADS" className="h-8 w-auto rounded" />
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">{roleLabel}</h1>
+            <p className="text-xs text-muted-foreground">{roleSubtitle}</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {!readOnly && <TeamManagementDialog />}
