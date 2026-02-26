@@ -23,8 +23,9 @@ interface StageDefinition {
 
 export const PIPELINE_STAGES: StageDefinition[] = [
   { roles: ['influencer'], title: 'Dodaj pomysł / temat', description: 'Wpisz temat lub pomysł na film.', inputType: 'text' },
-  { roles: ['influencer'], title: 'Przypisz osobę do filmu', description: 'Wybierz klienta lub dodaj inną osobę, która wystąpi w filmie.', inputType: 'actor_assignment' },
   { roles: ['klient'], title: 'Zaakceptuj pomysł', description: 'Przejrzyj pomysł influencera i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
+  { roles: ['influencer'], title: 'Przypisz osobę do filmu', description: 'Wybierz klienta lub dodaj inną osobę, która wystąpi w filmie.', inputType: 'actor_assignment' },
+  { roles: ['klient'], title: 'Zaakceptuj przypisanie osoby', description: 'Przejrzyj przypisaną osobę do filmu i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
   { roles: ['influencer'], title: 'Dodaj link do scenariusza', description: 'Wklej link do dokumentu ze scenariuszem.', inputType: 'url' },
   { roles: ['klient'], title: 'Zaakceptuj scenariusz', description: 'Przejrzyj scenariusz i zatwierdź lub poproś o zmiany.', inputType: 'approval' },
   { roles: ['influencer'], title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
