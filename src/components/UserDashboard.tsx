@@ -28,7 +28,7 @@ const UserDashboard = () => {
     // Show tasks that are todo, done, pending_client_approval, or needs_influencer_revision
     if (t.status === 'locked') return false;
     // For multi-role tasks in 'todo' status, hide if this role already completed
-    if (t.status === 'todo' && t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return false;
+    if (t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role] && t.status !== 'done') return false;
     return true;
   });
   
