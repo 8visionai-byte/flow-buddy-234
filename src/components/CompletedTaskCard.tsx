@@ -56,12 +56,30 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
       </div>
 
       {/* Accepted value */}
-      {task.value === 'approved' && task.previousValue && (
-        <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana propozycja</div>
-          <p className="text-sm text-foreground whitespace-pre-wrap">{task.previousValue}</p>
-        </div>
-      )}
+      {task.value === 'approved' && task.previousValue && (() => {
+        // Try to parse actor_assignment JSON
+        try {
+          const parsed = JSON.parse(task.previousValue);
+          if (parsed.type && parsed.name) {
+            return (
+              <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Zaakceptowana osoba do filmu</div>
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <UserIcon className="h-4 w-4 text-primary" />
+                  <span className="font-medium">{parsed.name}</span>
+                  <Badge variant="secondary" className="text-[10px]">{parsed.type === 'client' ? 'Klient' : 'Inna osoba'}</Badge>
+                </div>
+              </div>
+            );
+          }
+        } catch {}
+        return (
+          <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana propozycja</div>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{task.previousValue}</p>
+          </div>
+        );
+      })()}
 
       {task.value && task.value !== 'true' && task.value !== 'approved' && (
         <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
@@ -111,12 +129,18 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                         <Badge variant="secondary" className="text-[10px] border-0">{ROLE_LABELS[entry.by]}</Badge>
                         <span className="text-xs text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
                       </div>
-                      {entry.value && (
+                      {entry.value && entry.value !== 'approved' && (
                         tryParseSocialDescriptions(entry.value) ? (
                           <div className="mt-1"><SocialDescriptionsDisplay value={entry.value} /></div>
-                        ) : (
-                          <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>
-                        )
+                        ) : (() => {
+                          try {
+                            const parsed = JSON.parse(entry.value!);
+                            if (parsed.type && parsed.name) {
+                              return <p className="mt-1 text-muted-foreground text-xs">Osoba: {parsed.name} ({parsed.type === 'client' ? 'Klient' : 'Inna osoba'})</p>;
+                            }
+                          } catch {}
+                          return <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>;
+                        })()
                       )}
                       {entry.feedback && (
                         <p className="mt-1 text-destructive whitespace-pre-wrap text-xs">Uwagi: {entry.feedback}</p>
