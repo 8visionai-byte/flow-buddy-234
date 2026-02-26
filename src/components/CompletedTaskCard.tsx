@@ -1,4 +1,5 @@
 import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
+import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { format } from 'date-fns';
@@ -65,7 +66,11 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
       {task.value && task.value !== 'true' && task.value !== 'approved' && (
         <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
           <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana treść</div>
-          <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>
+          {tryParseSocialDescriptions(task.value) ? (
+            <SocialDescriptionsDisplay value={task.value} />
+          ) : (
+            <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>
+          )}
         </div>
       )}
 
@@ -95,7 +100,11 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                         <span className="text-xs text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
                       </div>
                       {entry.value && (
-                        <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>
+                        tryParseSocialDescriptions(entry.value) ? (
+                          <div className="mt-1"><SocialDescriptionsDisplay value={entry.value} /></div>
+                        ) : (
+                          <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>
+                        )
                       )}
                       {entry.feedback && (
                         <p className="mt-1 text-destructive whitespace-pre-wrap text-xs">Uwagi: {entry.feedback}</p>

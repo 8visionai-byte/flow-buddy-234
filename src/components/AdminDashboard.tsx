@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { ROLE_LABELS, ROLE_COLORS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority } from '@/types';
+import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -496,6 +497,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           <CheckCircle2 className="mr-1 h-3 w-3" />Potwierdź
         </Button>
       );
+    }
+
+    if (tryParseSocialDescriptions(task.value)) {
+      return <SocialDescriptionsDisplay value={task.value} compact />;
     }
 
     return <span className="truncate">{task.value || '—'}</span>;
