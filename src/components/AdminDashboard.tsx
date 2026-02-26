@@ -114,6 +114,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const influencers = users.filter(u => u.role === 'influencer');
   const editors = users.filter(u => u.role === 'montazysta');
   const clients = users.filter(u => u.role === 'klient');
+  const kierownicy = users.filter(u => u.role === 'kierownik_planu');
 
   const getDeleteProjectName = () => projects.find(p => p.id === deleteConfirm)?.name || '';
 
@@ -693,6 +694,20 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     <SelectContent className="bg-popover z-50">
                       <SelectItem value="none">— Brak —</SelectItem>
                       {clients.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={project.assignedKierownikId || 'none'}
+                    onValueChange={v => assignToProject(project.id, 'assignedKierownikId', v === 'none' ? null : v)}
+                  >
+                    <SelectTrigger className="h-7 w-36 text-xs">
+                      <SelectValue placeholder="Kierownik" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover z-50">
+                      <SelectItem value="none">— Brak —</SelectItem>
+                      {kierownicy.map(u => (
                         <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                       ))}
                     </SelectContent>

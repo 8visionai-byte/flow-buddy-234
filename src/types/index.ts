@@ -67,6 +67,7 @@ export interface Project {
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
   assignedClientId: string | null;
+  assignedKierownikId: string | null;
   publicationDate: string | null;
   priority: ProjectPriority;
 }
