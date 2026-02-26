@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
+import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +57,11 @@ const HistoryAccordion = ({ history }: { history: TaskHistoryEntry[] }) => {
                     <span className="text-xs text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
                   </div>
                   {entry.value && (
-                    <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>
+                    tryParseSocialDescriptions(entry.value) ? (
+                      <div className="mt-1"><SocialDescriptionsDisplay value={entry.value} /></div>
+                    ) : (
+                      <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>
+                    )
                   )}
                   {entry.feedback && (
                     <p className="mt-1 text-destructive whitespace-pre-wrap text-xs">Uwagi: {entry.feedback}</p>
