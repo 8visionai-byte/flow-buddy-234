@@ -23,6 +23,7 @@ interface StageDefinition {
 
 export const PIPELINE_STAGES: StageDefinition[] = [
   { roles: ['influencer'], title: 'Dodaj pomysł / temat', description: 'Wpisz temat lub pomysł na film.', inputType: 'text' },
+  { roles: ['influencer'], title: 'Przypisz osobę do filmu', description: 'Wybierz klienta lub dodaj inną osobę, która wystąpi w filmie.', inputType: 'actor_assignment' },
   { roles: ['klient'], title: 'Zaakceptuj pomysł', description: 'Przejrzyj pomysł influencera i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
   { roles: ['influencer'], title: 'Dodaj link do scenariusza', description: 'Wklej link do dokumentu ze scenariuszem.', inputType: 'url' },
   { roles: ['klient'], title: 'Zaakceptuj scenariusz', description: 'Przejrzyj scenariusz i zatwierdź lub poproś o zmiany.', inputType: 'approval' },
@@ -52,7 +53,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     description: stage.description,
     inputType: stage.inputType,
     status: i < currentStage ? 'done' as const : i === currentStage ? 'todo' as const : 'locked' as const,
-    value: i < currentStage ? (stage.inputType === 'boolean' ? 'true' : stage.inputType === 'url' ? 'https://example.com/link' : stage.inputType === 'approval' ? 'approved' : stage.inputType === 'social_descriptions' ? '{"facebook":"Opis FB","twitter":"Tweet","instagram":"Opis IG","youtube":"Tytuł YT"}' : 'Przykładowa wartość') : null,
+    value: i < currentStage ? (stage.inputType === 'boolean' ? 'true' : stage.inputType === 'url' ? 'https://example.com/link' : stage.inputType === 'approval' ? 'approved' : stage.inputType === 'social_descriptions' ? '{"facebook":"Opis FB","twitter":"Tweet","instagram":"Opis IG","youtube":"Tytuł YT"}' : stage.inputType === 'actor_assignment' ? '{"type":"client","name":"Anna"}' : 'Przykładowa wartość') : null,
     previousValue: null,
     clientFeedback: null,
     assignedAt: i === currentStage ? new Date().toISOString() : i < currentStage ? new Date(Date.now() - (currentStage - i) * 86400000).toISOString() : null,

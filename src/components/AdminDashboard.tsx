@@ -503,6 +503,20 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       return <SocialDescriptionsDisplay value={task.value} compact />;
     }
 
+    // Actor assignment display
+    if (task.inputType === 'actor_assignment' && task.value) {
+      try {
+        const parsed = JSON.parse(task.value);
+        if (parsed.type && parsed.name) {
+          return (
+            <span className="text-xs">
+              🎬 {parsed.name} <span className="text-muted-foreground">({parsed.type === 'client' ? 'Klient' : 'Aktor'})</span>
+            </span>
+          );
+        }
+      } catch {}
+    }
+
     return <span className="truncate">{task.value || '—'}</span>;
   };
 

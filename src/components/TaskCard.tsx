@@ -5,6 +5,8 @@ import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,7 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare, CalendarClock } from 'lucide-react';
+import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare, CalendarClock, UserPlus, User as UserIcon } from 'lucide-react';
 import SlaTimer from '@/components/SlaTimer';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -84,7 +86,7 @@ interface TaskCardProps {
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
 const TaskCard = ({ task, projectName }: TaskCardProps) => {
-  const { completeTask, rejectTask, resubmitTask, currentUser } = useApp();
+  const { completeTask, rejectTask, resubmitTask, currentUser, projects } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -92,6 +94,10 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   const [noteUrl, setNoteUrl] = useState('');
   const [noteText, setNoteText] = useState('');
   const [socialFields, setSocialFields] = useState({ facebook: '', twitter: '', instagram: '', youtube: '' });
+  const [actorType, setActorType] = useState<'client' | 'custom'>('client');
+  const [actorCustomName, setActorCustomName] = useState('');
+
+  const project = projects.find(p => p.id === task.projectId);
 
   const isKierownikConfirm = task.assignedRoles.includes('kierownik_planu') && task.title === 'Potwierdź nagranie';
 
@@ -103,6 +109,16 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
       }
       const jsonValue = JSON.stringify({ url: noteUrl.trim(), note: noteText.trim() });
       completeTask(task.id, jsonValue);
+      return;
+    }
+    if (task.inputType === 'actor_assignment') {
+      if (actorType === 'custom' && actorCustomName.trim().length === 0) {
+        setError('Wpisz imię i nazwisko osoby');
+        return;
+      }
+      const name = actorType === 'client' ? (project?.clientName || 'Klient') : actorCustomName.trim();
+      setError('');
+      completeTask(task.id, JSON.stringify({ type: actorType, name }), currentUser?.role);
       return;
     }
     if (task.inputType === 'social_descriptions') {
@@ -393,6 +409,49 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           <Button onClick={handleSubmit} className="w-full" disabled={isSubmitDisabled}>
             <FileText className="mr-2 h-4 w-4" />
             Wyślij
+          </Button>
+        </div>
+      ) : task.inputType === 'actor_assignment' ? (
+        <div className="space-y-4">
+          <RadioGroup value={actorType} onValueChange={(v) => { setActorType(v as 'client' | 'custom'); setError(''); }}>
+            <div className="flex items-center space-x-3 rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors">
+              <RadioGroupItem value="client" id="actor-client" />
+              <Label htmlFor="actor-client" className="flex items-center gap-2 cursor-pointer flex-1">
+                <UserIcon className="h-4 w-4 text-primary" />
+                <div>
+                  <div className="font-medium text-sm">Klient: {project?.clientName || '—'}</div>
+                  <div className="text-xs text-muted-foreground">Klient przypisany do projektu</div>
+                </div>
+              </Label>
+            </div>
+            <div className="flex items-center space-x-3 rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors">
+              <RadioGroupItem value="custom" id="actor-custom" />
+              <Label htmlFor="actor-custom" className="flex items-center gap-2 cursor-pointer flex-1">
+                <UserPlus className="h-4 w-4 text-warning" />
+                <div>
+                  <div className="font-medium text-sm">Inna osoba (aktor)</div>
+                  <div className="text-xs text-muted-foreground">Wpisz imię i nazwisko osoby</div>
+                </div>
+              </Label>
+            </div>
+          </RadioGroup>
+          {actorType === 'custom' && (
+            <Input
+              placeholder="Imię i nazwisko aktora..."
+              value={actorCustomName}
+              onChange={e => { setActorCustomName(e.target.value); setError(''); }}
+              autoFocus
+            />
+          )}
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-destructive">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {error}
+            </div>
+          )}
+          <Button onClick={handleSubmit} className="w-full" disabled={actorType === 'custom' && actorCustomName.trim().length === 0}>
+            <UserIcon className="mr-2 h-4 w-4" />
+            Przypisz osobę
           </Button>
         </div>
       ) : task.inputType === 'social_descriptions' ? (

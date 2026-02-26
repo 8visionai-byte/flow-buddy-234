@@ -1,7 +1,7 @@
 import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import {
@@ -68,9 +68,21 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
           <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana treść</div>
           {tryParseSocialDescriptions(task.value) ? (
             <SocialDescriptionsDisplay value={task.value} />
-          ) : (
-            <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>
-          )}
+          ) : (() => {
+            try {
+              const parsed = JSON.parse(task.value!);
+              if (parsed.type && parsed.name) {
+                return (
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                    <UserIcon className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{parsed.name}</span>
+                    <span className="text-xs text-muted-foreground">({parsed.type === 'client' ? 'Klient' : 'Aktor'})</span>
+                  </div>
+                );
+              }
+            } catch {}
+            return <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>;
+          })()}
         </div>
       )}
 
