@@ -53,9 +53,12 @@ const UserDashboard = () => {
 
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-card transition-transform md:relative md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between border-b border-border p-4">
-          <div>
-            <div className="text-sm font-semibold text-foreground">{currentUser.name}</div>
-            <div className="text-xs text-muted-foreground">{ROLE_LABELS[currentUser.role]}</div>
+          <div className="flex items-center gap-3">
+            <img src="/images/yads-logo.png" alt="YADS" className="h-7 w-auto rounded" />
+            <div>
+              <div className="text-sm font-semibold text-foreground">{currentUser.name}</div>
+              <div className="text-xs text-muted-foreground">{ROLE_LABELS[currentUser.role]}</div>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
@@ -121,6 +124,7 @@ const UserDashboard = () => {
           <Button variant="ghost" size="icon" className="mr-2 md:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
+          <img src="/images/yads-logo.png" alt="YADS" className="mr-3 h-7 w-auto rounded md:hidden" />
           <h1 className="text-lg font-semibold text-foreground">Moje zadania</h1>
         </header>
 
