@@ -51,10 +51,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: role, value, timestamp: now };
 
-      // Also propagate approval history back to the previous task (so influencer sees it)
-      const prevTask = task.inputType === 'approval' ? prev.find(
-        t => t.projectId === task.projectId && t.order === task.order - 1
-      ) : null;
+      // Propagate approval history to the source non-approval task (not just order-1)
+      let prevTask: Task | undefined = undefined;
+      if (task.inputType === 'approval') {
+        for (let o = task.order - 1; o >= 0; o--) {
+          const candidate = prev.find(t => t.projectId === task.projectId && t.order === o);
+          if (candidate && candidate.inputType !== 'approval') {
+            prevTask = candidate;
+            break;
+          }
+        }
+      }
 
       if (isMultiRole) {
         const newCompletions = { ...task.roleCompletions, [role]: value };
