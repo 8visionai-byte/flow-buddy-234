@@ -79,6 +79,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           for (let o = completedTask.order + 1; ; o++) {
             const t = projectTasks.find(pt => pt.order === o);
             if (!t || t.status !== 'locked') break;
+            if (t.inputType !== 'approval' && nextToUnlock.length > 0) break;
             nextToUnlock.push(t.id);
             if (t.inputType !== 'approval') break;
           }
@@ -152,13 +153,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return updated;
       }
       
-      // Non-approval task: unlock all consecutive approval tasks together
+      // Non-approval task: unlock all consecutive approval tasks together (but NOT non-approval tasks after them)
       const nextTasksToUnlock: string[] = [];
       for (let o = completedTask.order + 1; ; o++) {
         const t = projectTasks.find(pt => pt.order === o);
         if (!t || t.status !== 'locked') break;
+        if (t.inputType !== 'approval' && nextTasksToUnlock.length > 0) break; // stop before non-approval if we already have approvals
         nextTasksToUnlock.push(t.id);
-        if (t.inputType !== 'approval') break;
+        if (t.inputType !== 'approval') break; // if first next is non-approval, unlock just that one
       }
       
       if (nextTasksToUnlock.length > 0) {
