@@ -73,10 +73,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           });
 
           const completedTask = updated.find(t => t.id === taskId)!;
-          const nextTask = updated.find(t => t.projectId === completedTask.projectId && t.order === completedTask.order + 1);
-          if (nextTask) {
-            const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
-            return updated.map(t => t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t);
+          const projectTasks = updated.filter(t => t.projectId === completedTask.projectId).sort((a, b) => a.order - b.order);
+          // Unlock consecutive approval tasks together
+          const nextToUnlock: string[] = [];
+          for (let o = completedTask.order + 1; ; o++) {
+            const t = projectTasks.find(pt => pt.order === o);
+            if (!t || t.status !== 'locked') break;
+            nextToUnlock.push(t.id);
+            if (t.inputType !== 'approval') break;
+          }
+          if (nextToUnlock.length > 0) {
+            const unlockSet = new Set(nextToUnlock);
+            return updated.map(t => {
+              if (unlockSet.has(t.id)) {
+                const ns = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+                return { ...t, status: ns, previousValue: completedTask.value || value, assignedAt: now };
+              }
+              return t;
+            });
           }
           return updated;
         } else {
@@ -102,14 +116,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
 
       const completedTask = updated.find(t => t.id === taskId)!;
-      const nextTask = updated.find(
-        t => t.projectId === completedTask.projectId && t.order === completedTask.order + 1
-      );
-      if (nextTask) {
-        const newStatus = nextTask.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
-        return updated.map(t =>
-          t.id === nextTask.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t
-        );
+      const projectTasks = updated.filter(t => t.projectId === completedTask.projectId).sort((a, b) => a.order - b.order);
+      
+      // If this is an approval task, check if it's part of a group of consecutive approvals
+      if (completedTask.inputType === 'approval') {
+        // Find all sibling approvals (consecutive approval tasks around this one)
+        let groupStart = completedTask.order;
+        while (groupStart > 0) {
+          const prev = projectTasks.find(t => t.order === groupStart - 1);
+          if (prev && prev.inputType === 'approval') groupStart--;
+          else break;
+        }
+        let groupEnd = completedTask.order;
+        while (true) {
+          const next = projectTasks.find(t => t.order === groupEnd + 1);
+          if (next && next.inputType === 'approval') groupEnd++;
+          else break;
+        }
+        
+        // Check if ALL approvals in the group are done
+        const allGroupDone = projectTasks
+          .filter(t => t.order >= groupStart && t.order <= groupEnd)
+          .every(t => t.status === 'done');
+        
+        if (allGroupDone) {
+          // Unlock next task after the approval group
+          const nextAfterGroup = projectTasks.find(t => t.order === groupEnd + 1);
+          if (nextAfterGroup && nextAfterGroup.status === 'locked') {
+            const newStatus = nextAfterGroup.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+            return updated.map(t =>
+              t.id === nextAfterGroup.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t
+            );
+          }
+        }
+        return updated;
+      }
+      
+      // Non-approval task: unlock all consecutive approval tasks together
+      const nextTasksToUnlock: string[] = [];
+      for (let o = completedTask.order + 1; ; o++) {
+        const t = projectTasks.find(pt => pt.order === o);
+        if (!t || t.status !== 'locked') break;
+        nextTasksToUnlock.push(t.id);
+        if (t.inputType !== 'approval') break;
+      }
+      
+      if (nextTasksToUnlock.length > 0) {
+        const unlockSet = new Set(nextTasksToUnlock);
+        return updated.map(t => {
+          if (unlockSet.has(t.id)) {
+            const newStatus = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+            return { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now };
+          }
+          return t;
+        });
       }
 
       return updated;
