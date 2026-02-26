@@ -154,21 +154,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Non-approval task: unlock all consecutive approval tasks together (but NOT non-approval tasks after them)
-      const nextTasksToUnlock: string[] = [];
+      const nextTasksToUnlock: { id: string; prevValue: string }[] = [];
       for (let o = completedTask.order + 1; ; o++) {
         const t = projectTasks.find(pt => pt.order === o);
         if (!t || t.status !== 'locked') break;
-        if (t.inputType !== 'approval' && nextTasksToUnlock.length > 0) break; // stop before non-approval if we already have approvals
-        nextTasksToUnlock.push(t.id);
-        if (t.inputType !== 'approval') break; // if first next is non-approval, unlock just that one
+        if (t.inputType !== 'approval' && nextTasksToUnlock.length > 0) break;
+        // Each approval gets previousValue from the corresponding source task before the approval group
+        const sourceOrder = completedTask.order - nextTasksToUnlock.length;
+        const sourceTask = projectTasks.find(pt => pt.order === sourceOrder);
+        nextTasksToUnlock.push({ id: t.id, prevValue: sourceTask?.value || completedTask.value || value });
+        if (t.inputType !== 'approval') break;
       }
       
+      // Assign correct previousValue to each approval: map approval index to source task
       if (nextTasksToUnlock.length > 0) {
-        const unlockSet = new Set(nextTasksToUnlock);
+        // Collect done non-approval tasks before this approval group (in reverse order)
+        const approvalCount = nextTasksToUnlock.length;
+        const sourceTasks: { value: string | null }[] = [];
+        for (let o = completedTask.order; o >= 0 && sourceTasks.length < approvalCount; o--) {
+          const st = projectTasks.find(pt => pt.order === o);
+          if (st && st.inputType !== 'approval' && st.status === 'done') {
+            sourceTasks.unshift(st);
+          }
+        }
+        
+        const unlockMap = new Map<string, string>();
+        nextTasksToUnlock.forEach((item, i) => {
+          const source = sourceTasks[i];
+          unlockMap.set(item.id, source?.value || completedTask.value || value);
+        });
+        
         return updated.map(t => {
-          if (unlockSet.has(t.id)) {
+          if (unlockMap.has(t.id)) {
             const newStatus = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
-            return { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now };
+            return { ...t, status: newStatus, previousValue: unlockMap.get(t.id)!, assignedAt: now };
           }
           return t;
         });

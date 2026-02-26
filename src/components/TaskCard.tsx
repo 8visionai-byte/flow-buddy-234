@@ -189,15 +189,37 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
         <p className="mb-4 text-sm text-muted-foreground">{task.description}</p>
 
         {/* Show influencer's submission */}
-        {task.previousValue && (
-          <div className="mb-6 rounded-lg border border-border bg-muted/50 p-4">
-            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <MessageSquare className="h-3.5 w-3.5" />
-              Propozycja Influencera
+        {task.previousValue && (() => {
+          // Try to parse actor_assignment JSON
+          try {
+            const parsed = JSON.parse(task.previousValue);
+            if (parsed.type && parsed.name) {
+              return (
+                <div className="mb-6 rounded-lg border border-border bg-muted/50 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Przypisana osoba do filmu
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">{parsed.name}</span>
+                    <Badge variant="secondary" className="text-[10px]">{parsed.type === 'client' ? 'Klient' : 'Inna osoba'}</Badge>
+                  </div>
+                </div>
+              );
+            }
+          } catch {}
+          // Default: show as text
+          return (
+            <div className="mb-6 rounded-lg border border-border bg-muted/50 p-4">
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <MessageSquare className="h-3.5 w-3.5" />
+                Propozycja Influencera
+              </div>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{task.previousValue}</p>
             </div>
-            <p className="text-sm text-foreground whitespace-pre-wrap">{task.previousValue}</p>
-          </div>
-        )}
+          );
+        })()}
 
         {!showFeedbackForm ? (
           <div className="flex gap-3">
