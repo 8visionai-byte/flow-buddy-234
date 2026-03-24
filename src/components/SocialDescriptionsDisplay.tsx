@@ -1,17 +1,21 @@
 import { Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
 
-interface SocialData {
+export interface SocialData {
   facebook?: string;
+  facebookDate?: string;
   twitter?: string;
+  twitterDate?: string;
   instagram?: string;
+  instagramDate?: string;
   youtube?: string;
+  youtubeDate?: string;
 }
 
-const SOCIAL_FIELDS: { key: keyof SocialData; label: string; icon: React.ReactNode }[] = [
-  { key: 'facebook', label: 'Facebook', icon: <Facebook className="h-3.5 w-3.5 text-[#1877F2]" /> },
-  { key: 'twitter', label: 'Twitter / X', icon: <Twitter className="h-3.5 w-3.5 text-foreground" /> },
-  { key: 'instagram', label: 'Instagram', icon: <Instagram className="h-3.5 w-3.5 text-[#E4405F]" /> },
-  { key: 'youtube', label: 'YouTube', icon: <Youtube className="h-3.5 w-3.5 text-[#FF0000]" /> },
+const SOCIAL_FIELDS: { key: keyof SocialData; dateKey: keyof SocialData; label: string; icon: React.ReactNode }[] = [
+  { key: 'facebook', dateKey: 'facebookDate', label: 'Facebook', icon: <Facebook className="h-3.5 w-3.5 text-[#1877F2]" /> },
+  { key: 'twitter', dateKey: 'twitterDate', label: 'Twitter / X', icon: <Twitter className="h-3.5 w-3.5 text-foreground" /> },
+  { key: 'instagram', dateKey: 'instagramDate', label: 'Instagram', icon: <Instagram className="h-3.5 w-3.5 text-[#E4405F]" /> },
+  { key: 'youtube', dateKey: 'youtubeDate', label: 'YouTube', icon: <Youtube className="h-3.5 w-3.5 text-[#FF0000]" /> },
 ];
 
 export function tryParseSocialDescriptions(value: string | null): SocialData | null {
@@ -55,6 +59,7 @@ const SocialDescriptionsDisplay = ({ value, compact = false }: Props) => {
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-muted-foreground mb-0.5">{f.label}</div>
             <p className="text-sm text-foreground whitespace-pre-wrap">{data[f.key]}</p>
+            {/* Dates are set separately by admin in "Ustaw datę publikacji" task */}
           </div>
         </div>
       ) : null)}

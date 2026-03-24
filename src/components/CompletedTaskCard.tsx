@@ -1,7 +1,11 @@
+import { useState } from 'react';
+import { useApp } from '@/context/AppContext';
 import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
+import { tryParseSocialDates } from '@/components/SocialDatesWidget';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import {
@@ -35,12 +39,66 @@ function formatTimestamp(iso: string | null): string {
   return format(new Date(iso), "dd.MM.yyyy, HH:mm", { locale: pl });
 }
 
+const URL_REGEX = /^https?:\/\/.+\..+/;
+
+interface RawFootagePayload { url: string; recordingNumber: string; notes?: string; }
+function tryParseRawFootage(val: string): RawFootagePayload | null {
+  try {
+    const p = JSON.parse(val);
+    if (p && typeof p === 'object' && !Array.isArray(p) && p.url && p.recordingNumber !== undefined) return p as RawFootagePayload;
+  } catch {}
+  return null;
+}
+
+const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
+  <div className="space-y-2">
+    <div className="flex items-center gap-2 text-sm">
+      <Film className="h-4 w-4 text-primary shrink-0" />
+      <a href={payload.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{payload.url}</a>
+    </div>
+    {payload.recordingNumber && (
+      <div className="flex items-center gap-2 text-sm text-foreground">
+        <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        Nr nagrania: <span className="font-medium ml-1">{payload.recordingNumber}</span>
+      </div>
+    )}
+    {payload.notes && (
+      <div className="flex items-start gap-2 text-sm text-foreground">
+        <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+        <span className="whitespace-pre-wrap">{payload.notes}</span>
+      </div>
+    )}
+  </div>
+);
+
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
+  const { currentUser, updateTaskValue, tasks } = useApp();
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [editUrlValue, setEditUrlValue] = useState('');
+  const [urlError, setUrlError] = useState('');
+
+  // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
+  const canEditUrl =
+    task.inputType === 'url' &&
+    task.status === 'done' &&
+    currentUser?.role === 'influencer' &&
+    task.assignedRoles.includes('influencer');
+
+  const handleSaveUrl = () => {
+    if (!URL_REGEX.test(editUrlValue.trim())) {
+      setUrlError('Podaj poprawny adres URL (https://...)');
+      return;
+    }
+    updateTaskValue(task.id, editUrlValue.trim());
+    setEditingUrl(false);
+    setUrlError('');
+  };
+
   return (
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
       {/* Header */}
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{projectName}</span>
+        <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide">{projectName}</span>
         <Badge variant="secondary" className="gap-1 border-0 bg-success/10 text-success text-xs">
           <CheckCircle2 className="h-3 w-3" />
           Ukończone
@@ -57,9 +115,26 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
 
       {/* Accepted value */}
       {task.value === 'approved' && task.previousValue && (() => {
-        // Try to parse actor_assignment JSON
         try {
           const parsed = JSON.parse(task.previousValue);
+          // New format: ActorEntry[] array
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) {
+            return (
+              <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Zaakceptowane osoby do filmu</div>
+                <div className="space-y-1.5">
+                  {parsed.map((actor: { id: string; name: string; roleLabel?: string; sourceType: string }) => (
+                    <div key={actor.id} className="flex items-center gap-2 text-sm text-foreground">
+                      <UserIcon className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium">{actor.name}</span>
+                      {actor.roleLabel && <Badge variant="secondary" className="text-[10px] border-0">{actor.roleLabel}</Badge>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          // Old format: { type, name }
           if (parsed.type && parsed.name) {
             return (
               <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
@@ -81,26 +156,119 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         );
       })()}
 
-      {task.value && task.value !== 'true' && task.value !== 'approved' && (
-        <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">Zaakceptowana treść</div>
-          {tryParseSocialDescriptions(task.value) ? (
-            <SocialDescriptionsDisplay value={task.value} />
-          ) : (() => {
-            try {
-              const parsed = JSON.parse(task.value!);
-              if (parsed.type && parsed.name) {
+      {/* Social dates display (admin "Ustaw datę publikacji" task) */}
+      {task.inputType === 'social_dates' && task.value && (() => {
+        const dates = tryParseSocialDates(task.value);
+        if (!dates) return null;
+        const PLATFORM_CONFIG = [
+          { dateKey: 'facebookDate' as const, label: 'Facebook', icon: <Facebook className="h-3.5 w-3.5 text-[#1877F2]" /> },
+          { dateKey: 'twitterDate' as const, label: 'Twitter / X', icon: <Twitter className="h-3.5 w-3.5 text-foreground" /> },
+          { dateKey: 'instagramDate' as const, label: 'Instagram', icon: <Instagram className="h-3.5 w-3.5 text-[#E4405F]" /> },
+          { dateKey: 'youtubeDate' as const, label: 'YouTube', icon: <Youtube className="h-3.5 w-3.5 text-[#FF0000]" /> },
+        ] as const;
+        return (
+          <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
+            <div className="mb-2 text-xs font-medium text-muted-foreground">Daty publikacji</div>
+            <div className="space-y-1.5">
+              {PLATFORM_CONFIG.map(p => {
+                const dateVal = dates[p.dateKey];
+                if (!dateVal) return null;
                 return (
-                  <div className="flex items-center gap-2 text-sm text-foreground">
-                    <UserIcon className="h-4 w-4 text-primary" />
-                    <span className="font-medium">{parsed.name}</span>
-                    <span className="text-xs text-muted-foreground">({parsed.type === 'client' ? 'Klient' : 'Aktor'})</span>
+                  <div key={p.dateKey} className="flex items-center gap-2 text-sm">
+                    {p.icon}
+                    <span className="font-medium text-foreground">{p.label}</span>
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3" />
+                      {format(new Date(dateVal), 'dd.MM.yyyy', { locale: pl })}
+                    </span>
                   </div>
                 );
-              }
-            } catch {}
-            return <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>;
-          })()}
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {task.value && task.value !== 'true' && task.value !== 'approved' && task.value !== 'approved_with_file_notes' && task.value !== 'skipped' && task.inputType !== 'social_dates' && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">
+              {task.inputType === 'url' ? 'Przesłany link'
+                : task.inputType === 'raw_footage' ? 'Wgrana surówka'
+                : 'Zaakceptowana treść'}
+            </span>
+            {canEditUrl && !editingUrl && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => { setEditUrlValue(task.value ?? ''); setEditingUrl(true); setUrlError(''); }}
+              >
+                <Pencil className="h-3 w-3" />
+                Popraw link
+              </Button>
+            )}
+          </div>
+          {editingUrl ? (
+            <div className="space-y-2 mt-1">
+              <div className="relative">
+                <LinkIcon className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="url"
+                  value={editUrlValue}
+                  onChange={e => { setEditUrlValue(e.target.value); setUrlError(''); }}
+                  className="w-full rounded-md border border-border bg-background pl-9 pr-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  placeholder="https://..."
+                  autoFocus
+                />
+              </div>
+              {urlError && <p className="text-xs text-destructive">{urlError}</p>}
+              <div className="flex gap-2">
+                <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveUrl}>
+                  <Check className="h-3 w-3" />Zapisz
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setEditingUrl(false); setUrlError(''); }}>
+                  <X className="h-3 w-3" />Anuluj
+                </Button>
+              </div>
+            </div>
+          ) : (
+            tryParseSocialDescriptions(task.value) ? (
+              <SocialDescriptionsDisplay value={task.value} />
+            ) : (() => {
+              // raw_footage: { url, recordingNumber, notes }
+              const rawFootage = tryParseRawFootage(task.value!);
+              if (rawFootage) return <RawFootageDisplay payload={rawFootage} />;
+              try {
+                const parsed = JSON.parse(task.value!);
+                // New format: ActorEntry[]
+                if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) {
+                  return (
+                    <div className="space-y-1.5">
+                      {parsed.map((actor: { id: string; name: string; roleLabel?: string }) => (
+                        <div key={actor.id} className="flex items-center gap-2 text-sm text-foreground">
+                          <UserIcon className="h-4 w-4 text-primary shrink-0" />
+                          <span className="font-medium">{actor.name}</span>
+                          {actor.roleLabel && <Badge variant="secondary" className="text-[10px] border-0">{actor.roleLabel}</Badge>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                // Old format: { type, name }
+                if (parsed.type && parsed.name) {
+                  return (
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <UserIcon className="h-4 w-4 text-primary" />
+                      <span className="font-medium">{parsed.name}</span>
+                      <span className="text-xs text-muted-foreground">({parsed.type === 'client' ? 'Klient' : 'Aktor'})</span>
+                    </div>
+                  );
+                }
+              } catch {}
+              return <p className="text-sm text-foreground whitespace-pre-wrap break-all">{task.value}</p>;
+            })()
+          )}
         </div>
       )}
 
@@ -133,8 +301,19 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                         tryParseSocialDescriptions(entry.value) ? (
                           <div className="mt-1"><SocialDescriptionsDisplay value={entry.value} /></div>
                         ) : (() => {
+                          const rf = tryParseRawFootage(entry.value!);
+                          if (rf) return <div className="mt-1"><RawFootageDisplay payload={rf} /></div>;
                           try {
                             const parsed = JSON.parse(entry.value!);
+                            // New format: ActorEntry[]
+                            if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) {
+                              return (
+                                <p className="mt-1 text-muted-foreground text-xs">
+                                  {parsed.map((a: { name: string }) => a.name).join(', ')}
+                                </p>
+                              );
+                            }
+                            // Old format
                             if (parsed.type && parsed.name) {
                               return <p className="mt-1 text-muted-foreground text-xs">Osoba: {parsed.name} ({parsed.type === 'client' ? 'Klient' : 'Inna osoba'})</p>;
                             }

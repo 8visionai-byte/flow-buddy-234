@@ -1,15 +1,18 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { User, Task, Project, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority } from '@/types';
-import { INITIAL_USERS, INITIAL_PROJECTS, getInitialTasks, createTasksForProject } from '@/data/mockData';
+import { User, Task, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
+import { INITIAL_USERS, INITIAL_PROJECTS, INITIAL_CLIENTS, INITIAL_CAMPAIGNS, INITIAL_IDEAS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 
 // localStorage helpers
 const STORAGE_KEYS = {
   currentUser: 'yads_currentUser',
   users: 'yads_users',
+  clients: 'yads_clients',
   projects: 'yads_projects',
   tasks: 'yads_tasks',
   recordings: 'yads_recordings',
   projectNotes: 'yads_projectNotes',
+  ideas: 'yads_ideas',
+  campaigns: 'yads_campaigns',
 } as const;
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -34,6 +37,7 @@ interface AppContextType {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
   users: User[];
+  clients: Client[];
   projects: Project[];
   tasks: Task[];
   recordings: Recording[];
@@ -41,14 +45,21 @@ interface AppContextType {
   completeTask: (taskId: string, value: string, byRole?: UserRole) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
-  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'publicationDate' | 'priority'>) => void;
+  updateTaskValue: (taskId: string, newValue: string) => void;
+  saveDraftValue: (taskId: string, value: string) => void;
+  deferTask: (taskId: string) => void;
+  rejectFinalTask: (taskId: string, reason?: string) => void;
+  addProject: (project: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId' | 'publicationDate' | 'priority' | 'slaHours'>) => void;
   reopenTask: (taskId: string) => void;
   deleteProject: (projectId: string) => void;
   toggleFreezeProject: (projectId: string) => void;
-  assignToProject: (projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId', userId: string | null) => void;
-  addUser: (user: Omit<User, 'id'>) => void;
+  assignToProject: (projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId', userId: string | null) => void;
+  addUser: (user: Omit<User, 'id'>) => string;
   updateUser: (id: string, data: Partial<Omit<User, 'id'>>) => void;
   deleteUser: (id: string) => void;
+  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => string;
+  updateClient: (id: string, data: Partial<Omit<Client, 'id' | 'createdAt'>>) => void;
+  deleteClient: (id: string) => void;
   setTaskDeadline: (taskId: string, date: string | null) => void;
   addRecording: (projectId: string, url: string, note: string) => void;
   deleteRecording: (recordingId: string) => void;
@@ -56,6 +67,18 @@ interface AppContextType {
   deleteProjectNote: (noteId: string) => void;
   setPublicationDate: (projectId: string, date: string | null) => void;
   setProjectPriority: (projectId: string, priority: ProjectPriority) => void;
+  setProjectSla: (projectId: string, hours: number | null) => void;
+  ideas: Idea[];
+  addIdea: (campaignId: string, title: string, description: string, createdByUserId: string) => void;
+  updateIdea: (ideaId: string, title: string, description: string) => void;
+  deleteIdea: (ideaId: string) => void;
+  reviewIdea: (ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => void;
+  acceptIdeaAsProject: (ideaId: string) => void;
+  campaigns: Campaign[];
+  addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status'>) => void;
+  updateCampaign: (id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => void;
+  deleteCampaign: (id: string) => void;
+  updatePartyNote: (taskId: string, role: string, note: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -63,18 +86,24 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadFromStorage(STORAGE_KEYS.currentUser, null));
   const [users, setUsers] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.users, INITIAL_USERS));
+  const [clients, setClients] = useState<Client[]>(() => loadFromStorage(STORAGE_KEYS.clients, INITIAL_CLIENTS));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage(STORAGE_KEYS.projects, INITIAL_PROJECTS));
   const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage(STORAGE_KEYS.tasks, getInitialTasks()));
   const [recordings, setRecordings] = useState<Recording[]>(() => loadFromStorage(STORAGE_KEYS.recordings, []));
   const [projectNotes, setProjectNotes] = useState<ProjectNote[]>(() => loadFromStorage(STORAGE_KEYS.projectNotes, []));
+  const [ideas, setIdeas] = useState<Idea[]>(() => loadFromStorage(STORAGE_KEYS.ideas, INITIAL_IDEAS));
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => loadFromStorage(STORAGE_KEYS.campaigns, INITIAL_CAMPAIGNS));
 
   // Persist to localStorage on every change
   useEffect(() => { saveToStorage(STORAGE_KEYS.currentUser, currentUser); }, [currentUser]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.users, users); }, [users]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.clients, clients); }, [clients]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.projects, projects); }, [projects]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.tasks, tasks); }, [tasks]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.recordings, recordings); }, [recordings]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.projectNotes, projectNotes); }, [projectNotes]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.ideas, ideas); }, [ideas]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.campaigns, campaigns); }, [campaigns]);
 
   const completeTask = useCallback((taskId: string, value: string, byRole?: UserRole) => {
     setTasks(prev => {
@@ -84,6 +113,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const role = byRole || task.assignedRole;
       const isMultiRole = task.assignedRoles.length > 1;
+
+      // Script review with file notes → bounce back to influencer (don't advance)
+      if (task.inputType === 'script_review' && value === 'approved_with_file_notes') {
+        const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
+        const bounceEntry: TaskHistoryEntry = { action: 'rejected', by: 'klient', feedback: 'Uwagi naniesione w pliku — popraw scenariusz i prześlij nowy link.', timestamp: now };
+        return prev.map(t => {
+          if (t.id === taskId) return { ...t, status: 'locked' as const, history: [...t.history, bounceEntry] };
+          if (scriptTask && t.id === scriptTask.id) return {
+            ...t,
+            status: 'needs_influencer_revision' as const,
+            clientFeedback: 'Uwagi naniesione w pliku — popraw scenariusz i prześlij nowy link.',
+            assignedAt: now,
+            completedAt: null,
+            completedBy: null,
+            history: [...t.history, bounceEntry],
+          };
+          return t;
+        });
+      }
 
       const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: role, value, timestamp: now };
 
@@ -149,12 +197,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Single-role task — original logic
+      let operatorNote: string | null = null;
+      if (task.inputType === 'raw_footage') {
+        try { const p = JSON.parse(value); operatorNote = p.notes?.trim() || null; } catch {}
+      }
+      const uwagTaskId = operatorNote
+        ? prev.find(t => t.projectId === task.projectId && t.title === 'Wnieś uwagi przed montażem' && !t.roleCompletions['operator'])?.id
+        : null;
+
       const updated = prev.map(t => {
         if (t.id === taskId) {
           return { ...t, status: 'done' as const, value, completedAt: now, completedBy: t.assignedRole, history: [...t.history, entry] };
         }
         if (prevTask && t.id === prevTask.id) {
           return { ...t, history: [...t.history, entry] };
+        }
+        if (uwagTaskId && t.id === uwagTaskId) {
+          return { ...t, roleCompletions: { ...t.roleCompletions, operator: operatorNote! } };
         }
         return t;
       });
@@ -227,13 +286,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           unlockMap.set(item.id, source?.value || completedTask.value || value);
         });
         
-        return updated.map(t => {
+        const unlocked = updated.map(t => {
           if (unlockMap.has(t.id)) {
             const newStatus = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
             return { ...t, status: newStatus, previousValue: unlockMap.get(t.id)!, assignedAt: now };
           }
           return t;
         });
+
+        // Klient approved film without changes → auto-skip corrections, auto-approve klient part of acceptance
+        if (completedTask.title === 'Weryfikuj film na frame.io' && value === 'approved') {
+          const poprawki = unlocked.find(t => t.projectId === completedTask.projectId && t.title === 'Wgraj poprawki');
+          const akceptacja = unlocked.find(t => t.projectId === completedTask.projectId && t.title === 'Akceptacja materiału');
+          if (poprawki && akceptacja) {
+            const opisyTask = unlocked.find(t => t.projectId === completedTask.projectId && t.title === 'Opisy i tytuły do publikacji');
+            return unlocked.map(t => {
+              if (t.id === poprawki.id) return { ...t, status: 'done' as const, value: 'skipped', completedAt: now };
+              // Klient approved via frameio — fully auto-complete acceptance, no admin needed
+              if (t.id === akceptacja.id) return {
+                ...t, status: 'done' as const, value: 'approved', completedAt: now, assignedAt: now,
+              };
+              // Unlock next task for influencer
+              if (opisyTask && t.id === opisyTask.id) return { ...t, status: 'todo' as const, assignedAt: now };
+              return t;
+            });
+          }
+        }
+
+        // Set montażysta SLA based on priority
+        if (completedTask.title === 'Nadaj priorytet montażu') {
+          const slaMap: Record<string, number> = { high: 48, medium: 96, low: 168 };
+          const slaHours = slaMap[value] ?? 96;
+          const deadline = new Date(Date.now() + slaHours * 3600000).toISOString();
+          return unlocked.map(t =>
+            (t.title === 'Wgraj zmontowany film' && t.projectId === completedTask.projectId && t.status === 'todo')
+              ? { ...t, deadlineDate: deadline }
+              : t
+          );
+        }
+        return unlocked;
+      }
+
+      // Klient approved without changes (no next task to unlock case)
+      if (completedTask.title === 'Weryfikuj film na frame.io' && value === 'approved') {
+        const poprawki = updated.find(t => t.projectId === completedTask.projectId && t.title === 'Wgraj poprawki');
+        const akceptacja = updated.find(t => t.projectId === completedTask.projectId && t.title === 'Akceptacja materiału');
+        if (poprawki && akceptacja) {
+          const opisyTask = updated.find(t => t.projectId === completedTask.projectId && t.title === 'Opisy i tytuły do publikacji');
+          return updated.map(t => {
+            if (t.id === poprawki.id) return { ...t, status: 'done' as const, value: 'skipped', completedAt: now };
+            // Klient approved via frameio — fully auto-complete acceptance, no admin needed
+            if (t.id === akceptacja.id) return {
+              ...t, status: 'done' as const, value: 'approved', completedAt: now, assignedAt: now,
+            };
+            // Unlock next task for influencer
+            if (opisyTask && t.id === opisyTask.id) return { ...t, status: 'todo' as const, assignedAt: now };
+            return t;
+          });
+        }
       }
 
       return updated;
@@ -273,6 +383,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const deferTask = useCallback((taskId: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+      const entry: TaskHistoryEntry = { action: 'deferred', by: 'klient', timestamp: new Date().toISOString() };
+      return prev.map(t => t.id === taskId ? { ...t, status: 'deferred' as const, history: [...t.history, entry] } : t);
+    });
+  }, []);
+
+  const rejectFinalTask = useCallback((taskId: string, reason?: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+      const entry: TaskHistoryEntry = { action: 'rejected_final', by: 'klient', feedback: reason || undefined, timestamp: new Date().toISOString() };
+      return prev.map(t => t.id === taskId ? { ...t, status: 'rejected_final' as const, clientFeedback: reason || null, history: [...t.history, entry] } : t);
+    });
+  }, []);
+
   // Influencer resubmits after revision
   const resubmitTask = useCallback((taskId: string, newValue: string) => {
     setTasks(prev => {
@@ -298,6 +426,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Influencer corrects a done URL/text task without resetting downstream approval
+  const updateTaskValue = useCallback((taskId: string, newValue: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+      const now = new Date().toISOString();
+      // Find next pending_client_approval task and update its previousValue
+      const nextApproval = prev.find(
+        t => t.projectId === task.projectId && t.order === task.order + 1 &&
+          (t.status === 'pending_client_approval' || t.status === 'todo')
+      );
+      return prev.map(t => {
+        if (t.id === taskId) return { ...t, value: newValue, completedAt: now };
+        if (nextApproval && t.id === nextApproval.id) return { ...t, previousValue: newValue };
+        return t;
+      });
+    });
+  }, []);
+
+  // Save partial data to task.value without changing status or completedAt (used for social description drafts)
+  const saveDraftValue = useCallback((taskId: string, value: string) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, value } : t));
+  }, []);
+
   const reopenTask = useCallback((taskId: string) => {
     setTasks(prev => {
       const task = prev.find(t => t.id === taskId);
@@ -317,9 +469,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'publicationDate' | 'priority'>) => {
+  const addProject = useCallback((data: Omit<Project, 'id' | 'currentStageIndex' | 'status' | 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId' | 'publicationDate' | 'priority' | 'slaHours'>) => {
     const id = `p${Date.now()}`;
-    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, publicationDate: null, priority: 'medium' };
+    const newProject: Project = { ...data, id, currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 };
     setProjects(prev => [...prev, newProject]);
     const newTasks = createTasksForProject(id, 0);
     setTasks(prev => [...prev, ...newTasks]);
@@ -336,15 +488,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ));
   }, []);
 
-  const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId', userId: string | null) => {
+  const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId', userId: string | null) => {
     setProjects(prev => prev.map(p =>
       p.id === projectId ? { ...p, [field]: userId } : p
     ));
   }, []);
 
-  const addUser = useCallback((data: Omit<User, 'id'>) => {
+  const addUser = useCallback((data: Omit<User, 'id'>): string => {
     const id = `u${Date.now()}`;
     setUsers(prev => [...prev, { ...data, id }]);
+    return id;
   }, []);
 
   const updateUser = useCallback((id: string, data: Partial<Omit<User, 'id'>>) => {
@@ -353,6 +506,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteUser = useCallback((id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
+  }, []);
+
+  const addClient = useCallback((data: Omit<Client, 'id' | 'createdAt'>): string => {
+    const id = `c${Date.now()}`;
+    setClients(prev => [...prev, { ...data, id, createdAt: new Date().toISOString() }]);
+    return id;
+  }, []);
+
+  const updateClient = useCallback((id: string, data: Partial<Omit<Client, 'id' | 'createdAt'>>) => {
+    setClients(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+  }, []);
+
+  const deleteClient = useCallback((id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
   }, []);
 
   const setTaskDeadline = useCallback((taskId: string, date: string | null) => {
@@ -387,13 +554,145 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, priority } : p));
   }, []);
 
+  const setProjectSla = useCallback((projectId: string, hours: number | null) => {
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, slaHours: hours } : p));
+  }, []);
+
+  const addIdea = useCallback((campaignId: string, title: string, description: string, createdByUserId: string) => {
+    const idea: Idea = {
+      id: `idea-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      campaignId,
+      resultingProjectId: null,
+      title, description, createdByUserId,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      clientNotes: null, reviewedAt: null, reviewedByUserId: null,
+    };
+    setIdeas(prev => [...prev, idea]);
+  }, []);
+
+  const updateIdea = useCallback((ideaId: string, title: string, description: string) => {
+    setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, title, description } : i));
+  }, []);
+
+  const deleteIdea = useCallback((ideaId: string) => {
+    setIdeas(prev => prev.filter(i => i.id !== ideaId));
+  }, []);
+
+  const reviewIdea = useCallback((ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => {
+    setIdeas(prev => prev.map(i => i.id === ideaId
+      ? { ...i, status, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId }
+      : i
+    ));
+  }, []);
+
+  const acceptIdeaAsProject = useCallback((ideaId: string) => {
+    // Defer all state updates to the next tick to avoid nested setState calls
+    setTimeout(() => {
+      setIdeas(prevIdeas => {
+        const idea = prevIdeas.find(i => i.id === ideaId);
+        if (!idea || idea.resultingProjectId) return prevIdeas;
+
+        const newProjectId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const now = new Date().toISOString();
+        // Pipeline: 0=pomysł ✅, 1=zaakceptuj pomysł ✅, 2=scenariusz 🔵 (first active)
+        // Actor assignment (stage 4) comes AFTER script approval — correct per 5W2H flow
+        const SCRIPT_STAGE = 2;
+
+        setCampaigns(prevCamps => {
+          const camp = prevCamps.find(c => c.id === idea.campaignId);
+          if (camp) {
+            const newProject: Project = {
+              id: newProjectId,
+              name: idea.title,
+              clientId: camp.clientId,
+              clientName: '',
+              company: '',
+              clientEmail: '',
+              clientPhone: '',
+              currentStageIndex: SCRIPT_STAGE,
+              status: 'active',
+              assignedInfluencerId: camp.assignedInfluencerId,
+              assignedEditorId: null,
+              assignedClientId: camp.assignedClientUserId,
+              assignedKierownikId: null,
+              assignedOperatorId: null,
+              publicationDate: null,
+              priority: 'medium',
+              slaHours: camp.slaHours || 48,
+            };
+            setProjects(p => [...p, newProject]);
+
+            const ideaText = [idea.title, idea.description].filter(Boolean).join('\n\n');
+            const baseTasks = createTasksForProject(newProjectId, SCRIPT_STAGE);
+
+            const patchedTasks = baseTasks.map(t => {
+              // Stage 0: "Dodaj pomysł / temat" — pre-fill from accepted idea
+              if (t.order === 0) return {
+                ...t,
+                value: ideaText,
+                completedAt: now,
+                completedBy: 'influencer',
+                history: [{ action: 'submitted' as const, by: 'influencer' as const, value: ideaText, timestamp: now }],
+              };
+              // Stage 1: "Zaakceptuj pomysł" — pre-approved (client already approved in IdeasPanel)
+              if (t.order === 1) return {
+                ...t,
+                value: 'approved',
+                previousValue: ideaText,
+                completedAt: now,
+                completedBy: 'klient',
+                history: [{ action: 'approved' as const, by: 'klient' as const, value: 'approved', timestamp: now }],
+              };
+              return t;
+            });
+
+            setTasks(t => [...t, ...patchedTasks]);
+          }
+          return prevCamps;
+        });
+
+        return prevIdeas.map(i => i.id === ideaId ? { ...i, resultingProjectId: newProjectId } : i);
+      });
+    }, 0);
+  }, []);
+
+  const addCampaign = useCallback((data: Omit<Campaign, 'id' | 'createdAt' | 'status'>) => {
+    const campaign: Campaign = {
+      ...data,
+      id: `camp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+      status: 'awaiting_ideas',
+    };
+    setCampaigns(prev => [...prev, campaign]);
+  }, []);
+
+  const updateCampaign = useCallback((id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => {
+    setCampaigns(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+  }, []);
+
+  const deleteCampaign = useCallback((id: string) => {
+    setCampaigns(prev => prev.filter(c => c.id !== id));
+    setIdeas(prev => prev.filter(i => i.campaignId !== id));
+  }, []);
+
+  const updatePartyNote = useCallback((taskId: string, role: string, note: string) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      return { ...t, roleCompletions: { ...t.roleCompletions, [role]: note } };
+    }));
+  }, []);
+
   return (
     <AppContext.Provider value={{
-      currentUser, setCurrentUser, users, projects, tasks, recordings, projectNotes,
-      completeTask, rejectTask, resubmitTask, reopenTask,
+      currentUser, setCurrentUser, users, clients, projects, tasks, recordings, projectNotes,
+      completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
-      addUser, updateUser, deleteUser, setTaskDeadline,
-      addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority,
+      addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline,
+      addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
+      ideas, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject,
+      campaigns, addCampaign, updateCampaign, deleteCampaign,
+      updatePartyNote,
     }}>
       {children}
     </AppContext.Provider>

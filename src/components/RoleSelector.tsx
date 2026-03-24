@@ -15,6 +15,8 @@ const RoleSelector = () => {
       if (user.role === 'montazysta') return p.assignedEditorId === user.id;
       if (user.role === 'klient') return p.assignedClientId === user.id;
       if (user.role === 'kierownik_planu') return p.assignedKierownikId === user.id;
+      if (user.role === 'publikator') return tasks.some(t => t.projectId === p.id && t.assignedRoles.includes('publikator') && t.status === 'todo');
+      return false;
     }).map(p => p.id);
   };
 

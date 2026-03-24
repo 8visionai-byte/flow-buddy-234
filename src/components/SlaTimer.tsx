@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Clock, AlertTriangle } from 'lucide-react';
 
-const SLA_MS = 48 * 60 * 60 * 1000;
+const DEFAULT_SLA_MS = 48 * 60 * 60 * 1000;
 
 interface SlaTimerProps {
   assignedAt: string | null;
   compact?: boolean;
+  slaMs?: number;
 }
 
 function formatDuration(ms: number): string {
@@ -17,7 +18,7 @@ function formatDuration(ms: number): string {
   return `${minutes}m`;
 }
 
-const SlaTimer = ({ assignedAt, compact = false }: SlaTimerProps) => {
+const SlaTimer = ({ assignedAt, compact = false, slaMs }: SlaTimerProps) => {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -27,7 +28,8 @@ const SlaTimer = ({ assignedAt, compact = false }: SlaTimerProps) => {
 
   if (!assignedAt) return null;
 
-  const deadline = new Date(assignedAt).getTime() + SLA_MS;
+  const effectiveSlaMs = slaMs ?? DEFAULT_SLA_MS;
+  const deadline = new Date(assignedAt).getTime() + effectiveSlaMs;
   const remaining = deadline - now;
   const overdue = remaining < 0;
 
