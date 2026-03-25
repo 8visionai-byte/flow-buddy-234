@@ -25,6 +25,8 @@ const actionLabels: Record<TaskHistoryEntry['action'], string> = {
   approved: 'Zaakceptowano',
   rejected: 'Odrzucono z uwagami',
   resubmitted: 'Poprawiono i wysłano ponownie',
+  deferred: 'Odroczono',
+  rejected_final: 'Odrzucono ostatecznie',
 };
 
 const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
@@ -32,6 +34,8 @@ const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
   approved: <ThumbsUp className="h-3.5 w-3.5 text-success" />,
   rejected: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
   resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
+  deferred: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
+  rejected_final: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
 };
 
 function formatTimestamp(iso: string | null): string {
