@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { User, Task, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
+import { User, Task, TaskStatus, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
 import { createTasksForProject } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -237,10 +237,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // ─── Helper: cleanup stale tasks from previous stages ──────
+  // When a task at order N is completed and the next stage is unlocked,
+  // any active tasks from orders < N should be auto-archived.
+  const cleanupPreviousStageTasks = (allTasks: Task[], completedProjectId: string, completedOrder: number): Task[] => {
+    const now = new Date().toISOString();
+    const activeStatuses: TaskStatus[] = ['todo', 'pending_client_approval', 'needs_influencer_revision'];
+    return allTasks.map(t => {
+      if (t.projectId !== completedProjectId) return t;
+      if (t.order >= completedOrder) return t;
+      if (!activeStatuses.includes(t.status)) return t;
+      // Auto-archive this stale task
+      const cleanupEntry: TaskHistoryEntry = {
+        action: 'submitted', by: 'admin', value: 'auto_cleanup',
+        timestamp: now,
+      };
+      return {
+        ...t,
+        status: 'done' as const,
+        value: t.value || 'auto_cleanup',
+        completedAt: now,
+        completedBy: 'admin',
+        history: [...t.history, cleanupEntry],
+      };
+    });
+  };
+
   // ─── Task operations (same logic, just using updateTasksAndSync) ──
 
   const completeTask = useCallback((taskId: string, value: string, byRole?: UserRole) => {
     updateTasksAndSync(prev => {
+      // Inner function that computes the new task state
+      const result = completeTaskInner(prev, taskId, value, byRole);
+      // Apply stage cleanup: archive stale tasks from previous stages
+      const completedTask = result.find(t => t.id === taskId);
+      if (completedTask && completedTask.status === 'done') {
+        return cleanupPreviousStageTasks(result, completedTask.projectId, completedTask.order);
+      }
+      return result;
+    });
+  }, [updateTasksAndSync, currentUser, projects, users, ideas, campaigns]);
+
+  const completeTaskInner = (prev: Task[], taskId: string, value: string, byRole?: UserRole): Task[] => {
       const now = new Date().toISOString();
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
@@ -516,8 +554,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       return updated;
-    });
-  }, [updateTasksAndSync, currentUser, projects, users, ideas, campaigns]);
+  };
 
   const rejectTask = useCallback((taskId: string, feedback: string) => {
     updateTasksAndSync(prev => {
@@ -595,11 +632,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!task) return prev;
       const entry: TaskHistoryEntry = { action: 'resubmitted', by: task.assignedRole, value: newValue, timestamp: now };
       const nextTask = prev.find(t => t.projectId === task.projectId && t.order === task.order + 1);
-      return prev.map(t => {
+      let result = prev.map(t => {
         if (t.id === taskId) return { ...t, status: 'done' as const, value: newValue, completedAt: now, completedBy: t.assignedRole, clientFeedback: null, history: [...t.history, entry] };
         if (nextTask && t.id === nextTask.id) return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, clientVotes: {}, assignedAt: now, history: [...t.history, entry] };
         return t;
       });
+      // Cleanup stale tasks from previous stages
+      return cleanupPreviousStageTasks(result, task.projectId, task.order);
     });
   }, [updateTasksAndSync]);
 
