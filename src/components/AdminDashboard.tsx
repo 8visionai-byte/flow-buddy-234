@@ -1302,129 +1302,207 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const getCampaignClient = (campaign: typeof campaigns[0]) => clients.find(c => c.id === campaign.clientId);
     const getCampaignInfluencer = (campaign: typeof campaigns[0]) => users.find(u => u.id === campaign.assignedInfluencerId);
 
-    if (campaigns.length === 0) {
+    const activeCampaigns = campaigns.filter(c => !c.isDeleted);
+    const trashedCampaigns = campaigns.filter(c => c.isDeleted);
+
+    const handleRestore = async (id: string) => {
+      setIsRestoringCampaign(id);
+      try {
+        restoreCampaign(id);
+        await new Promise(r => setTimeout(r, 300));
+      } finally {
+        setIsRestoringCampaign(null);
+      }
+    };
+
+    const renderCampaignCard = (campaign: typeof campaigns[0], isTrashed: boolean) => {
+      const client = getCampaignClient(campaign);
+      const influencer = getCampaignInfluencer(campaign);
+      const campaignIdeas = getCampaignIdeas(campaign.id);
+      const pendingCount = campaignIdeas.filter(i => i.status === 'pending').length;
+      const acceptedCount = campaignIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
+      const msTilDeadline = getSlaRemaining(campaign);
+      const hoursLeft = Math.floor(Math.abs(msTilDeadline) / 3600000);
+      const minutesLeft = Math.floor((Math.abs(msTilDeadline) % 3600000) / 60000);
+      const isOverdue = msTilDeadline < 0;
+      const isExpanded = expandedCampaignId === campaign.id;
+
       return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-          <Lightbulb className="h-12 w-12 text-muted-foreground opacity-40" />
-          <p className="text-lg font-semibold text-foreground">Brak kampanii</p>
-          <p className="text-sm text-muted-foreground">Utwórz kampanię, aby zlecić influencerowi przygotowanie pomysłów.</p>
-        </div>
-      );
-    }
+        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70")}>
+          {/* Campaign header */}
+          <div className="px-4 py-4 md:px-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
+                  {isTrashed ? (
+                    <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs">
+                      W koszu
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                      {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
+                       campaign.status === 'in_review' ? 'Klient ocenia' :
+                       campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {influencer?.name || 'Brak influencera'}
+                  </span>
+                  {client?.phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      {client.phone}
+                    </span>
+                  )}
+                </div>
+                {campaign.briefNotes && (
+                  <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">Brief: {campaign.briefNotes}</p>
+                )}
+              </div>
 
-    return (
-      <div className="space-y-4">
-        {campaigns.map(campaign => {
-          const client = getCampaignClient(campaign);
-          const influencer = getCampaignInfluencer(campaign);
-          const campaignIdeas = getCampaignIdeas(campaign.id);
-          const pendingCount = campaignIdeas.filter(i => i.status === 'pending').length;
-          const acceptedCount = campaignIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
-          const msTilDeadline = getSlaRemaining(campaign);
-          const hoursLeft = Math.floor(Math.abs(msTilDeadline) / 3600000);
-          const minutesLeft = Math.floor((Math.abs(msTilDeadline) % 3600000) / 60000);
-          const isOverdue = msTilDeadline < 0;
-          const isExpanded = expandedCampaignId === campaign.id;
-
-          return (
-            <div key={campaign.id} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-              {/* Campaign header */}
-              <div className="px-4 py-4 md:px-6">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
-                      <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                        {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
-                         campaign.status === 'in_review' ? 'Klient ocenia' :
-                         campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
-                      </Badge>
+              <div className="flex gap-3 items-start shrink-0">
+                {/* SLA countdown - hidden for trashed */}
+                {!isTrashed && (
+                  <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
+                    <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
+                      {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
                     </div>
-                    <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5" />
-                        {influencer?.name || 'Brak influencera'}
-                      </span>
-                      {client?.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5" />
-                          {client.phone}
-                        </span>
-                      )}
-                    </div>
-                    {campaign.briefNotes && (
-                      <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">Brief: {campaign.briefNotes}</p>
-                    )}
+                    <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
                   </div>
+                )}
 
-                  <div className="flex gap-3 items-start shrink-0">
-                    {/* SLA countdown */}
-                    <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
-                      <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
-                        {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
-                    </div>
+                {/* Idea count */}
+                <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
+                  <div className="text-sm font-bold tabular-nums text-foreground">
+                    {campaignIdeas.length}/{campaign.targetIdeaCount}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">pomysłów</div>
+                </div>
 
-                    {/* Idea count */}
-                    <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
-                      <div className="text-sm font-bold tabular-nums text-foreground">
-                        {campaignIdeas.length}/{campaign.targetIdeaCount}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">pomysłów</div>
-                    </div>
+                {/* Expand button */}
+                {!isTrashed && (
+                  <Button
+                    variant="ghost" size="sm" className="h-8 text-xs gap-1"
+                    onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    {isExpanded ? 'Zwiń' : 'Pomysły'}
+                  </Button>
+                )}
 
-                    {/* Expand button */}
-                    <Button
-                      variant="ghost" size="sm" className="h-8 text-xs gap-1"
-                      onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
-                    >
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      {isExpanded ? 'Zwiń' : 'Pomysły'}
+                {/* Dropdown menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical className="h-4 w-4" />
                     </Button>
-
-                    {/* Status change */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-popover z-50">
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-popover z-50">
+                    {isTrashed ? (
+                      <DropdownMenuItem
+                        disabled={isRestoringCampaign === campaign.id}
+                        onClick={() => handleRestore(campaign.id)}
+                      >
+                        <ArchiveRestore className="mr-2 h-4 w-4" />
+                        {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
+                      </DropdownMenuItem>
+                    ) : (
+                      <>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'awaiting_ideas' })}>Oczekuje na pomysły</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'in_review' })}>Klient ocenia</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'completed' })}>Zakończona</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />Usuń kampanię
+                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {/* Progress bar for ideas */}
-                <div className="mt-3 space-y-1">
-                  <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${Math.min(100, (campaignIdeas.length / campaign.targetIdeaCount) * 100)}%` }} />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stały się projektami` : 'Brak pomysłów'}</span>
-                    <span>{campaignIdeas.length} z {campaign.targetIdeaCount}</span>
-                  </div>
-                </div>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-
-              {/* Expanded ideas panel */}
-              {isExpanded && (
-                <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
-                  <IdeasPanel campaignId={campaign.id} role="admin" />
-                </div>
-              )}
             </div>
-          );
-        })}
+
+            {/* Progress bar for ideas */}
+            <div className="mt-3 space-y-1">
+              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                <div className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${Math.min(100, (campaignIdeas.length / campaign.targetIdeaCount) * 100)}%` }} />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stały się projektami` : 'Brak pomysłów'}</span>
+                <span>{campaignIdeas.length} z {campaign.targetIdeaCount}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded ideas panel */}
+          {isExpanded && !isTrashed && (
+            <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
+              <IdeasPanel campaignId={campaign.id} role="admin" />
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Campaign filter tabs */}
+        <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
+          <button
+            onClick={() => setCampaignTabFilter('active')}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              campaignTabFilter === 'active'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Aktywne ({activeCampaigns.length})
+          </button>
+          <button
+            onClick={() => setCampaignTabFilter('trash')}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+              campaignTabFilter === 'trash'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Kosz ({trashedCampaigns.length})
+          </button>
+        </div>
+
+        {campaignTabFilter === 'active' ? (
+          activeCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <Lightbulb className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Brak aktywnych kampanii</p>
+              <p className="text-sm text-muted-foreground">Utwórz kampanię, aby zlecić influencerowi przygotowanie pomysłów.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activeCampaigns.map(campaign => renderCampaignCard(campaign, false))}
+            </div>
+          )
+        ) : (
+          trashedCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <Trash2 className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Kosz jest pusty</p>
+              <p className="text-sm text-muted-foreground">W koszu nie ma jeszcze żadnych usuniętych kampanii.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {trashedCampaigns.map(campaign => renderCampaignCard(campaign, true))}
+            </div>
+          )
+        )}
       </div>
     );
   };
