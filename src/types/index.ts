@@ -144,7 +144,13 @@ export interface ActorEntry {
   telegramHandle: string;        // @username or +48... — used by Make.com webhook
 }
 
-export type IdeaStatus = 'pending' | 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected';
+export type IdeaStatus = 'pending' | 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected' | 'needs_revision';
+
+export interface IdeaEvaluation {
+  decision: 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected';
+  comment: string | null;
+  timestamp: string;
+}
 
 export interface Idea {
   id: string;
@@ -158,6 +164,7 @@ export interface Idea {
   clientNotes: string | null;   // for 'accepted_with_notes' or 'rejected' reasons
   reviewedAt: string | null;
   reviewedByUserId: string | null;
+  evaluations: Record<string, IdeaEvaluation>; // userId → vote
 }
 
 export type CampaignStatus = 'draft' | 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';

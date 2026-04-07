@@ -51,6 +51,7 @@ interface AppContextType {
   updateIdea: (ideaId: string, title: string, description: string) => void;
   deleteIdea: (ideaId: string) => void;
   reviewIdea: (ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => void;
+  resubmitIdea: (ideaId: string, title: string, description: string) => void;
   acceptIdeaAsProject: (ideaId: string) => void;
   campaigns: Campaign[];
   addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => void;
@@ -82,6 +83,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Track if realtime update is in progress to avoid echo loops
   const realtimeSkip = useRef(false);
+  // Ref to acceptIdeaAsProject for use in reviewIdea callback
+  const acceptIdeaAsProjectRef = useRef<(id: string) => void>(() => {});
 
   const setCurrentUser = useCallback((user: User | null) => {
     setCurrentUserState(user);
@@ -831,6 +834,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       campaignId, resultingProjectId: null, title, description, createdByUserId,
       createdAt: new Date().toISOString(), status: 'pending',
       clientNotes: null, reviewedAt: null, reviewedByUserId: null,
+      evaluations: {},
     };
     setIdeas(prev => [...prev, idea]);
     upsertIdea(idea);
@@ -852,7 +856,84 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reviewIdea = useCallback((ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => {
     setIdeas(prev => {
-      const updated = prev.map(i => i.id === ideaId ? { ...i, status, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId } : i);
+      const idea = prev.find(i => i.id === ideaId);
+      if (!idea) return prev;
+
+      // Find the campaign to get the reviewer list
+      const camp = campaigns.find(c => c.id === idea.campaignId);
+      const requiredReviewers = camp?.reviewerIds ?? [];
+
+      // If no multi-reviewer setup, fall back to immediate status change
+      if (requiredReviewers.length <= 1) {
+        const finalSt = status;
+        const updated = prev.map(i => i.id === ideaId ? {
+          ...i, status: finalSt, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
+          evaluations: { ...i.evaluations, [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() } },
+        } : i);
+        const changed = updated.find(i => i.id === ideaId);
+        if (changed) upsertIdea(changed);
+        // Auto-create project if accepted
+        if (finalSt === 'accepted' || finalSt === 'accepted_with_notes') {
+          setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
+        }
+        return updated;
+      }
+
+      // Multi-reviewer: store individual vote
+      const newEvaluations = {
+        ...idea.evaluations,
+        [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() },
+      };
+
+      const voteCount = Object.keys(newEvaluations).length;
+      const allVoted = voteCount >= requiredReviewers.length;
+
+      let finalStatus: IdeaStatus = idea.status === 'needs_revision' ? 'needs_revision' : 'pending';
+      let finalNotes = idea.clientNotes;
+
+      if (allVoted) {
+        const votes = Object.values(newEvaluations) as Array<{ decision: string; comment: string | null }>;
+        const hasRejection = votes.some(v => v.decision === 'rejected');
+        const hasNotes = votes.some(v => v.decision === 'accepted_with_notes');
+
+        if (hasRejection) {
+          finalStatus = 'needs_revision';
+          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
+        } else if (hasNotes) {
+          finalStatus = 'accepted_with_notes';
+          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
+        } else {
+          // all accepted or saved_for_later
+          const allSaved = votes.every(v => v.decision === 'saved_for_later');
+          finalStatus = allSaved ? 'saved_for_later' : 'accepted';
+          finalNotes = null;
+        }
+      }
+
+      const updated = prev.map(i => i.id === ideaId ? {
+        ...i,
+        evaluations: newEvaluations,
+        status: finalStatus,
+        clientNotes: finalNotes,
+        reviewedAt: allVoted ? new Date().toISOString() : i.reviewedAt,
+        reviewedByUserId: allVoted ? reviewedByUserId : i.reviewedByUserId,
+      } : i);
+      const changed = updated.find(i => i.id === ideaId);
+      if (changed) upsertIdea(changed);
+      // Auto-create project when consensus reached with acceptance
+      if (allVoted && (finalStatus === 'accepted' || finalStatus === 'accepted_with_notes')) {
+        setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
+      }
+      return updated;
+    });
+  }, [campaigns]);
+
+  const resubmitIdea = useCallback((ideaId: string, title: string, description: string) => {
+    setIdeas(prev => {
+      const updated = prev.map(i => i.id === ideaId ? {
+        ...i, title, description, status: 'pending' as const,
+        evaluations: {}, clientNotes: null, reviewedAt: null, reviewedByUserId: null,
+      } : i);
       const changed = updated.find(i => i.id === ideaId);
       if (changed) upsertIdea(changed);
       return updated;
@@ -904,6 +985,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }, 0);
   }, []);
+
+  // Keep ref in sync
+  acceptIdeaAsProjectRef.current = acceptIdeaAsProject;
 
   // ─── Campaigns ──────────────────────────────────────────────
 
@@ -1008,7 +1092,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addProject, deleteProject, toggleFreezeProject, assignToProject, toggleClientInProject,
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
-      ideas, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject,
+      ideas, addIdea, updateIdea, deleteIdea, reviewIdea, resubmitIdea, acceptIdeaAsProject,
       campaigns, addCampaign, createDraftCampaign, activateCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, hardDeleteCampaigns, bulkRestoreCampaigns,
       updatePartyNote, loading,
     }}>

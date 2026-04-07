@@ -50,8 +50,12 @@ const RoleSelector = () => {
         c.status !== 'completed' && c.status !== 'cancelled' && c.status !== 'draft' &&
         (c.reviewerIds?.includes(user.id) || c.assignedClientUserId === user.id)
       ).filter(c => {
-        const pendingIdeas = ideas.filter(i => i.campaignId === c.id && i.status === 'pending');
-        return pendingIdeas.length > 0;
+        const unvotedIdeas = ideas.filter(i =>
+          i.campaignId === c.id &&
+          i.status === 'pending' &&
+          !i.evaluations?.[user.id]
+        );
+        return unvotedIdeas.length > 0;
       }).length;
     }
 

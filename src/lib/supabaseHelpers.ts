@@ -60,6 +60,7 @@ export function mapIdea(row: any): Idea {
     title: row.title, description: row.description, createdByUserId: row.created_by_user_id,
     createdAt: row.created_at, status: row.status, clientNotes: row.client_notes,
     reviewedAt: row.reviewed_at, reviewedByUserId: row.reviewed_by_user_id,
+    evaluations: (row.evaluations || {}) as Record<string, any>,
   };
 }
 
@@ -205,6 +206,7 @@ export async function upsertIdea(idea: Idea) {
     title: idea.title, description: idea.description, created_by_user_id: idea.createdByUserId,
     created_at: idea.createdAt, status: idea.status, client_notes: idea.clientNotes,
     reviewed_at: idea.reviewedAt, reviewed_by_user_id: idea.reviewedByUserId,
+    evaluations: idea.evaluations as any,
   });
 }
 

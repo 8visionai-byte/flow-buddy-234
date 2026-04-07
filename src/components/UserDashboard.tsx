@@ -137,6 +137,10 @@ const UserDashboard = () => {
   const getPendingIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId && i.status === 'pending').length;
 
+  // For client: count ideas they haven't voted on yet
+  const getUnvotedIdeasCount = (campaignId: string) =>
+    ideas.filter(i => i.campaignId === campaignId && i.status === 'pending' && !i.evaluations?.[currentUser.id]).length;
+
   const getTotalIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId).length;
 
@@ -147,12 +151,13 @@ const UserDashboard = () => {
           if (c.assignedInfluencerId !== currentUser.id) return false;
           const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
           const pending = getPendingIdeasCount(c.id);
-          if (accepted >= c.targetIdeaCount && pending === 0) return false;
+          const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision').length;
+          if (accepted >= c.targetIdeaCount && pending === 0 && needsRevision === 0) return false;
           return true;
         }
         if (currentUser.role === 'klient') {
           if (!(c.reviewerIds?.includes(currentUser.id) || c.assignedClientUserId === currentUser.id)) return false;
-          return getPendingIdeasCount(c.id) > 0;
+          return getUnvotedIdeasCount(c.id) > 0;
         }
         return false;
       })
