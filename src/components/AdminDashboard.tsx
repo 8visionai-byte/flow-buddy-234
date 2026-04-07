@@ -67,7 +67,7 @@ const VIEWS: { id: ViewId; label: string; icon: React.FC<{ className?: string }>
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
   const {
     currentUser, setCurrentUser, tasks, projects, clients, users, ideas,
-    deleteProject, toggleFreezeProject, assignToProject, completeTask,
+    deleteProject, toggleFreezeProject, assignToProject, toggleClientInProject, completeTask,
     reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
     campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
     hardDeleteCampaigns, bulkRestoreCampaigns,
