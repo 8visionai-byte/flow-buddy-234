@@ -163,4 +163,5 @@ export interface Campaign {
   createdAt: string;
   slaHours: number;                     // 48 default — influencer deadline
   briefNotes: string;                   // DZ notes/brief for influencer
+  isDeleted: boolean;                   // soft delete flag
 }
