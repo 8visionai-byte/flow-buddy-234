@@ -68,7 +68,7 @@ const UserDashboard = () => {
     switch (currentUser.role) {
       case 'influencer':    return p.assignedInfluencerId === currentUser.id;
       case 'montazysta':    return p.assignedEditorId === currentUser.id;
-      case 'klient':        return p.assignedClientId === currentUser.id;
+      case 'klient':        return p.assignedClientId === currentUser.id || p.assignedClientIds?.includes(currentUser.id);
       case 'kierownik_planu': return p.assignedKierownikId === currentUser.id;
       case 'operator':      return p.assignedOperatorId === currentUser.id;
       case 'publikator':    return tasks.some(t => t.projectId === p.id && t.assignedRoles.includes('publikator') && t.status === 'todo');
