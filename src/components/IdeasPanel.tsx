@@ -67,7 +67,7 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
   const acceptedCount = projectIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
   const submittedCount = projectIdeas.length;
   const targetCount = campaign?.targetIdeaCount ?? 0;
-  const targetReached = targetCount > 0 && submittedCount >= targetCount;
+  const targetReached = targetCount > 0 && acceptedCount >= targetCount;
 
   // --- Influencer helpers ---
   const startAdd = () => {
@@ -424,8 +424,8 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
               : "border-warning/40 bg-warning/10 text-warning"
           )}>
             {targetReached ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-            {submittedCount}/{targetCount}
-            {targetReached ? ' ✓ cel osiągnięty' : ' pomysłów'}
+            {Math.min(acceptedCount, targetCount)}/{targetCount}
+            {targetReached ? ' ✓ cel osiągnięty' : ' zaakceptowanych'}
           </span>
         )}
         {role === 'influencer' && !showAddForm && editingId === null && (

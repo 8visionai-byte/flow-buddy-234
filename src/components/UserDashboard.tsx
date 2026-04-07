@@ -852,9 +852,12 @@ const UserDashboard = () => {
                       <div className="flex-1 truncate">
                         <div className="truncate font-medium">{client?.companyName || 'Kampania'}</div>
                         <div className={`truncate text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                          {isOverdue
-                            ? '⚠ Po terminie!'
-                            : `${String(hoursLeft).padStart(2, '0')}h ${String(minsLeft).padStart(2, '0')}m · ${total}/${campaign.targetIdeaCount} pomysłów`}
+                          {(() => {
+                            const accepted = ideas.filter(i => i.campaignId === campaign.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+                            return isOverdue
+                              ? '⚠ Po terminie!'
+                              : `${String(hoursLeft).padStart(2, '0')}h ${String(minsLeft).padStart(2, '0')}m · ${Math.min(accepted, campaign.targetIdeaCount)}/${campaign.targetIdeaCount} zaakceptowanych`;
+                          })()}
                         </div>
                       </div>
                       {pending > 0 && currentUser.role === 'klient' && (

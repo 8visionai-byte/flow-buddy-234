@@ -1438,9 +1438,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 {/* Idea count */}
                 <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
                   <div className="text-sm font-bold tabular-nums text-foreground">
-                    {campaignIdeas.length}/{campaign.targetIdeaCount}
+                    {Math.min(acceptedCount, campaign.targetIdeaCount)}/{campaign.targetIdeaCount}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">pomysłów</div>
+                  <div className="text-[10px] text-muted-foreground">zaakceptowanych</div>
                 </div>
 
                 {/* Expand button */}
@@ -1530,11 +1530,11 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             <div className="mt-3 space-y-1">
               <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
                 <div className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${Math.min(100, (campaignIdeas.length / campaign.targetIdeaCount) * 100)}%` }} />
+                  style={{ width: `${Math.min(100, (acceptedCount / campaign.targetIdeaCount) * 100)}%` }} />
               </div>
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stały się projektami` : 'Brak pomysłów'}</span>
-                <span>{campaignIdeas.length} z {campaign.targetIdeaCount}</span>
+                <span>{pendingCount > 0 ? `${pendingCount} w trakcie weryfikacji` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych` : 'Brak pomysłów'}</span>
+                <span>{Math.min(acceptedCount, campaign.targetIdeaCount)} z {campaign.targetIdeaCount} zaakceptowanych</span>
               </div>
             </div>
           </div>
