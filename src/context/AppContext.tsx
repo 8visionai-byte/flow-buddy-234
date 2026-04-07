@@ -838,6 +838,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newClient = { ...data, id, createdAt: new Date().toISOString() };
     setClients(prev => [...prev, newClient]);
     upsertClient(newClient);
+
+    // Auto-create a user account for the contact person if provided
+    if (data.contactName?.trim()) {
+      const userId = `u${Date.now()}`;
+      const newUser: User = { id: userId, name: data.contactName.trim(), role: 'klient', clientId: id };
+      setUsers(prev => [...prev, newUser]);
+      upsertUser(newUser);
+    }
+
     return id;
   }, []);
 
