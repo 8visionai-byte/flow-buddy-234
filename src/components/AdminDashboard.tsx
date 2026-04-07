@@ -17,7 +17,7 @@ import {
   RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList,
   Calendar as CalendarIcon, Flag, FileText, ChevronDown, ChevronRight, ChevronLeft,
   Building2, Clock, LayoutList, Users, Phone, Mail, Lightbulb, UserPlus, Check, X,
-  ArchiveRestore,
+  ArchiveRestore, Pencil,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -99,6 +99,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [priorityDialogTask, setPriorityDialogTask] = useState<Task | null>(null);
   const [inlineNewKP, setInlineNewKP] = useState<Record<string, string>>({});
   const [inlineNewOp, setInlineNewOp] = useState<Record<string, string>>({});
+  // Draft editing
+  const [editingDraft, setEditingDraft] = useState<typeof campaigns[0] | null>(null);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects(prev => {
@@ -1441,20 +1443,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   <Button
                     size="sm"
                     className="h-8 text-xs gap-1"
-                    disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
-                    onClick={() => handleActivate(campaign.id)}
+                    onClick={() => setEditingDraft(campaign)}
                   >
-                    {isActivatingCampaign === campaign.id ? (
-                      <>
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                        Uruchamianie...
-                      </>
-                    ) : (
-                      <>
-                        <Lightbulb className="h-3.5 w-3.5" />
-                        Uruchom kampanię
-                      </>
-                    )}
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edytuj szkic
                   </Button>
                 )}
 
@@ -1486,6 +1478,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       </>
                     ) : isDraft ? (
                       <>
+                        <DropdownMenuItem onClick={() => setEditingDraft(campaign)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edytuj
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
                           onClick={() => handleActivate(campaign.id)}
@@ -2156,6 +2152,14 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {!readOnly && <ClientManagementDialog />}
           {!readOnly && <TeamManagementDialog />}
           {!readOnly && <AddCampaignDialog />}
+          {/* Edit draft dialog — controlled externally */}
+          {!readOnly && (
+            <AddCampaignDialog
+              editDraft={editingDraft}
+              externalOpen={!!editingDraft}
+              onOpenChange={(open) => { if (!open) setEditingDraft(null); }}
+            />
+          )}
           <span className="hidden text-sm text-muted-foreground sm:inline">{currentUser.name}</span>
           <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
             <LogOut className="h-4 w-4" />

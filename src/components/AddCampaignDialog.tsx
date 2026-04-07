@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import { Campaign } from '@/types';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -14,9 +15,31 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Lightbulb, Plus, X, Check, UserPlus } from 'lucide-react';
 
-const AddCampaignDialog = () => {
-  const { clients, users, addCampaign, createDraftCampaign, updateCampaign, addUser } = useApp();
-  const [open, setOpen] = useState(false);
+interface AddCampaignDialogProps {
+  /** If provided, opens in edit mode with this draft's data */
+  editDraft?: Campaign | null;
+  /** Controlled open state (for external trigger) */
+  externalOpen?: boolean;
+  /** Callback when dialog closes */
+  onOpenChange?: (open: boolean) => void;
+}
+
+const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaignDialogProps) => {
+  const { clients, users, addCampaign, createDraftCampaign, updateCampaign, activateCampaign, addUser } = useApp();
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  // Use external control if provided, otherwise internal
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = (v: boolean) => {
+    if (externalOpen !== undefined) {
+      onOpenChange?.(v);
+    } else {
+      setInternalOpen(v);
+    }
+  };
+
+  const isEditMode = !!editDraft;
+
   const [clientId, setClientId] = useState('');
   const [influencerId, setInfluencerId] = useState('');
   const [reviewerIds, setReviewerIds] = useState<string[]>([]);
@@ -31,6 +54,22 @@ const AddCampaignDialog = () => {
   // Inline new influencer form
   const [showNewInfluencer, setShowNewInfluencer] = useState(false);
   const [newInfluencerName, setNewInfluencerName] = useState('');
+
+  // Pre-fill form when editing a draft
+  useEffect(() => {
+    if (editDraft && open) {
+      setClientId(editDraft.clientId || '');
+      setInfluencerId(editDraft.assignedInfluencerId || '');
+      setReviewerIds(editDraft.reviewerIds || []);
+      setTargetCount(String(editDraft.targetIdeaCount || 12));
+      setSlaHours(String(editDraft.slaHours || 48));
+      setBriefNotes(editDraft.briefNotes || '');
+      draftIdRef.current = editDraft.id;
+      setReviewerError(false);
+      setShowNewInfluencer(false);
+      setNewInfluencerName('');
+    }
+  }, [editDraft, open]);
 
   const influencers = users.filter(u => u.role === 'influencer');
   const clientUsers = clientId
@@ -52,11 +91,9 @@ const AddCampaignDialog = () => {
     };
 
     if (!draftIdRef.current) {
-      // Create new draft
       const id = createDraftCampaign(data);
       draftIdRef.current = id;
     } else {
-      // Update existing draft
       updateCampaign(draftIdRef.current, data);
     }
   }, [clientId, influencerId, reviewerIds, targetCount, slaHours, briefNotes, createDraftCampaign, updateCampaign]);
@@ -66,7 +103,6 @@ const AddCampaignDialog = () => {
     const newId = addUser({ name: newInfluencerName.trim(), role: 'influencer' });
     setInfluencerId(newId);
     setNewInfluencerName(''); setShowNewInfluencer(false);
-    // Auto-save with new influencer
     setTimeout(() => saveDraft({ influencerId: newId }), 0);
   };
 
@@ -74,7 +110,6 @@ const AddCampaignDialog = () => {
     setReviewerError(false);
     setReviewerIds(prev => {
       const next = prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id];
-      // Auto-save
       setTimeout(() => saveDraft({ reviewerIds: next }), 0);
       return next;
     });
@@ -84,7 +119,6 @@ const AddCampaignDialog = () => {
     setClientId(v);
     setReviewerIds([]);
     setReviewerError(false);
-    // Auto-save with new client
     setTimeout(() => saveDraft({ clientId: v, reviewerIds: [] }), 0);
   };
 
@@ -102,7 +136,7 @@ const AddCampaignDialog = () => {
     const firstClientReviewer = reviewerIds.find(id => id !== 'admin') || null;
 
     if (draftIdRef.current) {
-      // Activate existing draft by updating it to awaiting_ideas
+      // Update existing draft and activate it
       updateCampaign(draftIdRef.current, {
         clientId,
         assignedInfluencerId: influencerId,
@@ -113,6 +147,10 @@ const AddCampaignDialog = () => {
         briefNotes: briefNotes.trim(),
         status: 'awaiting_ideas',
       });
+      // If editing a draft, also activate it (resets createdAt for SLA)
+      if (isEditMode) {
+        activateCampaign(draftIdRef.current);
+      }
     } else {
       addCampaign({
         clientId,
@@ -124,12 +162,19 @@ const AddCampaignDialog = () => {
         briefNotes: briefNotes.trim(),
       });
     }
-    // Reset
+    resetAndClose();
+  };
+
+  const resetForm = () => {
     setClientId(''); setInfluencerId(''); setReviewerIds([]);
     setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
     setShowNewInfluencer(false); setNewInfluencerName('');
     setReviewerError(false);
     draftIdRef.current = null;
+  };
+
+  const resetAndClose = () => {
+    resetForm();
     setOpen(false);
   };
 
@@ -137,28 +182,30 @@ const AddCampaignDialog = () => {
     setOpen(isOpen);
     if (!isOpen) {
       // If closing without submitting, draft stays in DB as "Szkic"
-      // Reset local form state
-      setClientId(''); setInfluencerId(''); setReviewerIds([]);
-      setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
-      setShowNewInfluencer(false); setNewInfluencerName('');
-      setReviewerError(false);
-      draftIdRef.current = null;
+      resetForm();
     }
   };
 
+  // Trigger button only shown when no external control
+  const triggerButton = externalOpen === undefined ? (
+    <DialogTrigger asChild>
+      <Button size="sm" className="gap-2">
+        <Lightbulb className="h-4 w-4" />
+        Nowa kampania
+      </Button>
+    </DialogTrigger>
+  ) : null;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="gap-2">
-          <Lightbulb className="h-4 w-4" />
-          Nowa kampania
-        </Button>
-      </DialogTrigger>
+      {triggerButton}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Utwórz kampanię pomysłów</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Edytuj szkic kampanii' : 'Utwórz kampanię pomysłów'}</DialogTitle>
           <DialogDescription>
-            Wybierz klienta i influencera — dane zapisują się automatycznie jako szkic. Możesz zamknąć okno i wrócić później.
+            {isEditMode
+              ? 'Uzupełnij dane szkicu i uruchom kampanię. Zamknięcie okna zachowa zmiany w szkicu.'
+              : 'Wybierz klienta i influencera — dane zapisują się automatycznie jako szkic. Możesz zamknąć okno i wrócić później.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -340,7 +387,9 @@ const AddCampaignDialog = () => {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>Anuluj</Button>
-          <Button onClick={handleSubmit} disabled={!isValid}>Utwórz kampanię</Button>
+          <Button onClick={handleSubmit} disabled={!isValid}>
+            {isEditMode ? 'Uruchom kampanię' : 'Utwórz kampanię'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
