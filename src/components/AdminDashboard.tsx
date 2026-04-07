@@ -2106,14 +2106,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           </AlertDialogContent>
         </AlertDialog>
       )}
-                }}
-              >
-                {isDeletingCampaign ? 'Usuwanie...' : 'Usuń kampanię'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+
+
 
     </div>
   );
