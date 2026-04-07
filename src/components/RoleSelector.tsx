@@ -37,9 +37,9 @@ const RoleSelector = () => {
         c.assignedInfluencerId === user.id &&
         c.status === 'awaiting_ideas'
       ).filter(c => {
-        // Only count if influencer hasn't submitted all required ideas yet
-        const submittedIdeas = ideas.filter(i => i.campaignId === c.id && i.createdByUserId === user.id);
-        return submittedIdeas.length < c.targetIdeaCount;
+        // Only count if influencer hasn't reached target accepted ideas yet
+        const acceptedIdeas = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes'));
+        return acceptedIdeas.length < c.targetIdeaCount;
       }).length;
     }
 

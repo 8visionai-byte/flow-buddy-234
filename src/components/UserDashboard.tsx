@@ -145,9 +145,9 @@ const UserDashboard = () => {
         if (c.status === 'completed' || c.status === 'cancelled' || c.status === 'draft') return false;
         if (currentUser.role === 'influencer') {
           if (c.assignedInfluencerId !== currentUser.id) return false;
-          const total = getTotalIdeasCount(c.id);
+          const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
           const pending = getPendingIdeasCount(c.id);
-          if (total >= c.targetIdeaCount && pending === 0) return false;
+          if (accepted >= c.targetIdeaCount && pending === 0) return false;
           return true;
         }
         if (currentUser.role === 'klient') {
@@ -852,9 +852,12 @@ const UserDashboard = () => {
                       <div className="flex-1 truncate">
                         <div className="truncate font-medium">{client?.companyName || 'Kampania'}</div>
                         <div className={`truncate text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                          {isOverdue
-                            ? '⚠ Po terminie!'
-                            : `${String(hoursLeft).padStart(2, '0')}h ${String(minsLeft).padStart(2, '0')}m · ${total}/${campaign.targetIdeaCount} pomysłów`}
+                          {(() => {
+                            const accepted = ideas.filter(i => i.campaignId === campaign.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+                            return isOverdue
+                              ? '⚠ Po terminie!'
+                              : `${String(hoursLeft).padStart(2, '0')}h ${String(minsLeft).padStart(2, '0')}m · ${Math.min(accepted, campaign.targetIdeaCount)}/${campaign.targetIdeaCount} zaakceptowanych`;
+                          })()}
                         </div>
                       </div>
                       {pending > 0 && currentUser.role === 'klient' && (
