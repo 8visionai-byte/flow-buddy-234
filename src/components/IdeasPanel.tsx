@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<IdeaStatus, { label: string; color: string; icon: Re
 type ClientAction = 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected' | null;
 
 const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
-  const { currentUser, ideas, campaigns, clients, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject } = useApp();
+  const { currentUser, ideas, campaigns, clients, users, addIdea, updateIdea, deleteIdea, reviewIdea, resubmitIdea, acceptIdeaAsProject } = useApp();
   const projectIdeas = ideas.filter(i => i.campaignId === campaignId);
   const campaign = campaigns.find(c => c.id === campaignId);
   const campaignClient = campaign ? clients.find(c => c.id === campaign.clientId) : null;
