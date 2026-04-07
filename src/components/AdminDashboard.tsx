@@ -1303,7 +1303,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const getCampaignClient = (campaign: typeof campaigns[0]) => clients.find(c => c.id === campaign.clientId);
     const getCampaignInfluencer = (campaign: typeof campaigns[0]) => users.find(u => u.id === campaign.assignedInfluencerId);
 
-    const activeCampaigns = campaigns.filter(c => !c.isDeleted);
+    const activeCampaigns = campaigns.filter(c => !c.isDeleted && c.status !== 'draft');
+    const draftCampaigns = campaigns.filter(c => !c.isDeleted && c.status === 'draft');
     const trashedCampaigns = campaigns.filter(c => c.isDeleted);
 
     const handleRestore = async (id: string) => {
@@ -1313,6 +1314,16 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         await new Promise(r => setTimeout(r, 300));
       } finally {
         setIsRestoringCampaign(null);
+      }
+    };
+
+    const handleActivate = async (id: string) => {
+      setIsActivatingCampaign(id);
+      try {
+        activateCampaign(id);
+        await new Promise(r => setTimeout(r, 300));
+      } finally {
+        setIsActivatingCampaign(null);
       }
     };
 
