@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useApp } from '@/context/AppContext';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter,
@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Lightbulb, Plus, X, Check, UserPlus } from 'lucide-react';
 
 const AddCampaignDialog = () => {
-  const { clients, users, addCampaign, addUser } = useApp();
+  const { clients, users, addCampaign, createDraftCampaign, updateCampaign, addUser } = useApp();
   const [open, setOpen] = useState(false);
   const [clientId, setClientId] = useState('');
   const [influencerId, setInfluencerId] = useState('');
@@ -24,6 +24,9 @@ const AddCampaignDialog = () => {
   const [slaHours, setSlaHours] = useState('48');
   const [briefNotes, setBriefNotes] = useState('');
   const [reviewerError, setReviewerError] = useState(false);
+
+  // Draft tracking
+  const draftIdRef = useRef<string | null>(null);
 
   // Inline new influencer form
   const [showNewInfluencer, setShowNewInfluencer] = useState(false);
@@ -36,18 +39,58 @@ const AddCampaignDialog = () => {
 
   const isValid = !!clientId && !!influencerId;
 
+  // Auto-save draft to DB
+  const saveDraft = useCallback((overrides?: Record<string, any>) => {
+    const data = {
+      clientId: overrides?.clientId ?? clientId,
+      assignedInfluencerId: overrides?.influencerId ?? influencerId,
+      assignedClientUserId: null as string | null,
+      reviewerIds: overrides?.reviewerIds ?? reviewerIds,
+      targetIdeaCount: Math.max(1, parseInt(overrides?.targetCount ?? targetCount) || 12),
+      slaHours: Math.max(1, parseInt(overrides?.slaHours ?? slaHours) || 48),
+      briefNotes: (overrides?.briefNotes ?? briefNotes).trim(),
+    };
+
+    if (!draftIdRef.current) {
+      // Create new draft
+      const id = createDraftCampaign(data);
+      draftIdRef.current = id;
+    } else {
+      // Update existing draft
+      updateCampaign(draftIdRef.current, data);
+    }
+  }, [clientId, influencerId, reviewerIds, targetCount, slaHours, briefNotes, createDraftCampaign, updateCampaign]);
+
   const handleAddNewInfluencer = () => {
     if (!newInfluencerName.trim()) return;
     const newId = addUser({ name: newInfluencerName.trim(), role: 'influencer' });
     setInfluencerId(newId);
     setNewInfluencerName(''); setShowNewInfluencer(false);
+    // Auto-save with new influencer
+    setTimeout(() => saveDraft({ influencerId: newId }), 0);
   };
 
   const toggleReviewer = (id: string) => {
     setReviewerError(false);
-    setReviewerIds(prev =>
-      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
-    );
+    setReviewerIds(prev => {
+      const next = prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id];
+      // Auto-save
+      setTimeout(() => saveDraft({ reviewerIds: next }), 0);
+      return next;
+    });
+  };
+
+  const handleClientChange = (v: string) => {
+    setClientId(v);
+    setReviewerIds([]);
+    setReviewerError(false);
+    // Auto-save with new client
+    setTimeout(() => saveDraft({ clientId: v, reviewerIds: [] }), 0);
+  };
+
+  const handleInfluencerChange = (v: string) => {
+    setInfluencerId(v);
+    setTimeout(() => saveDraft({ influencerId: v }), 0);
   };
 
   const handleSubmit = () => {
@@ -56,27 +99,55 @@ const AddCampaignDialog = () => {
       setReviewerError(true);
       return;
     }
-    // First reviewer becomes the legacy assignedClientUserId (for backward compat)
     const firstClientReviewer = reviewerIds.find(id => id !== 'admin') || null;
-    addCampaign({
-      clientId,
-      assignedInfluencerId: influencerId,
-      assignedClientUserId: firstClientReviewer,
-      reviewerIds,
-      targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
-      slaHours: Math.max(1, parseInt(slaHours) || 48),
-      briefNotes: briefNotes.trim(),
-    });
+
+    if (draftIdRef.current) {
+      // Activate existing draft by updating it to awaiting_ideas
+      updateCampaign(draftIdRef.current, {
+        clientId,
+        assignedInfluencerId: influencerId,
+        assignedClientUserId: firstClientReviewer,
+        reviewerIds,
+        targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
+        slaHours: Math.max(1, parseInt(slaHours) || 48),
+        briefNotes: briefNotes.trim(),
+        status: 'awaiting_ideas',
+      });
+    } else {
+      addCampaign({
+        clientId,
+        assignedInfluencerId: influencerId,
+        assignedClientUserId: firstClientReviewer,
+        reviewerIds,
+        targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
+        slaHours: Math.max(1, parseInt(slaHours) || 48),
+        briefNotes: briefNotes.trim(),
+      });
+    }
     // Reset
     setClientId(''); setInfluencerId(''); setReviewerIds([]);
     setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
     setShowNewInfluencer(false); setNewInfluencerName('');
     setReviewerError(false);
+    draftIdRef.current = null;
     setOpen(false);
   };
 
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      // If closing without submitting, draft stays in DB as "Szkic"
+      // Reset local form state
+      setClientId(''); setInfluencerId(''); setReviewerIds([]);
+      setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
+      setShowNewInfluencer(false); setNewInfluencerName('');
+      setReviewerError(false);
+      draftIdRef.current = null;
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" className="gap-2">
           <Lightbulb className="h-4 w-4" />
@@ -87,7 +158,7 @@ const AddCampaignDialog = () => {
         <DialogHeader>
           <DialogTitle>Utwórz kampanię pomysłów</DialogTitle>
           <DialogDescription>
-            Wybierz klienta i influencera — influencer otrzyma brief i ma podany czas na złożenie pomysłów.
+            Wybierz klienta i influencera — dane zapisują się automatycznie jako szkic. Możesz zamknąć okno i wrócić później.
           </DialogDescription>
         </DialogHeader>
 
@@ -98,7 +169,7 @@ const AddCampaignDialog = () => {
             {clients.length === 0 ? (
               <p className="text-sm text-muted-foreground">Dodaj najpierw klienta w panelu „Klienci".</p>
             ) : (
-              <Select value={clientId} onValueChange={v => { setClientId(v); setReviewerIds([]); setReviewerError(false); }}>
+              <Select value={clientId} onValueChange={handleClientChange}>
                 <SelectTrigger><SelectValue placeholder="Wybierz klienta..." /></SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   {clients.map(c => (
@@ -159,7 +230,7 @@ const AddCampaignDialog = () => {
                 <p className="text-sm text-muted-foreground">Brak influencerów — użyj "Dodaj nowego" powyżej.</p>
               </div>
             ) : (
-              <Select value={influencerId} onValueChange={setInfluencerId}>
+              <Select value={influencerId} onValueChange={handleInfluencerChange}>
                 <SelectTrigger><SelectValue placeholder="Wybierz influencera..." /></SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   {influencers.map(u => (
@@ -231,7 +302,7 @@ const AddCampaignDialog = () => {
               <Input
                 type="number" min="1" max="50"
                 value={targetCount}
-                onChange={e => setTargetCount(e.target.value)}
+                onChange={e => { setTargetCount(e.target.value); setTimeout(() => saveDraft({ targetCount: e.target.value }), 0); }}
                 className="h-9"
               />
             </div>
@@ -241,7 +312,7 @@ const AddCampaignDialog = () => {
               <Input
                 type="number" min="1" max="168"
                 value={slaHours}
-                onChange={e => setSlaHours(e.target.value)}
+                onChange={e => { setSlaHours(e.target.value); setTimeout(() => saveDraft({ slaHours: e.target.value }), 0); }}
                 className="h-9"
               />
             </div>
@@ -255,12 +326,20 @@ const AddCampaignDialog = () => {
               placeholder="np. Szukamy pomysłów na serię filmów o higienie jamy ustnej..."
               value={briefNotes}
               onChange={e => setBriefNotes(e.target.value)}
+              onBlur={() => saveDraft()}
             />
           </div>
+
+          {/* Draft indicator */}
+          {draftIdRef.current && (
+            <p className="text-[10px] text-muted-foreground text-center">
+              💾 Szkic zapisany automatycznie — możesz zamknąć i wrócić później
+            </p>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Anuluj</Button>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>Anuluj</Button>
           <Button onClick={handleSubmit} disabled={!isValid}>Utwórz kampanię</Button>
         </DialogFooter>
       </DialogContent>
