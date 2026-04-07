@@ -60,6 +60,7 @@ export function mapIdea(row: any): Idea {
     title: row.title, description: row.description, createdByUserId: row.created_by_user_id,
     createdAt: row.created_at, status: row.status, clientNotes: row.client_notes,
     reviewedAt: row.reviewed_at, reviewedByUserId: row.reviewed_by_user_id,
+    evaluations: (row.evaluations || {}) as Record<string, any>,
   };
 }
 
