@@ -151,7 +151,8 @@ const UserDashboard = () => {
           if (c.assignedInfluencerId !== currentUser.id) return false;
           const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
           const pending = getPendingIdeasCount(c.id);
-          if (accepted >= c.targetIdeaCount && pending === 0) return false;
+          const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision').length;
+          if (accepted >= c.targetIdeaCount && pending === 0 && needsRevision === 0) return false;
           return true;
         }
         if (currentUser.role === 'klient') {
