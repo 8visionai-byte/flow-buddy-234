@@ -756,6 +756,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     deleteCampaignDb(id);
   }, []);
 
+  const softDeleteCampaign = useCallback((id: string) => {
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, isDeleted: true } : c);
+      const changed = updated.find(c => c.id === id);
+      if (changed) upsertCampaign(changed);
+      return updated;
+    });
+  }, []);
+
+  const restoreCampaign = useCallback((id: string) => {
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, isDeleted: false } : c);
+      const changed = updated.find(c => c.id === id);
+      if (changed) upsertCampaign(changed);
+      return updated;
+    });
+  }, []);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
