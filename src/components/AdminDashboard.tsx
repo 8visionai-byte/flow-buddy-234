@@ -1497,7 +1497,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           </div>
 
           {/* Expanded ideas panel */}
-          {isExpanded && !isTrashed && (
+          {isExpanded && !isTrashed && !isDraft && (
             <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
               <IdeasPanel campaignId={campaign.id} role="admin" />
             </div>
@@ -1520,6 +1520,18 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             )}
           >
             Aktywne ({activeCampaigns.length})
+          </button>
+          <button
+            onClick={() => setCampaignTabFilter('drafts')}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+              campaignTabFilter === 'drafts'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Szkice ({draftCampaigns.length})
           </button>
           <button
             onClick={() => setCampaignTabFilter('trash')}
@@ -1545,6 +1557,18 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           ) : (
             <div className="space-y-4">
               {activeCampaigns.map(campaign => renderCampaignCard(campaign, false))}
+            </div>
+          )
+        ) : campaignTabFilter === 'drafts' ? (
+          draftCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Brak szkiców</p>
+              <p className="text-sm text-muted-foreground">Rozpocznij tworzenie kampanii — szkice zapisują się automatycznie.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {draftCampaigns.map(campaign => renderCampaignCard(campaign, false))}
             </div>
           )
         ) : (
