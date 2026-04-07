@@ -22,7 +22,7 @@ interface AppContextType {
   completeTask: (taskId: string, value: string, byRole?: UserRole) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
-  updateTaskValue: (taskId: string, newValue: string) => void;
+  updateTaskValue: (taskId: string, newValue: string, historyEntry?: TaskHistoryEntry) => void;
   saveDraftValue: (taskId: string, value: string) => void;
   deferTask: (taskId: string) => void;
   rejectFinalTask: (taskId: string, reason?: string) => void;
@@ -616,14 +616,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [updateTasksAndSync]);
 
-  const updateTaskValue = useCallback((taskId: string, newValue: string) => {
+  const updateTaskValue = useCallback((taskId: string, newValue: string, historyEntry?: TaskHistoryEntry) => {
     updateTasksAndSync(prev => {
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
       const now = new Date().toISOString();
       const nextApproval = prev.find(t => t.projectId === task.projectId && t.order === task.order + 1 && (t.status === 'pending_client_approval' || t.status === 'todo'));
       return prev.map(t => {
-        if (t.id === taskId) return { ...t, value: newValue, completedAt: now };
+        if (t.id === taskId) return {
+          ...t,
+          value: newValue,
+          completedAt: now,
+          ...(historyEntry ? { history: [...t.history, historyEntry] } : {}),
+        };
         if (nextApproval && t.id === nextApproval.id) return { ...t, previousValue: newValue };
         return t;
       });
