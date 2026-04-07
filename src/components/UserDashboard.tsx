@@ -1071,13 +1071,44 @@ const UserDashboard = () => {
             {/* ── DONE sub-tab ── */}
             {taskSubTab === 'done' && (
               <>
-                {myDoneTasks.length === 0 ? (
+                {/* Done campaigns (influencer goal met) */}
+                {showIdeasSection && doneCampaigns.length > 0 && (
+                  <div>
+                    <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {currentUser.role === 'influencer' ? 'Ukończone kampanie' : 'Ocenione kampanie'} ({doneCampaigns.length})
+                    </div>
+                    {doneCampaigns.map(campaign => {
+                      const client = clients.find(c => c.id === campaign.clientId);
+                      const accepted = ideas.filter(i => i.campaignId === campaign.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+                      const isSelected = selectedItem?.type === 'ideas' && selectedItem.campaignId === campaign.id;
+                      return (
+                        <button
+                          key={campaign.id}
+                          onClick={() => selectItem({ type: 'ideas', campaignId: campaign.id })}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                            isSelected ? 'bg-success/10 text-success' : 'text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                          <div className="flex-1 truncate">
+                            <div className="truncate font-medium">{client?.companyName || 'Kampania'}</div>
+                            <div className="truncate text-xs text-success">
+                              ✅ Cel osiągnięty · {Math.min(accepted, campaign.targetIdeaCount)}/{campaign.targetIdeaCount}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {myDoneTasks.length === 0 && doneCampaigns.length === 0 ? (
                   <div className="rounded-lg border border-border bg-muted/30 px-3 py-6 text-center space-y-1.5">
                     <CheckCircle2 className="h-6 w-6 mx-auto text-muted-foreground/40" />
                     <p className="text-xs font-medium text-muted-foreground">Brak wykonanych zadań</p>
                     <p className="text-[11px] text-muted-foreground">Ukończone zadania pojawią się tutaj.</p>
                   </div>
-                ) : (
+                ) : myDoneTasks.length > 0 ? (
                   <div>
                     <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                       Wykonane ({myDoneTasks.length})
