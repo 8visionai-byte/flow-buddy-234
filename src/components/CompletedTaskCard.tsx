@@ -159,6 +159,16 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
     toast.success('Zapisano zmiany');
   };
 
+  const handleSaveUrl = () => {
+    if (!URL_REGEX.test(editUrlValue.trim())) {
+      setUrlError('Podaj poprawny adres URL (https://...)');
+      return;
+    }
+    updateTaskValue(task.id, editUrlValue.trim());
+    setEditingUrl(false);
+    setUrlError('');
+  };
+
   return (
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
       {/* Header */}
