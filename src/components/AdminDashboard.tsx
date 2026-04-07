@@ -188,6 +188,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     project.clientId ? clients.find(c => c.id === project.clientId) : null;
 
   const getDeleteProjectName = () => projects.find(p => p.id === deleteConfirm)?.name || '';
+  const getDeleteCampaignName = () => {
+    const c = campaigns.find(c => c.id === deleteCampaignConfirm);
+    if (!c) return '';
+    const client = clients.find(cl => cl.id === c.clientId);
+    return client?.companyName || c.id;
+  };
 
   const handleDeleteConfirm = () => {
     if (deleteConfirm) {
