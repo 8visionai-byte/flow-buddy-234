@@ -156,7 +156,7 @@ const UserDashboard = () => {
         }
         if (currentUser.role === 'klient') {
           if (!(c.reviewerIds?.includes(currentUser.id) || c.assignedClientUserId === currentUser.id)) return false;
-          return getPendingIdeasCount(c.id) > 0;
+          return getUnvotedIdeasCount(c.id) > 0;
         }
         return false;
       })
