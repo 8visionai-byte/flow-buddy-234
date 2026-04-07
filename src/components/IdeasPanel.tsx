@@ -163,12 +163,50 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
     </div>
   );
 
+  const startResubmit = (idea: Idea) => {
+    setResubmitId(idea.id);
+    setResubmitTitle(idea.title);
+    setResubmitDesc(idea.description);
+  };
+  const cancelResubmit = () => { setResubmitId(null); setResubmitTitle(''); setResubmitDesc(''); };
+  const doResubmit = () => {
+    if (!resubmitId || !resubmitTitle.trim()) return;
+    resubmitIdea(resubmitId, resubmitTitle.trim(), resubmitDesc.trim());
+    cancelResubmit();
+  };
+
   const renderInfluencerIdea = (idea: Idea) => {
     const isEditing = editingId === idea.id;
+    const isResubmitting = resubmitId === idea.id;
     const cfg = STATUS_CONFIG[idea.status];
     const Icon = cfg.icon;
     if (isEditing) return <div key={idea.id}>{renderIdeaForm(false)}</div>;
+    if (isResubmitting) return (
+      <div key={idea.id} className="rounded-lg border border-warning p-3 space-y-2 bg-warning/5">
+        <p className="text-xs font-semibold text-warning">Edytuj i wyślij ponownie</p>
+        <div className="space-y-1">
+          <Label className="text-xs">Tytuł pomysłu *</Label>
+          <Input className="h-8 text-sm" value={resubmitTitle} onChange={e => setResubmitTitle(e.target.value)} autoFocus />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Opis / koncepcja</Label>
+          <Textarea className="text-sm min-h-[60px] resize-none" value={resubmitDesc} onChange={e => setResubmitDesc(e.target.value)} />
+        </div>
+        {idea.clientNotes && (
+          <div className="rounded bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground italic">
+            <span className="font-medium not-italic text-foreground">Uwagi klienta: </span>{idea.clientNotes}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={cancelResubmit}><X className="mr-1 h-3 w-3" />Anuluj</Button>
+          <Button size="sm" className="h-7 text-xs bg-warning hover:bg-warning/90 text-white" onClick={doResubmit} disabled={!resubmitTitle.trim()}>
+            <Check className="mr-1 h-3 w-3" />Wyślij ponownie
+          </Button>
+        </div>
+      </div>
+    );
     const canEdit = idea.status === 'pending';
+    const canResubmit = idea.status === 'needs_revision' || idea.status === 'rejected';
     return (
       <div key={idea.id} className="rounded-lg border border-border bg-card p-3">
         <div className="flex items-start justify-between gap-2">
@@ -178,6 +216,12 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
               <Badge variant="secondary" className={`${cfg.color} border-0 text-[10px] gap-1`}>
                 <Icon className="h-3 w-3" />{cfg.label}
               </Badge>
+              {/* Show vote progress for multi-reviewer */}
+              {idea.status === 'pending' && campaign && campaign.reviewerIds.length > 1 && (
+                <Badge variant="outline" className="text-[10px] gap-1">
+                  Opinie: {Object.keys(idea.evaluations || {}).length}/{campaign.reviewerIds.length}
+                </Badge>
+              )}
             </div>
             {idea.description && (
               <p className="text-xs text-muted-foreground mt-1">{idea.description}</p>
@@ -185,6 +229,22 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
             {idea.clientNotes && (
               <div className="mt-2 rounded bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground italic">
                 <span className="font-medium not-italic text-foreground">Uwagi klienta: </span>{idea.clientNotes}
+              </div>
+            )}
+            {/* Show individual evaluations */}
+            {idea.evaluations && Object.keys(idea.evaluations).length > 0 && (
+              <div className="mt-2 space-y-1">
+                {Object.entries(idea.evaluations).map(([uid, ev]) => {
+                  const reviewer = users.find(u => u.id === uid);
+                  const evalData = ev as IdeaEvaluation;
+                  const decLabel = evalData.decision === 'accepted' ? '✅' : evalData.decision === 'accepted_with_notes' ? '⚠️' : evalData.decision === 'rejected' ? '❌' : '📌';
+                  return (
+                    <div key={uid} className="text-[10px] text-muted-foreground">
+                      {decLabel} <span className="font-medium">{reviewer?.name || uid}</span>
+                      {evalData.comment && <span className="italic"> — „{evalData.comment}"</span>}
+                    </div>
+                  );
+                })}
               </div>
             )}
             {idea.resultingProjectId && (
@@ -197,17 +257,24 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
               Dodano {format(new Date(idea.createdAt), 'dd.MM.yyyy HH:mm', { locale: pl })}
             </p>
           </div>
-          {canEdit && (
-            <div className="flex gap-1 shrink-0">
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(idea)}>
-                <Pencil className="h-3.5 w-3.5" />
+          <div className="flex gap-1 shrink-0">
+            {canResubmit && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-warning text-warning hover:bg-warning/10" onClick={() => startResubmit(idea)}>
+                <Pencil className="h-3 w-3" />Edytuj i wyślij
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                onClick={() => setDeleteConfirm(idea.id)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
+            )}
+            {canEdit && (
+              <>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(idea)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+                  onClick={() => setDeleteConfirm(idea.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
