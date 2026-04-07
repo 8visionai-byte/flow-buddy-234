@@ -1467,13 +1467,23 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-popover z-50">
                     {isTrashed ? (
-                      <DropdownMenuItem
-                        disabled={isRestoringCampaign === campaign.id}
-                        onClick={() => handleRestore(campaign.id)}
-                      >
-                        <ArchiveRestore className="mr-2 h-4 w-4" />
-                        {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuItem
+                          disabled={isRestoringCampaign === campaign.id}
+                          onClick={() => handleRestore(campaign.id)}
+                        >
+                          <ArchiveRestore className="mr-2 h-4 w-4" />
+                          {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setHardDeleteConfirm([campaign.id])}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Usuń całkowicie z systemu
+                        </DropdownMenuItem>
+                      </>
                     ) : isDraft ? (
                       <>
                         <DropdownMenuItem
