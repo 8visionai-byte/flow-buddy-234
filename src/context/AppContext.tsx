@@ -824,7 +824,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
       ideas, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject,
-      campaigns, addCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign,
+      campaigns, addCampaign, createDraftCampaign, activateCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign,
       updatePartyNote, loading,
     }}>
       {children}
