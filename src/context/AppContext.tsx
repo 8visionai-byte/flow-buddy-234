@@ -53,6 +53,8 @@ interface AppContextType {
   acceptIdeaAsProject: (ideaId: string) => void;
   campaigns: Campaign[];
   addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => void;
+  createDraftCampaign: (data: Partial<Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>>) => string;
+  activateCampaign: (id: string) => void;
   updateCampaign: (id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => void;
   deleteCampaign: (id: string) => void;
   softDeleteCampaign: (id: string) => void;
