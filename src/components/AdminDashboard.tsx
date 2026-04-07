@@ -99,6 +99,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [priorityDialogTask, setPriorityDialogTask] = useState<Task | null>(null);
   const [inlineNewKP, setInlineNewKP] = useState<Record<string, string>>({});
   const [inlineNewOp, setInlineNewOp] = useState<Record<string, string>>({});
+  // Draft editing
+  const [editingDraft, setEditingDraft] = useState<typeof campaigns[0] | null>(null);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects(prev => {
