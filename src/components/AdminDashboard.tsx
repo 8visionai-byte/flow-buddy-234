@@ -1611,9 +1611,67 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Select all */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={trashSelected.size === trashedCampaigns.length && trashedCampaigns.length > 0}
+                  disabled={isHardDeleting || isBulkRestoring}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setTrashSelected(new Set(trashedCampaigns.map(c => c.id)));
+                    } else {
+                      setTrashSelected(new Set());
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">Zaznacz wszystkie ({trashedCampaigns.length})</span>
+              </div>
               {trashedCampaigns.map(campaign => renderCampaignCard(campaign, true))}
             </div>
           )
+        )}
+
+        {/* Floating Bulk Action Bar */}
+        {campaignTabFilter === 'trash' && trashSelected.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 shadow-2xl text-background animate-in slide-in-from-bottom-4 fade-in duration-200">
+            <span className="text-sm font-medium">Zaznaczono: {trashSelected.size}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkRestoring || isHardDeleting}
+              className="h-8 text-xs gap-1"
+              onClick={async () => {
+                setIsBulkRestoring(true);
+                try {
+                  await bulkRestoreCampaigns(Array.from(trashSelected));
+                  setTrashSelected(new Set());
+                } finally {
+                  setIsBulkRestoring(false);
+                }
+              }}
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" />
+              {isBulkRestoring ? 'Przywracanie...' : 'Przywróć zaznaczone'}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isHardDeleting || isBulkRestoring}
+              className="h-8 text-xs gap-1"
+              onClick={() => setHardDeleteConfirm(Array.from(trashSelected))}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Usuń trwale
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-background hover:text-background/80 hover:bg-background/10"
+              onClick={() => setTrashSelected(new Set())}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
     );
