@@ -52,9 +52,7 @@ export const INITIAL_IDEAS: Idea[] = [
     clientNotes: null,
     reviewedAt: null,
     reviewedByUserId: null,
-  },
-  {
-    id: 'idea2',
+    evaluations: {},
     campaignId: 'camp1',
     resultingProjectId: null,
     title: 'Elektryczna vs szczoteczka ręczna — co wybrać?',
@@ -65,9 +63,7 @@ export const INITIAL_IDEAS: Idea[] = [
     clientNotes: null,
     reviewedAt: null,
     reviewedByUserId: null,
-  },
-  {
-    id: 'idea3',
+    evaluations: {},
     campaignId: 'camp1',
     resultingProjectId: null,
     title: '5 produktów, które niszczą Twoje zęby bez wiedzy',
@@ -78,6 +74,7 @@ export const INITIAL_IDEAS: Idea[] = [
     clientNotes: null,
     reviewedAt: null,
     reviewedByUserId: null,
+    evaluations: {},
   },
 ];
 

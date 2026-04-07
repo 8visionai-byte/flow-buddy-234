@@ -206,6 +206,7 @@ export async function upsertIdea(idea: Idea) {
     title: idea.title, description: idea.description, created_by_user_id: idea.createdByUserId,
     created_at: idea.createdAt, status: idea.status, client_notes: idea.clientNotes,
     reviewed_at: idea.reviewedAt, reviewed_by_user_id: idea.reviewedByUserId,
+    evaluations: idea.evaluations as any,
   });
 }
 

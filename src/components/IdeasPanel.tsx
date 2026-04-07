@@ -32,6 +32,7 @@ const STATUS_CONFIG: Record<IdeaStatus, { label: string; color: string; icon: Re
   accepted_with_notes: { label: 'Tak, ale...',     color: 'bg-warning/15 text-warning',               icon: MessageSquare },
   saved_for_later:     { label: 'Na później',      color: 'bg-primary/10 text-primary',               icon: Bookmark },
   rejected:            { label: 'Odrzucony',       color: 'bg-destructive/10 text-destructive',       icon: XCircle },
+  needs_revision:      { label: 'Do poprawy',      color: 'bg-warning/15 text-warning',               icon: Pencil },
 };
 
 type ClientAction = 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected' | null;

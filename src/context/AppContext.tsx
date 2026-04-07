@@ -831,6 +831,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       campaignId, resultingProjectId: null, title, description, createdByUserId,
       createdAt: new Date().toISOString(), status: 'pending',
       clientNotes: null, reviewedAt: null, reviewedByUserId: null,
+      evaluations: {},
     };
     setIdeas(prev => [...prev, idea]);
     upsertIdea(idea);
