@@ -6,7 +6,7 @@ import {
   fetchAll, upsertTask, upsertTasks, upsertProject, upsertUser, deleteUserDb,
   upsertClient, deleteClientDb, deleteProjectDb, insertRecording, deleteRecordingDb,
   insertProjectNote, deleteProjectNoteDb, upsertCampaign, deleteCampaignDb,
-  upsertIdea, deleteIdeaDb,
+  upsertIdea, deleteIdeaDb, hardDeleteCampaignsDb, bulkRestoreCampaignsDb,
   mapUser, mapClient, mapProject, mapTask, mapRecording, mapProjectNote, mapCampaign, mapIdea,
 } from '@/lib/supabaseHelpers';
 
