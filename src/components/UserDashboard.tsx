@@ -145,9 +145,9 @@ const UserDashboard = () => {
         if (c.status === 'completed' || c.status === 'cancelled' || c.status === 'draft') return false;
         if (currentUser.role === 'influencer') {
           if (c.assignedInfluencerId !== currentUser.id) return false;
-          const total = getTotalIdeasCount(c.id);
+          const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
           const pending = getPendingIdeasCount(c.id);
-          if (total >= c.targetIdeaCount && pending === 0) return false;
+          if (accepted >= c.targetIdeaCount && pending === 0) return false;
           return true;
         }
         if (currentUser.role === 'klient') {
