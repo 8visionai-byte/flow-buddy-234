@@ -46,6 +46,7 @@ export function mapCampaign(row: any): Campaign {
     id: row.id, clientId: row.client_id, assignedInfluencerId: row.assigned_influencer_id,
     assignedClientUserId: row.assigned_client_user_id, targetIdeaCount: row.target_idea_count,
     status: row.status, createdAt: row.created_at, slaHours: row.sla_hours, briefNotes: row.brief_notes,
+    isDeleted: row.is_deleted ?? false,
   };
 }
 
@@ -171,7 +172,7 @@ export async function upsertCampaign(campaign: Campaign) {
     id: campaign.id, client_id: campaign.clientId, assigned_influencer_id: campaign.assignedInfluencerId,
     assigned_client_user_id: campaign.assignedClientUserId, target_idea_count: campaign.targetIdeaCount,
     status: campaign.status, created_at: campaign.createdAt, sla_hours: campaign.slaHours,
-    brief_notes: campaign.briefNotes,
+    brief_notes: campaign.briefNotes, is_deleted: campaign.isDeleted ?? false,
   });
 }
 

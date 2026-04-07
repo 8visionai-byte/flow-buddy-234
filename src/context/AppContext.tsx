@@ -52,9 +52,11 @@ interface AppContextType {
   reviewIdea: (ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => void;
   acceptIdeaAsProject: (ideaId: string) => void;
   campaigns: Campaign[];
-  addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status'>) => void;
+  addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => void;
   updateCampaign: (id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => void;
   deleteCampaign: (id: string) => void;
+  softDeleteCampaign: (id: string) => void;
+  restoreCampaign: (id: string) => void;
   updatePartyNote: (taskId: string, role: string, note: string) => void;
   loading: boolean;
 }
@@ -730,10 +732,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Campaigns ──────────────────────────────────────────────
 
-  const addCampaign = useCallback((data: Omit<Campaign, 'id' | 'createdAt' | 'status'>) => {
+  const addCampaign = useCallback((data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => {
     const campaign: Campaign = {
       ...data, id: `camp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      createdAt: new Date().toISOString(), status: 'awaiting_ideas',
+      createdAt: new Date().toISOString(), status: 'awaiting_ideas', isDeleted: false,
     };
     setCampaigns(prev => [...prev, campaign]);
     upsertCampaign(campaign);
@@ -752,6 +754,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCampaigns(prev => prev.filter(c => c.id !== id));
     setIdeas(prev => prev.filter(i => i.campaignId !== id));
     deleteCampaignDb(id);
+  }, []);
+
+  const softDeleteCampaign = useCallback((id: string) => {
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, isDeleted: true } : c);
+      const changed = updated.find(c => c.id === id);
+      if (changed) upsertCampaign(changed);
+      return updated;
+    });
+  }, []);
+
+  const restoreCampaign = useCallback((id: string) => {
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, isDeleted: false } : c);
+      const changed = updated.find(c => c.id === id);
+      if (changed) upsertCampaign(changed);
+      return updated;
+    });
   }, []);
 
   if (loading) {
@@ -773,7 +793,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
       ideas, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject,
-      campaigns, addCampaign, updateCampaign, deleteCampaign,
+      campaigns, addCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign,
       updatePartyNote, loading,
     }}>
       {children}

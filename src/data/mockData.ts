@@ -33,6 +33,7 @@ export const INITIAL_CAMPAIGNS: Campaign[] = [
     createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), // 2 hours ago
     slaHours: 48,
     briefNotes: 'Chcemy serię filmów o higienie jamy ustnej. Pomysły powinny być ciekawe i angażujące dla pacjentów kliniki stomatologicznej.',
+    isDeleted: false,
   },
 ];
 
