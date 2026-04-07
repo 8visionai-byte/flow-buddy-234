@@ -47,10 +47,11 @@ function getTaskTimeInfo(task: Task, project: Project | undefined) {
 }
 
 const UserDashboard = () => {
-  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote, reopenTask, users } = useApp();
   const [selectedItem, setSelectedItem] = useState<SidebarItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<DashView>('tasks');
+  const [taskSubTab, setTaskSubTab] = useState<'todo' | 'done'>('todo');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedQueueProjectId, setSelectedQueueProjectId] = useState<string | null>(null);
   const [frameioInputs, setFrameioInputs] = useState<Record<string, string>>({});
