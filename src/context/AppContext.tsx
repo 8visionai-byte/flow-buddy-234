@@ -930,14 +930,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // If no multi-reviewer setup, fall back to immediate status change
       if (requiredReviewers.length <= 1) {
         const finalSt = status;
+        // "accepted_with_notes" means client has feedback → treat as needs_revision (ping-pong)
+        const effectiveStatus: IdeaStatus = finalSt === 'accepted_with_notes' ? 'needs_revision' : finalSt;
         const updated = prev.map(i => i.id === ideaId ? {
-          ...i, status: finalSt, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
+          ...i, status: effectiveStatus, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
           evaluations: { ...i.evaluations, [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() } },
         } : i);
         const changed = updated.find(i => i.id === ideaId);
         if (changed) upsertIdea(changed);
-        // Auto-create project if accepted
-        if (finalSt === 'accepted' || finalSt === 'accepted_with_notes') {
+        // Auto-create project ONLY if purely accepted (no notes/revisions)
+        if (finalSt === 'accepted') {
           setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
         }
         return updated;
@@ -949,8 +951,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() },
       };
 
-      // VETO: If this vote is a rejection, immediately bounce back without waiting for others
-      if (status === 'rejected' || status === 'needs_revision') {
+      // VETO: If this vote is a rejection OR "accepted_with_notes" (has feedback), immediately bounce back
+      if (status === 'rejected' || status === 'needs_revision' || status === 'accepted_with_notes') {
         const combinedNotes = Object.values(newEvaluations as Record<string, any>)
           .filter((v: any) => v.comment).map((v: any) => v.comment).join(' | ');
         const updated = prev.map(i => i.id === ideaId ? {
@@ -975,16 +977,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (allVoted) {
         const votes = Object.values(newEvaluations) as Array<{ decision: string; comment: string | null }>;
-        const hasNotes = votes.some(v => v.decision === 'accepted_with_notes');
-
-        if (hasNotes) {
-          finalStatus = 'accepted_with_notes';
-          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
-        } else {
-          const allSaved = votes.every(v => v.decision === 'saved_for_later');
-          finalStatus = allSaved ? 'saved_for_later' : 'accepted';
-          finalNotes = null;
-        }
+        const allSaved = votes.every(v => v.decision === 'saved_for_later');
+        finalStatus = allSaved ? 'saved_for_later' : 'accepted';
+        finalNotes = null;
       }
 
       const updated = prev.map(i => i.id === ideaId ? {
@@ -997,8 +992,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } : i);
       const changed = updated.find(i => i.id === ideaId);
       if (changed) upsertIdea(changed);
-      // Auto-create project when consensus reached with acceptance
-      if (allVoted && (finalStatus === 'accepted' || finalStatus === 'accepted_with_notes')) {
+      // Auto-create project ONLY when all voted and purely accepted
+      if (allVoted && finalStatus === 'accepted') {
         setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
       }
       return updated;
