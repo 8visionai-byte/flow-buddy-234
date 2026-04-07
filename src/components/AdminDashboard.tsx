@@ -1318,7 +1318,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status)) : statusBadge(task.status)}
+                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status, task)) : statusBadge(task.status, task)}
                     </td>
                     <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
                     <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
