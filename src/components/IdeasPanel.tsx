@@ -363,7 +363,7 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
   const renderClientIdea = (idea: Idea) => {
     const cfg = STATUS_CONFIG[idea.status];
     const Icon = cfg.icon;
-    const alreadyReviewed = idea.status !== 'pending';
+    const alreadyReviewed = currentUser ? !!idea.evaluations?.[currentUser.id] : idea.status !== 'pending';
     const isReEditing = reEditingIds.has(idea.id);
 
     if (alreadyReviewed && !isReEditing) {
