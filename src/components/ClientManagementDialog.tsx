@@ -238,7 +238,7 @@ const ClientManagementDialog = () => {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Osoba kontaktowa</Label>
+          <Label className="text-xs">Główny kontakt {isNew && '(osoba z dostępem)'}</Label>
           <Input
             className="h-8 text-sm"
             value={form.contactName}
