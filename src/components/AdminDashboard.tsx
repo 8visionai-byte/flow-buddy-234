@@ -1405,13 +1405,35 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 </div>
 
                 {/* Expand button */}
-                {!isTrashed && (
+                {!isTrashed && !isDraft && (
                   <Button
                     variant="ghost" size="sm" className="h-8 text-xs gap-1"
                     onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
                   >
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     {isExpanded ? 'Zwiń' : 'Pomysły'}
+                  </Button>
+                )}
+
+                {/* Activate button for drafts */}
+                {isDraft && (
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs gap-1"
+                    disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
+                    onClick={() => handleActivate(campaign.id)}
+                  >
+                    {isActivatingCampaign === campaign.id ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                        Uruchamianie...
+                      </>
+                    ) : (
+                      <>
+                        <Lightbulb className="h-3.5 w-3.5" />
+                        Uruchom kampanię
+                      </>
+                    )}
                   </Button>
                 )}
 
@@ -1431,6 +1453,20 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         <ArchiveRestore className="mr-2 h-4 w-4" />
                         {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
                       </DropdownMenuItem>
+                    ) : isDraft ? (
+                      <>
+                        <DropdownMenuItem
+                          disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
+                          onClick={() => handleActivate(campaign.id)}
+                        >
+                          <Lightbulb className="mr-2 h-4 w-4" />
+                          Uruchom kampanię
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
+                        </DropdownMenuItem>
+                      </>
                     ) : (
                       <>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'awaiting_ideas' })}>Oczekuje na pomysły</DropdownMenuItem>
