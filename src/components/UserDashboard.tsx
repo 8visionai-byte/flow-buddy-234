@@ -137,6 +137,10 @@ const UserDashboard = () => {
   const getPendingIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId && i.status === 'pending').length;
 
+  // For client: count ideas they haven't voted on yet
+  const getUnvotedIdeasCount = (campaignId: string) =>
+    ideas.filter(i => i.campaignId === campaignId && i.status === 'pending' && !i.evaluations?.[currentUser.id]).length;
+
   const getTotalIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId).length;
 
