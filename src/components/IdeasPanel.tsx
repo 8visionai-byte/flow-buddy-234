@@ -202,7 +202,7 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
       </div>
     );
     const canEdit = idea.status === 'pending';
-    const canResubmit = idea.status === 'needs_revision' || idea.status === 'rejected';
+    const canResubmit = idea.status === 'needs_revision' || idea.status === 'rejected' || idea.status === 'accepted_with_notes';
     return (
       <div key={idea.id} className="rounded-lg border border-border bg-card p-3">
         <div className="flex items-start justify-between gap-2">
