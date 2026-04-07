@@ -645,14 +645,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const reopenTask = useCallback((taskId: string) => {
     updateTasksAndSync(prev => {
       const task = prev.find(t => t.id === taskId);
-      if (!task || task.status !== 'done') return prev;
+      if (!task) return prev;
+      // Only allow reopening done tasks or tasks where user already completed their part
+      if (task.status !== 'done' && !(task.assignedRoles.length > 1 && task.roleCompletions[currentUser?.role || ''])) return prev;
+      const now = new Date().toISOString();
+      const historyEntry: TaskHistoryEntry = { action: 'resubmitted', by: (currentUser?.role || 'admin') as UserRole, userId: currentUser?.id, timestamp: now };
+
       return prev.map(t => {
-        if (t.id === taskId) return { ...t, status: 'todo' as const, completedAt: null, completedBy: null, value: null, assignedAt: new Date().toISOString() };
-        if (t.projectId === task.projectId && t.order === task.order + 1 && t.status !== 'done') return { ...t, status: 'locked' as const, assignedAt: null };
+        if (t.id === taskId) {
+          // Clear this user's vote from clientVotes if it's a consensus task
+          const newVotes = { ...t.clientVotes };
+          if (currentUser?.id && newVotes[currentUser.id]) {
+            delete newVotes[currentUser.id];
+          }
+          // Clear this user's roleCompletion if multi-role
+          const newCompletions = { ...t.roleCompletions };
+          if (currentUser?.role && newCompletions[currentUser.role]) {
+            delete newCompletions[currentUser.role];
+          }
+          // Determine new status: if multi-role and others still have completions, keep current status
+          // Otherwise reset to appropriate active status
+          const newStatus = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+          return {
+            ...t,
+            status: newStatus,
+            completedAt: null,
+            completedBy: null,
+            assignedAt: now,
+            clientVotes: newVotes,
+            roleCompletions: newCompletions,
+            history: [...t.history, historyEntry],
+          };
+        }
+        // Lock the next task if it was unlocked due to this task's completion
+        if (t.projectId === task.projectId && t.order === task.order + 1 && t.status !== 'done') {
+          return { ...t, status: 'locked' as const, assignedAt: null };
+        }
         return t;
       });
     });
-  }, [updateTasksAndSync]);
+  }, [updateTasksAndSync, currentUser]);
 
   const setTaskDeadline = useCallback((taskId: string, date: string | null) => {
     updateTasksAndSync(prev => prev.map(t => t.id === taskId ? { ...t, deadlineDate: date } : t));
