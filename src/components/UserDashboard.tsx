@@ -854,6 +854,40 @@ const UserDashboard = () => {
         {view === 'tasks' && (
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
 
+            {/* Sub-tabs: Do zrobienia / Wykonane */}
+            <div className="flex rounded-lg bg-muted p-0.5 gap-0.5">
+              <button
+                onClick={() => setTaskSubTab('todo')}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  taskSubTab === 'todo'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Do zrobienia
+                {myActionableTasks.length > 0 && (
+                  <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    {myActionableTasks.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setTaskSubTab('done')}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  taskSubTab === 'done'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Wykonane
+                {myDoneTasks.length > 0 && (
+                  <span className="ml-1 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {myDoneTasks.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
             {/* Ideas / campaigns */}
             {showIdeasSection && ideasCampaigns.length > 0 && (
               <div>
