@@ -1129,7 +1129,9 @@ const UserDashboard = () => {
                             </Button>
                           )}
                           {!canEdit && (
-                            <Lock className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" title="Projekt zbyt zaawansowany — edycja zablokowana" />
+                            <span title="Projekt zbyt zaawansowany — edycja zablokowana">
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+                            </span>
                           )}
                         </div>
                       );
