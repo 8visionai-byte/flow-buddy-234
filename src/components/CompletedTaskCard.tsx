@@ -77,10 +77,17 @@ const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
 );
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
-  const { currentUser, updateTaskValue, tasks } = useApp();
+  const { currentUser, updateTaskValue, tasks, projects, clients, users, campaigns, ideas } = useApp();
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
+
+  // Actor assignment edit state
+  const [editingActors, setEditingActors] = useState(false);
+  const [editActorList, setEditActorList] = useState<ActorEntry[]>([]);
+  const [actorError, setActorError] = useState('');
+
+  const project = projects.find(p => p.id === task.projectId);
 
   // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
   const canEditUrl =
@@ -89,14 +96,67 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
     currentUser?.role === 'influencer' &&
     task.assignedRoles.includes('influencer');
 
-  const handleSaveUrl = () => {
-    if (!URL_REGEX.test(editUrlValue.trim())) {
-      setUrlError('Podaj poprawny adres URL (https://...)');
+  // Can edit actor assignment (influencer only, done task)
+  const canEditActors =
+    task.inputType === 'actor_assignment' &&
+    task.status === 'done' &&
+    currentUser?.role === 'influencer' &&
+    task.assignedRoles.includes('influencer');
+
+  const parseCurrentActors = (): ActorEntry[] => {
+    if (!task.value) return [];
+    try {
+      const parsed = JSON.parse(task.value);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) return parsed;
+    } catch {}
+    return [];
+  };
+
+  const startEditActors = () => {
+    setEditActorList(parseCurrentActors());
+    setEditingActors(true);
+    setActorError('');
+  };
+
+  const removeActor = (id: string) => {
+    setEditActorList(prev => prev.filter(a => a.id !== id));
+  };
+
+  // Get available client users for adding
+  const clientUsersForProject = users.filter(u => u.role === 'klient' && u.clientId === project?.clientId);
+  const clientForProject = clients.find(c => c.id === project?.clientId) ?? null;
+
+  const isActorAdded = (sourceId: string) => editActorList.some(a => a.sourceId === sourceId);
+
+  const addActorFromDB = (sourceId: string, name: string, sourceType: 'client_contact' | 'client_user', defaultRole: string) => {
+    if (isActorAdded(sourceId)) return;
+    setEditActorList(prev => [...prev, {
+      id: Math.random().toString(36).slice(2, 9),
+      sourceType,
+      sourceId,
+      name,
+      roleLabel: defaultRole,
+      notifyChannel: 'none',
+      telegramHandle: '',
+    }]);
+  };
+
+  const handleSaveActors = () => {
+    if (editActorList.length === 0) {
+      setActorError('Przypisz co najmniej jedną osobę');
       return;
     }
-    updateTaskValue(task.id, editUrlValue.trim());
-    setEditingUrl(false);
-    setUrlError('');
+    const historyEntry: TaskHistoryEntry = {
+      action: 'submitted',
+      by: 'influencer',
+      userId: currentUser?.id,
+      value: JSON.stringify(editActorList),
+      timestamp: new Date().toISOString(),
+    };
+    updateTaskValue(task.id, JSON.stringify(editActorList), historyEntry);
+    setEditingActors(false);
+    setActorError('');
+    toast.success('Zapisano zmiany');
   };
 
   return (
