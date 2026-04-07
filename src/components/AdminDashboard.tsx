@@ -1339,8 +1339,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       const isOverdue = msTilDeadline < 0;
       const isExpanded = expandedCampaignId === campaign.id;
 
+      const isDraft = campaign.status === 'draft';
+
       return (
-        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70")}>
+        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70", isDraft && "border-dashed border-muted-foreground/30")}>
           {/* Campaign header */}
           <div className="px-4 py-4 md:px-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
