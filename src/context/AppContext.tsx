@@ -279,9 +279,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // ─── CONSENSUS LOGIC for approval tasks with multiple clients ───
       if (task.inputType === 'approval' && task.status === 'pending_client_approval' && userId) {
         const project = projects.find(p => p.id === task.projectId);
-        const clientIds = project?.assignedClientIds || [];
+        // Determine the full list of required approvers:
+        // 1. Use project.assignedClientIds if populated
+        // 2. Fallback: find campaign via idea → use campaign.reviewerIds
+        let clientIds = (project?.assignedClientIds || []).filter(Boolean);
+        if (clientIds.length === 0) {
+          const idea = ideas.find(i => i.resultingProjectId === task.projectId);
+          const camp = idea ? campaigns.find(c => c.id === idea.campaignId) : null;
+          if (camp?.reviewerIds?.length) clientIds = camp.reviewerIds;
+        }
 
-        if (clientIds.length > 1) {
+        if (clientIds.length > 0) {
           // Block duplicate vote
           if (task.clientVotes[userId]) return prev;
 
@@ -290,35 +298,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const allVoted = clientIds.every(cid => newVotes[cid]);
 
           if (!allVoted) {
-            // Not all voted yet — just record vote
+            // HARD GATE: Not all voted yet — just record vote, do NOT proceed
             return prev.map(t => t.id === taskId ? { ...t, clientVotes: newVotes, history: [...t.history, entry] } : t);
           }
 
-          // All voted — check consensus
-          const anyRejected = clientIds.some(cid => newVotes[cid]?.decision === 'rejected');
-          if (anyRejected) {
-            // Bounce back with combined feedback
-            const combinedFeedback = clientIds
-              .filter(cid => newVotes[cid]?.decision === 'rejected')
-              .map(cid => {
-                const userName = users.find(u => u.id === cid)?.name || cid;
-                return `${userName}: ${newVotes[cid].comment}`;
-              })
-              .join('\n\n');
-            const prevTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
-            const rejectEntry: TaskHistoryEntry = { action: 'rejected', by: 'klient', feedback: combinedFeedback, timestamp: now };
-            return prev.map(t => {
-              if (t.id === taskId) return { ...t, status: 'locked' as const, clientFeedback: combinedFeedback, clientVotes: {}, assignedAt: null, history: [...t.history, entry, rejectEntry] };
-              if (prevTask && t.id === prevTask.id) return { ...t, status: 'needs_influencer_revision' as const, clientFeedback: combinedFeedback, assignedAt: now, completedAt: null, completedBy: null, history: [...t.history, rejectEntry] };
-              return t;
-            });
-          }
-
-          // All approved — update votes and fall through to normal completion logic
-          // We need to update the task's clientVotes before proceeding
+          // All voted and all approved — update votes and fall through to completion
           prev = prev.map(t => t.id === taskId ? { ...t, clientVotes: newVotes } : t);
-          // Re-find the task with updated votes
-          // Fall through to normal single-role completion below
+          // Fall through to normal completion below
         }
       }
 
@@ -540,42 +526,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!task) return prev;
       const userId = currentUser?.id;
 
-      // ─── CONSENSUS: record reject vote ───
+      // ─── VETO: ANY rejection immediately bounces back ───
       if (task.inputType === 'approval' && task.status === 'pending_client_approval' && userId) {
         const project = projects.find(p => p.id === task.projectId);
-        const clientIds = project?.assignedClientIds || [];
+        let clientIds = (project?.assignedClientIds || []).filter(Boolean);
+        if (clientIds.length === 0) {
+          const idea = ideas.find(i => i.resultingProjectId === task.projectId);
+          const camp = idea ? campaigns.find(c => c.id === idea.campaignId) : null;
+          if (camp?.reviewerIds?.length) clientIds = camp.reviewerIds;
+        }
 
-        if (clientIds.length > 1) {
+        if (clientIds.length > 0) {
           // Block duplicate vote
           if (task.clientVotes[userId]) return prev;
 
-          const newVotes = { ...task.clientVotes, [userId]: { decision: 'rejected' as const, comment: feedback, timestamp: now } };
+          // IMMEDIATE VETO — don't wait for other voters
+          const userName = users.find(u => u.id === userId)?.name || userId;
           const rejectEntry: TaskHistoryEntry = { action: 'rejected', by: task.assignedRole, userId, feedback, timestamp: now };
-          const allVoted = clientIds.every(cid => newVotes[cid]);
 
-          if (!allVoted) {
-            // Not all voted yet — just record reject vote
-            return prev.map(t => t.id === taskId ? { ...t, clientVotes: newVotes, history: [...t.history, rejectEntry] } : t);
+          // Find previous content task to bounce back to
+          let prevTask: Task | undefined;
+          for (let o = task.order - 1; o >= 0; o--) {
+            const candidate = prev.find(t => t.projectId === task.projectId && t.order === o);
+            if (candidate && candidate.inputType !== 'approval') { prevTask = candidate; break; }
           }
 
-          // All voted — bounce back with combined feedback from ALL rejectors
-          const combinedFeedback = clientIds
-            .filter(cid => newVotes[cid]?.decision === 'rejected')
-            .map(cid => {
-              const userName = users.find(u => u.id === cid)?.name || cid;
-              return `${userName}: ${newVotes[cid].comment}`;
-            })
-            .join('\n\n');
-          const prevTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
           return prev.map(t => {
-            if (t.id === taskId) return { ...t, status: 'locked' as const, clientFeedback: combinedFeedback, clientVotes: {}, assignedAt: null, history: [...t.history, rejectEntry] };
-            if (prevTask && t.id === prevTask.id) return { ...t, status: 'needs_influencer_revision' as const, clientFeedback: combinedFeedback, assignedAt: now, completedAt: null, completedBy: null, history: [...t.history, rejectEntry] };
+            if (t.id === taskId) return { ...t, status: 'locked' as const, clientFeedback: `${userName}: ${feedback}`, clientVotes: {}, assignedAt: null, history: [...t.history, rejectEntry] };
+            if (prevTask && t.id === prevTask.id) return { ...t, status: 'needs_influencer_revision' as const, clientFeedback: `${userName}: ${feedback}`, assignedAt: now, completedAt: null, completedBy: null, history: [...t.history, rejectEntry] };
             return t;
           });
         }
       }
 
-      // Single client — original logic
+      // Single client / non-approval — original logic
       const prevTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
       const entry: TaskHistoryEntry = { action: 'rejected', by: task.assignedRole, userId, feedback, timestamp: now };
       return prev.map(t => {
@@ -584,7 +568,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return t;
       });
     });
-  }, [updateTasksAndSync, currentUser, projects, users]);
+  }, [updateTasksAndSync, currentUser, projects, users, ideas, campaigns]);
 
   const deferTask = useCallback((taskId: string) => {
     updateTasksAndSync(prev => {
@@ -917,25 +901,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() },
       };
 
+      // VETO: If this vote is a rejection, immediately bounce back without waiting for others
+      if (status === 'rejected' || status === 'needs_revision') {
+        const combinedNotes = Object.values(newEvaluations as Record<string, any>)
+          .filter((v: any) => v.comment).map((v: any) => v.comment).join(' | ');
+        const updated = prev.map(i => i.id === ideaId ? {
+          ...i,
+          evaluations: newEvaluations,
+          status: 'needs_revision' as const,
+          clientNotes: combinedNotes || clientNotes,
+          reviewedAt: new Date().toISOString(),
+          reviewedByUserId,
+        } : i);
+        const changed = updated.find(i => i.id === ideaId);
+        if (changed) upsertIdea(changed);
+        return updated;
+      }
+
       const voteCount = Object.keys(newEvaluations).length;
       const allVoted = voteCount >= requiredReviewers.length;
 
-      let finalStatus: IdeaStatus = idea.status === 'needs_revision' ? 'needs_revision' : 'pending';
+      // HARD GATE: keep as pending until all voted
+      let finalStatus: IdeaStatus = 'pending';
       let finalNotes = idea.clientNotes;
 
       if (allVoted) {
         const votes = Object.values(newEvaluations) as Array<{ decision: string; comment: string | null }>;
-        const hasRejection = votes.some(v => v.decision === 'rejected');
         const hasNotes = votes.some(v => v.decision === 'accepted_with_notes');
 
-        if (hasRejection) {
-          finalStatus = 'needs_revision';
-          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
-        } else if (hasNotes) {
+        if (hasNotes) {
           finalStatus = 'accepted_with_notes';
           finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
         } else {
-          // all accepted or saved_for_later
           const allSaved = votes.every(v => v.decision === 'saved_for_later');
           finalStatus = allSaved ? 'saved_for_later' : 'accepted';
           finalNotes = null;

@@ -94,7 +94,7 @@ interface TaskCardProps {
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
 const TaskCard = ({ task, projectName }: TaskCardProps) => {
-  const { completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote } = useApp();
+  const { completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote, ideas, campaigns } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -407,7 +407,13 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   // === APPROVAL VIEW (Client sees influencer's content) ===
   if (task.status === 'pending_client_approval' && task.inputType === 'approval') {
     const project = projects.find(p => p.id === task.projectId);
-    const clientIds = project?.assignedClientIds || [];
+    let clientIds = (project?.assignedClientIds || []).filter(Boolean);
+    // Fallback: use campaign reviewerIds
+    if (clientIds.length === 0) {
+      const idea = ideas.find(i => i.resultingProjectId === task.projectId);
+      const camp = idea ? campaigns.find(c => c.id === idea.campaignId) : null;
+      if (camp?.reviewerIds?.length) clientIds = camp.reviewerIds;
+    }
     const isConsensusMode = clientIds.length > 1;
     const currentUserVote = currentUser?.id ? task.clientVotes[currentUser.id] : undefined;
     const hasAlreadyVoted = !!currentUserVote;
