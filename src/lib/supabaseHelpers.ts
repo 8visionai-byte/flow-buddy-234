@@ -182,6 +182,16 @@ export async function deleteCampaignDb(id: string) {
   await supabase.from('campaigns').delete().eq('id', id);
 }
 
+export async function hardDeleteCampaignsDb(ids: string[]) {
+  // Delete ideas linked to these campaigns first, then delete the campaigns
+  await supabase.from('ideas').delete().in('campaign_id', ids);
+  await supabase.from('campaigns').delete().in('id', ids);
+}
+
+export async function bulkRestoreCampaignsDb(ids: string[]) {
+  await supabase.from('campaigns').update({ is_deleted: false }).in('id', ids);
+}
+
 export async function upsertIdea(idea: Idea) {
   await supabase.from('ideas').upsert({
     id: idea.id, campaign_id: idea.campaignId, resulting_project_id: idea.resultingProjectId,
