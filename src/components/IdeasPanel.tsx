@@ -104,13 +104,10 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
   const handleClientClick = (idea: Idea, action: ClientAction) => {
     if (!action) return;
     if (action === 'accepted' || action === 'saved_for_later') {
-      // Immediate — no notes needed
       reviewIdea(idea.id, action, null, currentUser.id);
-      if (action === 'accepted') acceptIdeaAsProject(idea.id);
       setReEditingIds(prev => { const n = new Set(prev); n.delete(idea.id); return n; });
       setClientAction(prev => { const n = { ...prev }; delete n[idea.id]; return n; });
     } else {
-      // Show notes textarea first (accepted_with_notes / rejected)
       setClientAction(prev => ({ ...prev, [idea.id]: prev[idea.id] === action ? null : action }));
     }
   };
@@ -118,7 +115,6 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
     const action = clientAction[idea.id];
     if (!action) return;
     reviewIdea(idea.id, action, clientNotes[idea.id]?.trim() || null, currentUser.id);
-    if (action === 'accepted_with_notes') acceptIdeaAsProject(idea.id);
     setReEditingIds(prev => { const n = new Set(prev); n.delete(idea.id); return n; });
     setClientAction(prev => { const n = { ...prev }; delete n[idea.id]; return n; });
     setClientNotes(prev => { const n = { ...prev }; delete n[idea.id]; return n; });
