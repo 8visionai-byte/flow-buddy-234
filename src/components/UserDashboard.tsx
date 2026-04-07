@@ -80,6 +80,7 @@ const UserDashboard = () => {
   // ── ONLY currently actionable tasks (not locked, not done) ────────────────
   const myActionableTasks = tasks.filter(t => {
     if (!activeProjectIds.includes(t.projectId)) return false;
+    if (t.title === 'Zaakceptuj przypisanie osoby') return false;
     if (!t.assignedRoles.includes(currentUser.role)) return false;
     if (t.status === 'done') return false;
     if (t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return false;
