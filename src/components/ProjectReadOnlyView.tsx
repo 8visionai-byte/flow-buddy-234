@@ -120,9 +120,6 @@ function stageStatusIcon(status: Task['status'], isMyStage: boolean) {
   switch (status) {
     case 'done':
       return <CheckCircle2 className="h-4 w-4 text-success shrink-0" />;
-    default: break;
-  }
-  switch (status) {
     case 'todo':
     case 'pending_client_approval':
       return <Circle className={`h-4 w-4 shrink-0 ${isMyStage ? 'text-primary' : 'text-warning'}`} />;
