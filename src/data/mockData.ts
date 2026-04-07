@@ -28,6 +28,7 @@ export const INITIAL_CAMPAIGNS: Campaign[] = [
     clientId: 'c1',
     assignedInfluencerId: 'u3',
     assignedClientUserId: 'u2',
+    reviewerIds: ['u2'],
     targetIdeaCount: 12,
     status: 'awaiting_ideas',
     createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), // 2 hours ago
