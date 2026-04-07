@@ -89,6 +89,8 @@ const UserDashboard = () => {
     }
     if (!t.assignedRoles.includes(currentUser.role)) return false;
     if (t.status === 'done') return false;
+    // For consensus approval tasks: hide if this user already voted
+    if (t.status === 'pending_client_approval' && t.inputType === 'approval' && currentUser.id && t.clientVotes[currentUser.id]) return false;
     if (t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return false;
 
     // Special: influencer can access "Brief dla montażysty" early as soon as
