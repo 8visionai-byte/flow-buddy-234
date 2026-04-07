@@ -1354,6 +1354,21 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {isTrashed && (
+                    <Checkbox
+                      checked={trashSelected.has(campaign.id)}
+                      disabled={isHardDeleting || isBulkRestoring}
+                      onCheckedChange={(checked) => {
+                        setTrashSelected(prev => {
+                          const next = new Set(prev);
+                          if (checked) next.add(campaign.id);
+                          else next.delete(campaign.id);
+                          return next;
+                        });
+                      }}
+                      className="mr-1"
+                    />
+                  )}
                   <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
                   {isTrashed ? (
                     <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs">
