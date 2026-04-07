@@ -911,6 +911,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
       status: 'draft',
       isDeleted: false,
+      requireCastApproval: data.requireCastApproval ?? false,
     };
     setCampaigns(prev => [...prev, campaign]);
     upsertCampaign(campaign);
