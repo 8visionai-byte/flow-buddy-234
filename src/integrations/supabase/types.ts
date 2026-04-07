@@ -147,6 +147,7 @@ export type Database = {
           created_at: string
           created_by_user_id: string
           description: string
+          evaluations: Json
           id: string
           resulting_project_id: string | null
           reviewed_at: string | null
@@ -160,6 +161,7 @@ export type Database = {
           created_at?: string
           created_by_user_id: string
           description?: string
+          evaluations?: Json
           id: string
           resulting_project_id?: string | null
           reviewed_at?: string | null
@@ -173,6 +175,7 @@ export type Database = {
           created_at?: string
           created_by_user_id?: string
           description?: string
+          evaluations?: Json
           id?: string
           resulting_project_id?: string | null
           reviewed_at?: string | null
@@ -472,6 +475,7 @@ export type Database = {
         | "accepted_with_notes"
         | "saved_for_later"
         | "rejected"
+        | "needs_revision"
       input_type:
         | "boolean"
         | "text"
@@ -644,6 +648,7 @@ export const Constants = {
         "accepted_with_notes",
         "saved_for_later",
         "rejected",
+        "needs_revision",
       ],
       input_type: [
         "boolean",
