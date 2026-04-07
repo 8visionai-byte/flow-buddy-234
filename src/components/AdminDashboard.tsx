@@ -20,6 +20,7 @@ import {
   ArchiveRestore,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import AddCampaignDialog from '@/components/AddCampaignDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import ClientManagementDialog from '@/components/ClientManagementDialog';
