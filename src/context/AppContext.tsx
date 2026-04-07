@@ -863,12 +863,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // If no multi-reviewer setup, fall back to immediate status change
       if (requiredReviewers.length <= 1) {
+        const finalSt = status;
         const updated = prev.map(i => i.id === ideaId ? {
-          ...i, status, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
+          ...i, status: finalSt, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
           evaluations: { ...i.evaluations, [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() } },
         } : i);
         const changed = updated.find(i => i.id === ideaId);
         if (changed) upsertIdea(changed);
+        // Auto-create project if accepted
+        if (finalSt === 'accepted' || finalSt === 'accepted_with_notes') {
+          setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
+        }
         return updated;
       }
 
