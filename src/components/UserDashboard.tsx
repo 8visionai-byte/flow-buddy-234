@@ -115,6 +115,31 @@ const UserDashboard = () => {
       )
     : [];
 
+  // ── DONE tasks for "Wykonane" tab (klient, admin, and other roles) ────────
+  const myDoneTasks = tasks.filter(t => {
+    if (!activeProjectIds.includes(t.projectId)) return false;
+    if (!t.assignedRoles.includes(currentUser.role)) return false;
+    if (t.status !== 'done') {
+      // Also include tasks where this user already voted (multi-role completion)
+      if (t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return true;
+      return false;
+    }
+    return true;
+  });
+
+  // Check if editing a done task is safe (project hasn't advanced 2+ steps beyond)
+  const canReopenTask = (task: Task): boolean => {
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    // Find how far the project has progressed past this task
+    let stepsAhead = 0;
+    for (const pt of projectTasks) {
+      if (pt.order > task.order && pt.status !== 'locked') {
+        stepsAhead++;
+      }
+    }
+    return stepsAhead <= 2;
+  };
+
   const myUpcomingCount = tasks.filter(t => {
     if (!activeProjectIds.includes(t.projectId)) return false;
     if (!t.assignedRoles.includes(currentUser.role)) return false;
