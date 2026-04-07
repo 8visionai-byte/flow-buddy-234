@@ -901,25 +901,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() },
       };
 
+      // VETO: If this vote is a rejection, immediately bounce back without waiting for others
+      if (status === 'rejected' || status === 'needs_revision') {
+        const combinedNotes = Object.values(newEvaluations as Record<string, any>)
+          .filter((v: any) => v.comment).map((v: any) => v.comment).join(' | ');
+        const updated = prev.map(i => i.id === ideaId ? {
+          ...i,
+          evaluations: newEvaluations,
+          status: 'needs_revision' as const,
+          clientNotes: combinedNotes || clientNotes,
+          reviewedAt: new Date().toISOString(),
+          reviewedByUserId,
+        } : i);
+        const changed = updated.find(i => i.id === ideaId);
+        if (changed) upsertIdea(changed);
+        return updated;
+      }
+
       const voteCount = Object.keys(newEvaluations).length;
       const allVoted = voteCount >= requiredReviewers.length;
 
-      let finalStatus: IdeaStatus = idea.status === 'needs_revision' ? 'needs_revision' : 'pending';
+      // HARD GATE: keep as pending until all voted
+      let finalStatus: IdeaStatus = 'pending';
       let finalNotes = idea.clientNotes;
 
       if (allVoted) {
         const votes = Object.values(newEvaluations) as Array<{ decision: string; comment: string | null }>;
-        const hasRejection = votes.some(v => v.decision === 'rejected');
         const hasNotes = votes.some(v => v.decision === 'accepted_with_notes');
 
-        if (hasRejection) {
-          finalStatus = 'needs_revision';
-          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
-        } else if (hasNotes) {
+        if (hasNotes) {
           finalStatus = 'accepted_with_notes';
           finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
         } else {
-          // all accepted or saved_for_later
           const allSaved = votes.every(v => v.decision === 'saved_for_later');
           finalStatus = allSaved ? 'saved_for_later' : 'accepted';
           finalNotes = null;
