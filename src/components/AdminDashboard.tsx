@@ -1386,7 +1386,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'in_review' })}>Klient ocenia</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'completed' })}>Zakończona</DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteCampaign(campaign.id)}>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
                           <Trash2 className="mr-2 h-4 w-4" />Usuń kampanię
                         </DropdownMenuItem>
                       </DropdownMenuContent>
