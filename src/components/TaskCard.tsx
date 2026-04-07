@@ -452,7 +452,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                     ) : (
                       <Clock className="h-4 w-4 text-muted-foreground/50 shrink-0" />
                     )}
-                    <span className={vote ? 'text-foreground font-medium' : 'text-muted-foreground'}>{voter?.name || cid}</span>
+                    <span className={vote ? 'text-foreground font-medium' : 'text-muted-foreground'}>{voter?.name || 'Nieznany użytkownik'}</span>
                     {vote && (
                       <span className="text-[10px] text-muted-foreground">
                         {vote.decision === 'approved' ? '— zaakceptował/a' : '— prosi o zmiany'}
