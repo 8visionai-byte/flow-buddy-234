@@ -854,7 +854,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reviewIdea = useCallback((ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => {
     setIdeas(prev => {
-      const updated = prev.map(i => i.id === ideaId ? { ...i, status, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId } : i);
+      const idea = prev.find(i => i.id === ideaId);
+      if (!idea) return prev;
+
+      // Find the campaign to get the reviewer list
+      const camp = campaigns.find(c => c.id === idea.campaignId);
+      const requiredReviewers = camp?.reviewerIds ?? [];
+
+      // If no multi-reviewer setup, fall back to immediate status change
+      if (requiredReviewers.length <= 1) {
+        const updated = prev.map(i => i.id === ideaId ? {
+          ...i, status, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
+          evaluations: { ...i.evaluations, [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() } },
+        } : i);
+        const changed = updated.find(i => i.id === ideaId);
+        if (changed) upsertIdea(changed);
+        return updated;
+      }
+
+      // Multi-reviewer: store individual vote
+      const newEvaluations = {
+        ...idea.evaluations,
+        [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() },
+      };
+
+      const voteCount = Object.keys(newEvaluations).length;
+      const allVoted = voteCount >= requiredReviewers.length;
+
+      let finalStatus: IdeaStatus = idea.status === 'needs_revision' ? 'needs_revision' : 'pending';
+      let finalNotes = idea.clientNotes;
+
+      if (allVoted) {
+        const votes = Object.values(newEvaluations) as Array<{ decision: string; comment: string | null }>;
+        const hasRejection = votes.some(v => v.decision === 'rejected');
+        const hasNotes = votes.some(v => v.decision === 'accepted_with_notes');
+
+        if (hasRejection) {
+          finalStatus = 'needs_revision';
+          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
+        } else if (hasNotes) {
+          finalStatus = 'accepted_with_notes';
+          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
+        } else {
+          // all accepted or saved_for_later
+          const allSaved = votes.every(v => v.decision === 'saved_for_later');
+          finalStatus = allSaved ? 'saved_for_later' : 'accepted';
+          finalNotes = null;
+        }
+      }
+
+      const updated = prev.map(i => i.id === ideaId ? {
+        ...i,
+        evaluations: newEvaluations,
+        status: finalStatus,
+        clientNotes: finalNotes,
+        reviewedAt: allVoted ? new Date().toISOString() : i.reviewedAt,
+        reviewedByUserId: allVoted ? reviewedByUserId : i.reviewedByUserId,
+      } : i);
+      const changed = updated.find(i => i.id === ideaId);
+      if (changed) upsertIdea(changed);
+      return updated;
+    });
+  }, [campaigns]);
+
+  const resubmitIdea = useCallback((ideaId: string, title: string, description: string) => {
+    setIdeas(prev => {
+      const updated = prev.map(i => i.id === ideaId ? {
+        ...i, title, description, status: 'pending' as const,
+        evaluations: {}, clientNotes: null, reviewedAt: null, reviewedByUserId: null,
+      } : i);
       const changed = updated.find(i => i.id === ideaId);
       if (changed) upsertIdea(changed);
       return updated;
