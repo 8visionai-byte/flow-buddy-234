@@ -732,10 +732,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Campaigns ──────────────────────────────────────────────
 
-  const addCampaign = useCallback((data: Omit<Campaign, 'id' | 'createdAt' | 'status'>) => {
+  const addCampaign = useCallback((data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => {
     const campaign: Campaign = {
       ...data, id: `camp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      createdAt: new Date().toISOString(), status: 'awaiting_ideas',
+      createdAt: new Date().toISOString(), status: 'awaiting_ideas', isDeleted: false,
     };
     setCampaigns(prev => [...prev, campaign]);
     upsertCampaign(campaign);
