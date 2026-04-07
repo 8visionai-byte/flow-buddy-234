@@ -1443,20 +1443,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   <Button
                     size="sm"
                     className="h-8 text-xs gap-1"
-                    disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
-                    onClick={() => handleActivate(campaign.id)}
+                    onClick={() => setEditingDraft(campaign)}
                   >
-                    {isActivatingCampaign === campaign.id ? (
-                      <>
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                        Uruchamianie...
-                      </>
-                    ) : (
-                      <>
-                        <Lightbulb className="h-3.5 w-3.5" />
-                        Uruchom kampanię
-                      </>
-                    )}
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edytuj szkic
                   </Button>
                 )}
 
