@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { User, Task, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
+import { User, Task, TaskStatus, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
 import { createTasksForProject } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
 import {
