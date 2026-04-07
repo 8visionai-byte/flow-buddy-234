@@ -526,42 +526,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!task) return prev;
       const userId = currentUser?.id;
 
-      // ─── CONSENSUS: record reject vote ───
+      // ─── VETO: ANY rejection immediately bounces back ───
       if (task.inputType === 'approval' && task.status === 'pending_client_approval' && userId) {
         const project = projects.find(p => p.id === task.projectId);
-        const clientIds = project?.assignedClientIds || [];
+        let clientIds = (project?.assignedClientIds || []).filter(Boolean);
+        if (clientIds.length === 0) {
+          const idea = ideas.find(i => i.resultingProjectId === task.projectId);
+          const camp = idea ? campaigns.find(c => c.id === idea.campaignId) : null;
+          if (camp?.reviewerIds?.length) clientIds = camp.reviewerIds;
+        }
 
-        if (clientIds.length > 1) {
+        if (clientIds.length > 0) {
           // Block duplicate vote
           if (task.clientVotes[userId]) return prev;
 
-          const newVotes = { ...task.clientVotes, [userId]: { decision: 'rejected' as const, comment: feedback, timestamp: now } };
+          // IMMEDIATE VETO — don't wait for other voters
+          const userName = users.find(u => u.id === userId)?.name || userId;
           const rejectEntry: TaskHistoryEntry = { action: 'rejected', by: task.assignedRole, userId, feedback, timestamp: now };
-          const allVoted = clientIds.every(cid => newVotes[cid]);
 
-          if (!allVoted) {
-            // Not all voted yet — just record reject vote
-            return prev.map(t => t.id === taskId ? { ...t, clientVotes: newVotes, history: [...t.history, rejectEntry] } : t);
+          // Find previous content task to bounce back to
+          let prevTask: Task | undefined;
+          for (let o = task.order - 1; o >= 0; o--) {
+            const candidate = prev.find(t => t.projectId === task.projectId && t.order === o);
+            if (candidate && candidate.inputType !== 'approval') { prevTask = candidate; break; }
           }
 
-          // All voted — bounce back with combined feedback from ALL rejectors
-          const combinedFeedback = clientIds
-            .filter(cid => newVotes[cid]?.decision === 'rejected')
-            .map(cid => {
-              const userName = users.find(u => u.id === cid)?.name || cid;
-              return `${userName}: ${newVotes[cid].comment}`;
-            })
-            .join('\n\n');
-          const prevTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
           return prev.map(t => {
-            if (t.id === taskId) return { ...t, status: 'locked' as const, clientFeedback: combinedFeedback, clientVotes: {}, assignedAt: null, history: [...t.history, rejectEntry] };
-            if (prevTask && t.id === prevTask.id) return { ...t, status: 'needs_influencer_revision' as const, clientFeedback: combinedFeedback, assignedAt: now, completedAt: null, completedBy: null, history: [...t.history, rejectEntry] };
+            if (t.id === taskId) return { ...t, status: 'locked' as const, clientFeedback: `${userName}: ${feedback}`, clientVotes: {}, assignedAt: null, history: [...t.history, rejectEntry] };
+            if (prevTask && t.id === prevTask.id) return { ...t, status: 'needs_influencer_revision' as const, clientFeedback: `${userName}: ${feedback}`, assignedAt: now, completedAt: null, completedBy: null, history: [...t.history, rejectEntry] };
             return t;
           });
         }
       }
 
-      // Single client — original logic
+      // Single client / non-approval — original logic
       const prevTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
       const entry: TaskHistoryEntry = { action: 'rejected', by: task.assignedRole, userId, feedback, timestamp: now };
       return prev.map(t => {
@@ -570,7 +568,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return t;
       });
     });
-  }, [updateTasksAndSync, currentUser, projects, users]);
+  }, [updateTasksAndSync, currentUser, projects, users, ideas, campaigns]);
 
   const deferTask = useCallback((taskId: string) => {
     updateTasksAndSync(prev => {
