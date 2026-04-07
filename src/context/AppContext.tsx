@@ -237,6 +237,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // ─── Helper: cleanup stale tasks from previous stages ──────
+  // When a task at order N is completed and the next stage is unlocked,
+  // any active tasks from orders < N should be auto-archived.
+  const cleanupPreviousStageTasks = (allTasks: Task[], completedProjectId: string, completedOrder: number): Task[] => {
+    const now = new Date().toISOString();
+    const activeStatuses: TaskStatus[] = ['todo', 'pending_client_approval', 'needs_influencer_revision'];
+    return allTasks.map(t => {
+      if (t.projectId !== completedProjectId) return t;
+      if (t.order >= completedOrder) return t;
+      if (!activeStatuses.includes(t.status)) return t;
+      // Auto-archive this stale task
+      const cleanupEntry: TaskHistoryEntry = {
+        action: 'submitted', by: 'admin', value: 'auto_cleanup',
+        timestamp: now,
+      };
+      return {
+        ...t,
+        status: 'done' as const,
+        value: t.value || 'auto_cleanup',
+        completedAt: now,
+        completedBy: 'admin',
+        history: [...t.history, cleanupEntry],
+      };
+    });
+  };
+
   // ─── Task operations (same logic, just using updateTasksAndSync) ──
 
   const completeTask = useCallback((taskId: string, value: string, byRole?: UserRole) => {
