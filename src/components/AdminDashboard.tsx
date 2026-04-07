@@ -1380,13 +1380,19 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               </div>
 
               <div className="flex gap-3 items-start shrink-0">
-                {/* SLA countdown - hidden for trashed */}
-                {!isTrashed && (
+                {/* SLA countdown - hidden for trashed and drafts */}
+                {!isTrashed && !isDraft && (
                   <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
                     <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
                       {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
                     </div>
                     <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
+                  </div>
+                )}
+                {isDraft && (
+                  <div className="text-center rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-1.5">
+                    <div className="text-sm font-bold tabular-nums text-muted-foreground">Pauza</div>
+                    <div className="text-[10px] text-muted-foreground">SLA nieaktywne</div>
                   </div>
                 )}
 
