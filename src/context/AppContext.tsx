@@ -51,6 +51,7 @@ interface AppContextType {
   updateIdea: (ideaId: string, title: string, description: string) => void;
   deleteIdea: (ideaId: string) => void;
   reviewIdea: (ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => void;
+  resubmitIdea: (ideaId: string, title: string, description: string) => void;
   acceptIdeaAsProject: (ideaId: string) => void;
   campaigns: Campaign[];
   addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => void;
