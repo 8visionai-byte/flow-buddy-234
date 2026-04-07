@@ -83,6 +83,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Track if realtime update is in progress to avoid echo loops
   const realtimeSkip = useRef(false);
+  // Ref to acceptIdeaAsProject for use in reviewIdea callback
+  const acceptIdeaAsProjectRef = useRef<(id: string) => void>(() => {});
 
   const setCurrentUser = useCallback((user: User | null) => {
     setCurrentUserState(user);
