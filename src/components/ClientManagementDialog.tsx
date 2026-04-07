@@ -105,6 +105,10 @@ const PhoneField = ({ value, onChange, size = 'sm' }: PhoneFieldProps) => {
 
 const EMPTY_FORM = { companyName: '', contactName: '', email: '', phone: '+48', notes: '' };
 
+// Check if a user matches the client's contact_name (primary contact)
+const isPrimaryContact = (user: { name: string }, client: Client) =>
+  client.contactName?.trim() && user.name.trim().toLowerCase() === client.contactName.trim().toLowerCase();
+
 const ClientManagementDialog = () => {
   const { clients, addClient, updateClient, deleteClient, users, addUser, deleteUser } = useApp();
   const [open, setOpen] = useState(false);
