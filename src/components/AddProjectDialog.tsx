@@ -29,6 +29,7 @@ const AddProjectDialog = () => {
       company: selectedClient.companyName,
       clientEmail: selectedClient.email,
       clientPhone: selectedClient.phone,
+      assignedClientIds: [],
     });
     setName('');
     setSelectedClientId('');
