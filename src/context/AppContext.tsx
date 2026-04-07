@@ -992,8 +992,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } : i);
       const changed = updated.find(i => i.id === ideaId);
       if (changed) upsertIdea(changed);
-      // Auto-create project when consensus reached with acceptance
-      if (allVoted && (finalStatus === 'accepted' || finalStatus === 'accepted_with_notes')) {
+      // Auto-create project ONLY when all voted and purely accepted
+      if (allVoted && finalStatus === 'accepted') {
         setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
       }
       return updated;
