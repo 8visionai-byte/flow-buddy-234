@@ -17,6 +17,7 @@ import {
   RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList,
   Calendar as CalendarIcon, Flag, FileText, ChevronDown, ChevronRight, ChevronLeft,
   Building2, Clock, LayoutList, Users, Phone, Mail, Lightbulb, UserPlus, Check, X,
+  ArchiveRestore,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import AddCampaignDialog from '@/components/AddCampaignDialog';
