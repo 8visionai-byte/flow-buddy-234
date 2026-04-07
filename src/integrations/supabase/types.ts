@@ -240,6 +240,7 @@ export type Database = {
       projects: {
         Row: {
           assigned_client_id: string | null
+          assigned_client_ids: string[]
           assigned_editor_id: string | null
           assigned_influencer_id: string | null
           assigned_kierownik_id: string | null
@@ -259,6 +260,7 @@ export type Database = {
         }
         Insert: {
           assigned_client_id?: string | null
+          assigned_client_ids?: string[]
           assigned_editor_id?: string | null
           assigned_influencer_id?: string | null
           assigned_kierownik_id?: string | null
@@ -278,6 +280,7 @@ export type Database = {
         }
         Update: {
           assigned_client_id?: string | null
+          assigned_client_ids?: string[]
           assigned_editor_id?: string | null
           assigned_influencer_id?: string | null
           assigned_kierownik_id?: string | null
@@ -378,6 +381,7 @@ export type Database = {
           assigned_role: Database["public"]["Enums"]["user_role"]
           assigned_roles: Database["public"]["Enums"]["user_role"][]
           client_feedback: string | null
+          client_votes: Json
           completed_at: string | null
           completed_by: string | null
           deadline_date: string | null
@@ -398,6 +402,7 @@ export type Database = {
           assigned_role: Database["public"]["Enums"]["user_role"]
           assigned_roles?: Database["public"]["Enums"]["user_role"][]
           client_feedback?: string | null
+          client_votes?: Json
           completed_at?: string | null
           completed_by?: string | null
           deadline_date?: string | null
@@ -418,6 +423,7 @@ export type Database = {
           assigned_role?: Database["public"]["Enums"]["user_role"]
           assigned_roles?: Database["public"]["Enums"]["user_role"][]
           client_feedback?: string | null
+          client_votes?: Json
           completed_at?: string | null
           completed_by?: string | null
           deadline_date?: string | null
