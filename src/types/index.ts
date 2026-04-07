@@ -157,7 +157,8 @@ export interface Campaign {
   id: string;
   clientId: string;
   assignedInfluencerId: string;
-  assignedClientUserId: string | null;  // which klient user sees this campaign
+  assignedClientUserId: string | null;  // legacy single reviewer (kept for backward compat)
+  reviewerIds: string[];                // multi-reviewer array
   targetIdeaCount: number;              // default 12
   status: CampaignStatus;
   createdAt: string;

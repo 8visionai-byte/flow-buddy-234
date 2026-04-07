@@ -1,0 +1,1 @@
+ALTER TABLE public.campaigns ADD COLUMN reviewer_ids text[] NOT NULL DEFAULT '{}';

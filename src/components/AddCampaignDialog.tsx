@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Lightbulb, Plus, X, Check, UserPlus } from 'lucide-react';
 
 const AddCampaignDialog = () => {
@@ -17,47 +19,59 @@ const AddCampaignDialog = () => {
   const [open, setOpen] = useState(false);
   const [clientId, setClientId] = useState('');
   const [influencerId, setInfluencerId] = useState('');
-  const [clientUserId, setClientUserId] = useState('');
+  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const [targetCount, setTargetCount] = useState('12');
   const [slaHours, setSlaHours] = useState('48');
   const [briefNotes, setBriefNotes] = useState('');
+  const [reviewerError, setReviewerError] = useState(false);
 
   // Inline new influencer form
   const [showNewInfluencer, setShowNewInfluencer] = useState(false);
   const [newInfluencerName, setNewInfluencerName] = useState('');
-  const [newInfluencerEmail, setNewInfluencerEmail] = useState('');
 
   const influencers = users.filter(u => u.role === 'influencer');
-  // Filter klient users by the selected client company (via user.clientId link)
   const clientUsers = clientId
     ? users.filter(u => u.role === 'klient' && u.clientId === clientId)
     : [];
-  // Auto-select if exactly one matching klient user
-  const autoSelectedClientUser = clientUsers.length === 1 ? clientUsers[0] : null;
-  const effectiveClientUserId = autoSelectedClientUser ? autoSelectedClientUser.id : clientUserId;
+
   const isValid = !!clientId && !!influencerId;
 
   const handleAddNewInfluencer = () => {
     if (!newInfluencerName.trim()) return;
     const newId = addUser({ name: newInfluencerName.trim(), role: 'influencer' });
     setInfluencerId(newId);
-    setNewInfluencerName(''); setNewInfluencerEmail(''); setShowNewInfluencer(false);
+    setNewInfluencerName(''); setShowNewInfluencer(false);
+  };
+
+  const toggleReviewer = (id: string) => {
+    setReviewerError(false);
+    setReviewerIds(prev =>
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    );
   };
 
   const handleSubmit = () => {
     if (!isValid) return;
+    if (reviewerIds.length === 0) {
+      setReviewerError(true);
+      return;
+    }
+    // First reviewer becomes the legacy assignedClientUserId (for backward compat)
+    const firstClientReviewer = reviewerIds.find(id => id !== 'admin') || null;
     addCampaign({
       clientId,
       assignedInfluencerId: influencerId,
-      assignedClientUserId: effectiveClientUserId || null,
+      assignedClientUserId: firstClientReviewer,
+      reviewerIds,
       targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
       slaHours: Math.max(1, parseInt(slaHours) || 48),
       briefNotes: briefNotes.trim(),
     });
     // Reset
-    setClientId(''); setInfluencerId(''); setClientUserId('');
+    setClientId(''); setInfluencerId(''); setReviewerIds([]);
     setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
-    setShowNewInfluencer(false); setNewInfluencerName(''); setNewInfluencerEmail('');
+    setShowNewInfluencer(false); setNewInfluencerName('');
+    setReviewerError(false);
     setOpen(false);
   };
 
@@ -84,7 +98,7 @@ const AddCampaignDialog = () => {
             {clients.length === 0 ? (
               <p className="text-sm text-muted-foreground">Dodaj najpierw klienta w panelu „Klienci".</p>
             ) : (
-              <Select value={clientId} onValueChange={setClientId}>
+              <Select value={clientId} onValueChange={v => { setClientId(v); setReviewerIds([]); setReviewerError(false); }}>
                 <SelectTrigger><SelectValue placeholder="Wybierz klienta..." /></SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   {clients.map(c => (
@@ -156,39 +170,54 @@ const AddCampaignDialog = () => {
             )}
           </div>
 
-          {/* Client reviewer — auto-resolved from company link */}
+          {/* Reviewers — multi-select checklist */}
           <div className="space-y-1.5">
-            <Label>Kto ocenia pomysły?</Label>
+            <Label>Kto ocenia pomysły? *</Label>
             {!clientId ? (
               <p className="text-xs text-muted-foreground italic py-1">Wybierz najpierw klienta.</p>
-            ) : autoSelectedClientUser ? (
-              // Exactly one user linked to this company — auto-selected
-              <div className="flex items-center gap-2 rounded-md border border-success/40 bg-success/5 px-3 py-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-success/20 text-xs font-medium text-success">
-                  {autoSelectedClientUser.name.charAt(0)}
-                </div>
-                <span className="text-sm font-medium text-foreground">{autoSelectedClientUser.name}</span>
-                <span className="ml-auto text-[10px] text-success">auto</span>
-              </div>
-            ) : clientUsers.length > 1 ? (
-              // Multiple users — show dropdown
-              <Select value={clientUserId || 'none'} onValueChange={v => setClientUserId(v === 'none' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="Wybierz osobę oceniającą..." /></SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  <SelectItem value="none">— Ocenia admin —</SelectItem>
-                  {clientUsers.map(u => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             ) : (
-              // No user linked to this company
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                <span className="text-xs text-muted-foreground italic">
-                  Brak konta klienta przypisanego do tej firmy.
-                </span>
-                <span className="ml-auto text-[10px] text-muted-foreground">ocenia admin</span>
-              </div>
+              <>
+                <div className="rounded-md border border-border p-2 max-h-[200px] overflow-y-auto space-y-1">
+                  {/* Admin option — always first */}
+                  <label className="flex items-center gap-2.5 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Checkbox
+                      checked={reviewerIds.includes('admin')}
+                      onCheckedChange={() => toggleReviewer('admin')}
+                    />
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-medium text-primary shrink-0">
+                      A
+                    </div>
+                    <span className="text-sm font-medium text-foreground">Ocenia admin</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px] border-0 bg-primary/10 text-primary">Admin</Badge>
+                  </label>
+
+                  {/* Client users */}
+                  {clientUsers.map(u => (
+                    <label key={u.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <Checkbox
+                        checked={reviewerIds.includes(u.id)}
+                        onCheckedChange={() => toggleReviewer(u.id)}
+                      />
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-success/15 text-xs font-medium text-success shrink-0">
+                        {u.name.charAt(0)}
+                      </div>
+                      <span className="text-sm font-medium text-foreground">{u.name}</span>
+                      <Badge variant="secondary" className="ml-auto text-[10px] border-0 bg-success/10 text-success">Klient</Badge>
+                    </label>
+                  ))}
+
+                  {clientUsers.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic px-2 py-1">
+                      Brak kont klienta przypisanych do tej firmy.
+                    </p>
+                  )}
+                </div>
+                {reviewerError && (
+                  <p className="text-xs text-destructive font-medium">
+                    Wybierz co najmniej jedną osobę oceniającą
+                  </p>
+                )}
+              </>
             )}
             <p className="text-[11px] text-muted-foreground">
               Konto do logowania ustawiasz w panelu <strong>Zespół → Klienci</strong>.

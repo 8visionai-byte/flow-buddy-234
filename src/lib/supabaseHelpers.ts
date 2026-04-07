@@ -44,7 +44,8 @@ export function mapProjectNote(row: any): ProjectNote {
 export function mapCampaign(row: any): Campaign {
   return {
     id: row.id, clientId: row.client_id, assignedInfluencerId: row.assigned_influencer_id,
-    assignedClientUserId: row.assigned_client_user_id, targetIdeaCount: row.target_idea_count,
+    assignedClientUserId: row.assigned_client_user_id, reviewerIds: row.reviewer_ids ?? [],
+    targetIdeaCount: row.target_idea_count,
     status: row.status, createdAt: row.created_at, slaHours: row.sla_hours, briefNotes: row.brief_notes,
     isDeleted: row.is_deleted ?? false,
   };
@@ -170,7 +171,8 @@ export async function deleteProjectNoteDb(id: string) {
 export async function upsertCampaign(campaign: Campaign) {
   await supabase.from('campaigns').upsert({
     id: campaign.id, client_id: campaign.clientId, assigned_influencer_id: campaign.assignedInfluencerId,
-    assigned_client_user_id: campaign.assignedClientUserId, target_idea_count: campaign.targetIdeaCount,
+    assigned_client_user_id: campaign.assignedClientUserId, reviewer_ids: campaign.reviewerIds ?? [],
+    target_idea_count: campaign.targetIdeaCount,
     status: campaign.status, created_at: campaign.createdAt, sla_hours: campaign.slaHours,
     brief_notes: campaign.briefNotes, is_deleted: campaign.isDeleted ?? false,
   });
