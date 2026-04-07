@@ -16,7 +16,8 @@ export function mapProject(row: any): Project {
     id: row.id, name: row.name, clientId: row.client_id, clientName: row.client_name, company: row.company,
     clientEmail: row.client_email, clientPhone: row.client_phone, currentStageIndex: row.current_stage_index,
     status: row.status, assignedInfluencerId: row.assigned_influencer_id, assignedEditorId: row.assigned_editor_id,
-    assignedClientId: row.assigned_client_id, assignedKierownikId: row.assigned_kierownik_id,
+    assignedClientId: row.assigned_client_id, assignedClientIds: row.assigned_client_ids ?? [],
+    assignedKierownikId: row.assigned_kierownik_id,
     assignedOperatorId: row.assigned_operator_id, publicationDate: row.publication_date, priority: row.priority, slaHours: row.sla_hours,
   };
 }
@@ -30,6 +31,7 @@ export function mapTask(row: any): Task {
     completedBy: row.completed_by, deadlineDate: row.deadline_date,
     history: (row.history || []) as TaskHistoryEntry[],
     roleCompletions: (row.role_completions || {}) as Record<string, string>,
+    clientVotes: (row.client_votes || {}) as Record<string, any>,
   };
 }
 
@@ -95,6 +97,7 @@ export async function upsertTask(task: Task) {
     client_feedback: task.clientFeedback, assigned_at: task.assignedAt, completed_at: task.completedAt,
     completed_by: task.completedBy, deadline_date: task.deadlineDate,
     history: task.history as any, role_completions: task.roleCompletions as any,
+    client_votes: task.clientVotes as any,
   });
 }
 
@@ -107,6 +110,7 @@ export async function upsertTasks(tasks: Task[]) {
     client_feedback: t.clientFeedback, assigned_at: t.assignedAt, completed_at: t.completedAt,
     completed_by: t.completedBy, deadline_date: t.deadlineDate,
     history: t.history as any, role_completions: t.roleCompletions as any,
+    client_votes: t.clientVotes as any,
   }));
   await supabase.from('tasks').upsert(rows);
 }
@@ -117,7 +121,8 @@ export async function upsertProject(project: Project) {
     company: project.company, client_email: project.clientEmail, client_phone: project.clientPhone,
     current_stage_index: project.currentStageIndex, status: project.status,
     assigned_influencer_id: project.assignedInfluencerId, assigned_editor_id: project.assignedEditorId,
-    assigned_client_id: project.assignedClientId, assigned_kierownik_id: project.assignedKierownikId,
+    assigned_client_id: project.assignedClientId, assigned_client_ids: project.assignedClientIds,
+    assigned_kierownik_id: project.assignedKierownikId,
     assigned_operator_id: project.assignedOperatorId, publication_date: project.publicationDate,
     priority: project.priority, sla_hours: project.slaHours,
   });

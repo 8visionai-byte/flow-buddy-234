@@ -67,7 +67,7 @@ const VIEWS: { id: ViewId; label: string; icon: React.FC<{ className?: string }>
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
   const {
     currentUser, setCurrentUser, tasks, projects, clients, users, ideas,
-    deleteProject, toggleFreezeProject, assignToProject, completeTask,
+    deleteProject, toggleFreezeProject, assignToProject, toggleClientInProject, completeTask,
     reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
     campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
     hardDeleteCampaigns, bulkRestoreCampaigns,
@@ -1126,9 +1126,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{editors.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={project.assignedClientId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedClientId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Klient" /></SelectTrigger>
+                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Klient główny" /></SelectTrigger>
                 <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{clientUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
+              {/* Multi-client checkboxes for consensus */}
+              {clientUsers.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] text-muted-foreground font-medium">Decydenci:</span>
+                  {clientUsers.map(u => (
+                    <label key={u.id} className="flex items-center gap-1 text-[11px] cursor-pointer">
+                      <Checkbox
+                        checked={project.assignedClientIds.includes(u.id)}
+                        onCheckedChange={() => toggleClientInProject(project.id, u.id)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className="text-foreground">{u.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
               <Select value={project.assignedKierownikId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedKierownikId', v === 'none' ? null : v)}>
                 <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Kierownik" /></SelectTrigger>
                 <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{kierownicy.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>

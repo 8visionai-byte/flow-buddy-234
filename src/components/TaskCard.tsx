@@ -406,6 +406,14 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
 
   // === APPROVAL VIEW (Client sees influencer's content) ===
   if (task.status === 'pending_client_approval' && task.inputType === 'approval') {
+    const project = projects.find(p => p.id === task.projectId);
+    const clientIds = project?.assignedClientIds || [];
+    const isConsensusMode = clientIds.length > 1;
+    const currentUserVote = currentUser?.id ? task.clientVotes[currentUser.id] : undefined;
+    const hasAlreadyVoted = !!currentUserVote;
+    const voteCount = clientIds.filter(cid => task.clientVotes[cid]).length;
+    const totalVoters = clientIds.length;
+
     return (
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="mb-1 flex items-center justify-between">
@@ -414,6 +422,42 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
         </div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
         <p className="mb-4 text-sm text-muted-foreground">{task.description}</p>
+
+        {/* Consensus progress indicator */}
+        {isConsensusMode && (
+          <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opinie: {voteCount}/{totalVoters}</span>
+              <Badge variant="secondary" className="text-[10px]">Konsensus wymagany</Badge>
+            </div>
+            {/* Voter list */}
+            <div className="space-y-1.5">
+              {clientIds.map(cid => {
+                const voter = users.find(u => u.id === cid);
+                const vote = task.clientVotes[cid];
+                return (
+                  <div key={cid} className="flex items-center gap-2 text-sm">
+                    {vote ? (
+                      vote.decision === 'approved' ? (
+                        <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-warning shrink-0" />
+                      )
+                    ) : (
+                      <Clock className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                    )}
+                    <span className={vote ? 'text-foreground font-medium' : 'text-muted-foreground'}>{voter?.name || cid}</span>
+                    {vote && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {vote.decision === 'approved' ? '— zaakceptował/a' : '— prosi o zmiany'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Show influencer's submission */}
         {task.previousValue && (() => {
@@ -494,116 +538,134 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           );
         })()}
 
-        {/* Decision buttons */}
-        {!showFeedbackForm && !showRejectFinalForm && !showAcceptWithNotesForm ? (
-          <div className="space-y-2">
-            {/* Primary row: Approve + Accept with notes */}
-            <div className="grid grid-cols-2 gap-2">
-              <Button onClick={handleApprove} className="bg-success hover:bg-success/90 text-success-foreground" size="lg">
-                <ThumbsUp className="mr-2 h-4 w-4" />
-                Zaakceptuj
-              </Button>
-              <Button
-                onClick={() => setShowAcceptWithNotesForm(true)}
-                variant="outline"
-                className="border-success/50 text-success hover:bg-success/10"
-                size="lg"
-              >
-                <CheckCheck className="mr-2 h-4 w-4" />
-                Z uwagami
-              </Button>
+        {/* Already voted message */}
+        {isConsensusMode && hasAlreadyVoted ? (
+          <div className="rounded-lg border border-success/30 bg-success/5 p-4 text-center space-y-1">
+            <div className="flex items-center justify-center gap-2 text-sm font-medium text-success">
+              <CheckCircle2 className="h-4 w-4" />
+              Twoja opinia została zapisana
             </div>
-            {/* Secondary row: Request changes */}
-            <Button
-              onClick={() => setShowFeedbackForm(true)}
-              variant="outline"
-              className="w-full border-warning/50 text-warning hover:bg-warning/10"
-              size="sm"
-            >
-              <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
-              Poproś o poprawki
-            </Button>
-            {/* Final reject — destructive, less prominent */}
-            <Button
-              onClick={() => setShowRejectFinalForm(true)}
-              variant="ghost"
-              className="w-full text-destructive hover:bg-destructive/10 text-xs h-7"
-            >
-              <XCircle className="mr-1.5 h-3 w-3" />
-              Odrzuć całkowicie
-            </Button>
-          </div>
-        ) : showAcceptWithNotesForm ? (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Dodaj uwagi dla influencera (opcjonalnie):</p>
-            <Textarea
-              placeholder="Wpisz komentarz, sugestie lub wskazówki do następnych etapów..."
-              value={acceptNotes}
-              onChange={e => setAcceptNotes(e.target.value)}
-              rows={3}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  completeTask(task.id, acceptNotes.trim() ? `approved: ${acceptNotes.trim()}` : 'approved', currentUser?.role);
-                  setShowAcceptWithNotesForm(false);
-                  setAcceptNotes('');
-                }}
-                className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
-              >
-                <CheckCheck className="mr-2 h-4 w-4" />
-                Zatwierdź z uwagami
-              </Button>
-              <Button variant="ghost" onClick={() => { setShowAcceptWithNotesForm(false); setAcceptNotes(''); }}>
-                Anuluj
-              </Button>
-            </div>
-          </div>
-        ) : showRejectFinalForm ? (
-          <div className="space-y-3">
-            <Textarea
-              placeholder="Powód odrzucenia (opcjonalnie)..."
-              value={rejectFinalReason}
-              onChange={e => setRejectFinalReason(e.target.value)}
-              rows={3}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Button onClick={() => { rejectFinalTask(task.id, rejectFinalReason || undefined); }} variant="destructive" className="flex-1">
-                <XCircle className="mr-2 h-4 w-4" />
-                Potwierdź odrzucenie
-              </Button>
-              <Button variant="ghost" onClick={() => { setShowRejectFinalForm(false); setRejectFinalReason(''); }}>
-                Anuluj
-              </Button>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentUserVote?.decision === 'approved' ? 'Zaakceptowałeś/aś materiał.' : 'Zgłosiłeś/aś uwagi.'}
+              {' '}Czekamy na pozostałych decydentów ({totalVoters - voteCount} {totalVoters - voteCount === 1 ? 'osoba' : 'osoby'}).
+            </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            <Textarea
-              placeholder="Opisz, co należy zmienić..."
-              value={feedbackValue}
-              onChange={e => { setFeedbackValue(e.target.value); setError(''); }}
-              rows={4}
-              autoFocus
-            />
-            {error && (
-              <div className="flex items-center gap-1.5 text-xs text-destructive">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {error}
+          <>
+            {/* Decision buttons */}
+            {!showFeedbackForm && !showRejectFinalForm && !showAcceptWithNotesForm ? (
+              <div className="space-y-2">
+                {/* Primary row: Approve + Accept with notes */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button onClick={handleApprove} className="bg-success hover:bg-success/90 text-success-foreground" size="lg">
+                    <ThumbsUp className="mr-2 h-4 w-4" />
+                    Zaakceptuj
+                  </Button>
+                  <Button
+                    onClick={() => setShowAcceptWithNotesForm(true)}
+                    variant="outline"
+                    className="border-success/50 text-success hover:bg-success/10"
+                    size="lg"
+                  >
+                    <CheckCheck className="mr-2 h-4 w-4" />
+                    Z uwagami
+                  </Button>
+                </div>
+                {/* Secondary row: Request changes */}
+                <Button
+                  onClick={() => setShowFeedbackForm(true)}
+                  variant="outline"
+                  className="w-full border-warning/50 text-warning hover:bg-warning/10"
+                  size="sm"
+                >
+                  <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
+                  Poproś o poprawki
+                </Button>
+                {/* Final reject — destructive, less prominent */}
+                {!isConsensusMode && (
+                  <Button
+                    onClick={() => setShowRejectFinalForm(true)}
+                    variant="ghost"
+                    className="w-full text-destructive hover:bg-destructive/10 text-xs h-7"
+                  >
+                    <XCircle className="mr-1.5 h-3 w-3" />
+                    Odrzuć całkowicie
+                  </Button>
+                )}
+              </div>
+            ) : showAcceptWithNotesForm ? (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-foreground">Dodaj uwagi dla influencera (opcjonalnie):</p>
+                <Textarea
+                  placeholder="Wpisz komentarz, sugestie lub wskazówki do następnych etapów..."
+                  value={acceptNotes}
+                  onChange={e => setAcceptNotes(e.target.value)}
+                  rows={3}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      completeTask(task.id, acceptNotes.trim() ? `approved: ${acceptNotes.trim()}` : 'approved', currentUser?.role);
+                      setShowAcceptWithNotesForm(false);
+                      setAcceptNotes('');
+                    }}
+                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    <CheckCheck className="mr-2 h-4 w-4" />
+                    Zatwierdź z uwagami
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setShowAcceptWithNotesForm(false); setAcceptNotes(''); }}>
+                    Anuluj
+                  </Button>
+                </div>
+              </div>
+            ) : showRejectFinalForm ? (
+              <div className="space-y-3">
+                <Textarea
+                  placeholder="Powód odrzucenia (opcjonalnie)..."
+                  value={rejectFinalReason}
+                  onChange={e => setRejectFinalReason(e.target.value)}
+                  rows={3}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button onClick={() => { rejectFinalTask(task.id, rejectFinalReason || undefined); }} variant="destructive" className="flex-1">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Potwierdź odrzucenie
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setShowRejectFinalForm(false); setRejectFinalReason(''); }}>
+                    Anuluj
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Textarea
+                  placeholder="Opisz, co należy zmienić..."
+                  value={feedbackValue}
+                  onChange={e => { setFeedbackValue(e.target.value); setError(''); }}
+                  rows={4}
+                  autoFocus
+                />
+                {error && (
+                  <div className="flex items-center gap-1.5 text-xs text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {error}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button onClick={handleReject} className="flex-1" disabled={feedbackValue.trim().length === 0}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Wyślij do poprawy
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setShowFeedbackForm(false); setError(''); }}>
+                    Anuluj
+                  </Button>
+                </div>
               </div>
             )}
-            <div className="flex gap-2">
-              <Button onClick={handleReject} className="flex-1" disabled={feedbackValue.trim().length === 0}>
-                <Send className="mr-2 h-4 w-4" />
-                Wyślij do poprawy
-              </Button>
-              <Button variant="ghost" onClick={() => { setShowFeedbackForm(false); setError(''); }}>
-                Anuluj
-              </Button>
-            </div>
-          </div>
+          </>
         )}
 
         <HistoryAccordion history={task.history} />

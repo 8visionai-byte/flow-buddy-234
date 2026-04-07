@@ -25,8 +25,15 @@ export type ProjectStatus = 'active' | 'frozen';
 export interface TaskHistoryEntry {
   action: 'submitted' | 'approved' | 'rejected' | 'resubmitted' | 'deferred' | 'rejected_final';
   by: UserRole;
+  userId?: string;
   value?: string | null;
   feedback?: string | null;
+  timestamp: string;
+}
+
+export interface ClientVote {
+  decision: 'approved' | 'rejected';
+  comment: string;
   timestamp: string;
 }
 
@@ -49,6 +56,7 @@ export interface Task {
   deadlineDate: string | null;
   history: TaskHistoryEntry[];
   roleCompletions: Record<string, string>;
+  clientVotes: Record<string, ClientVote>;
 }
 
 export interface Recording {
@@ -80,6 +88,7 @@ export interface Project {
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
   assignedClientId: string | null;
+  assignedClientIds: string[];
   assignedKierownikId: string | null;
   assignedOperatorId: string | null;
   publicationDate: string | null;

@@ -81,9 +81,9 @@ export const INITIAL_IDEAS: Idea[] = [
 ];
 
 export const INITIAL_PROJECTS: Project[] = [
-  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', assignedKierownikId: 'u5', assignedOperatorId: 'u6', publicationDate: null, priority: 'medium', slaHours: 48 },
-  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
-  { id: 'p3', name: '5 trików na produktywność', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', assignedClientIds: ['u2'], assignedKierownikId: 'u5', assignedOperatorId: 'u6', publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedClientIds: [], assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p3', name: '5 trików na produktywność', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedClientIds: [], assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
 ];
 
 interface StageDefinition {
@@ -141,6 +141,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     deadlineDate: null,
     history: [],
     roleCompletions: {},
+    clientVotes: {},
   }));
 }
 
