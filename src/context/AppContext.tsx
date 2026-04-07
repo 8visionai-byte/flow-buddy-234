@@ -243,11 +243,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const role = byRole || task.assignedRole;
       const isMultiRole = task.assignedRoles.length > 1;
+      const userId = currentUser?.id;
 
       // Script review with file notes → bounce back to influencer
       if (task.inputType === 'script_review' && value === 'approved_with_file_notes') {
         const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
-        const bounceEntry: TaskHistoryEntry = { action: 'rejected', by: 'klient', feedback: 'Uwagi naniesione w pliku — popraw scenariusz i prześlij nowy link.', timestamp: now };
+        const bounceEntry: TaskHistoryEntry = { action: 'rejected', by: 'klient', userId, feedback: 'Uwagi naniesione w pliku — popraw scenariusz i prześlij nowy link.', timestamp: now };
         return prev.map(t => {
           if (t.id === taskId) return { ...t, status: 'locked' as const, history: [...t.history, bounceEntry] };
           if (scriptTask && t.id === scriptTask.id) return {
@@ -260,7 +261,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: role, value, timestamp: now };
+      const entry: TaskHistoryEntry = { action: task.inputType === 'approval' ? 'approved' : 'submitted', by: role, userId, value, timestamp: now };
+
+      // ─── CONSENSUS LOGIC for approval tasks with multiple clients ───
+      if (task.inputType === 'approval' && task.status === 'pending_client_approval' && userId) {
+        const project = projects.find(p => p.id === task.projectId);
+        const clientIds = project?.assignedClientIds || [];
+
+        if (clientIds.length > 1) {
+          // Block duplicate vote
+          if (task.clientVotes[userId]) return prev;
+
+          const comment = value.startsWith('approved:') ? value.slice(9).trim() : '';
+          const newVotes = { ...task.clientVotes, [userId]: { decision: 'approved' as const, comment, timestamp: now } };
+          const allVoted = clientIds.every(cid => newVotes[cid]);
+
+          if (!allVoted) {
+            // Not all voted yet — just record vote
+            return prev.map(t => t.id === taskId ? { ...t, clientVotes: newVotes, history: [...t.history, entry] } : t);
+          }
+
+          // All voted — check consensus
+          const anyRejected = clientIds.some(cid => newVotes[cid]?.decision === 'rejected');
+          if (anyRejected) {
+            // Bounce back with combined feedback
+            const combinedFeedback = clientIds
+              .filter(cid => newVotes[cid]?.decision === 'rejected')
+              .map(cid => {
+                const userName = users.find(u => u.id === cid)?.name || cid;
+                return `${userName}: ${newVotes[cid].comment}`;
+              })
+              .join('\n\n');
+            const prevTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
+            const rejectEntry: TaskHistoryEntry = { action: 'rejected', by: 'klient', feedback: combinedFeedback, timestamp: now };
+            return prev.map(t => {
+              if (t.id === taskId) return { ...t, status: 'locked' as const, clientFeedback: combinedFeedback, clientVotes: {}, assignedAt: null, history: [...t.history, entry, rejectEntry] };
+              if (prevTask && t.id === prevTask.id) return { ...t, status: 'needs_influencer_revision' as const, clientFeedback: combinedFeedback, assignedAt: now, completedAt: null, completedBy: null, history: [...t.history, rejectEntry] };
+              return t;
+            });
+          }
+
+          // All approved — update votes and fall through to normal completion logic
+          // We need to update the task's clientVotes before proceeding
+          prev = prev.map(t => t.id === taskId ? { ...t, clientVotes: newVotes } : t);
+          // Re-find the task with updated votes
+          // Fall through to normal single-role completion below
+        }
+      }
 
       let prevTask: Task | undefined = undefined;
       if (task.inputType === 'approval') {
