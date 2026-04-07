@@ -807,6 +807,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const hardDeleteCampaigns = useCallback(async (ids: string[]) => {
+    setCampaigns(prev => prev.filter(c => !ids.includes(c.id)));
+    setIdeas(prev => prev.filter(i => !ids.includes(i.campaignId)));
+    await hardDeleteCampaignsDb(ids);
+  }, []);
+
+  const bulkRestoreCampaigns = useCallback(async (ids: string[]) => {
+    setCampaigns(prev => prev.map(c => ids.includes(c.id) ? { ...c, isDeleted: false } : c));
+    await bulkRestoreCampaignsDb(ids);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
