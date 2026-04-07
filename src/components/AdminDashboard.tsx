@@ -68,14 +68,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     currentUser, setCurrentUser, tasks, projects, clients, users, ideas,
     deleteProject, toggleFreezeProject, assignToProject, completeTask,
     reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
-    campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, addUser,
+    campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
   } = useApp();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [isRestoringCampaign, setIsRestoringCampaign] = useState<string | null>(null);
-  const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'trash'>('active');
+  const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
+  const [isActivatingCampaign, setIsActivatingCampaign] = useState<string | null>(null);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
