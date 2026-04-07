@@ -59,6 +59,8 @@ interface AppContextType {
   deleteCampaign: (id: string) => void;
   softDeleteCampaign: (id: string) => void;
   restoreCampaign: (id: string) => void;
+  hardDeleteCampaigns: (ids: string[]) => Promise<void>;
+  bulkRestoreCampaigns: (ids: string[]) => Promise<void>;
   updatePartyNote: (taskId: string, role: string, note: string) => void;
   loading: boolean;
 }
