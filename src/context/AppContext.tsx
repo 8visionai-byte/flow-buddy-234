@@ -6,7 +6,7 @@ import {
   fetchAll, upsertTask, upsertTasks, upsertProject, upsertUser, deleteUserDb,
   upsertClient, deleteClientDb, deleteProjectDb, insertRecording, deleteRecordingDb,
   insertProjectNote, deleteProjectNoteDb, upsertCampaign, deleteCampaignDb,
-  upsertIdea, deleteIdeaDb,
+  upsertIdea, deleteIdeaDb, hardDeleteCampaignsDb, bulkRestoreCampaignsDb,
   mapUser, mapClient, mapProject, mapTask, mapRecording, mapProjectNote, mapCampaign, mapIdea,
 } from '@/lib/supabaseHelpers';
 
@@ -59,6 +59,8 @@ interface AppContextType {
   deleteCampaign: (id: string) => void;
   softDeleteCampaign: (id: string) => void;
   restoreCampaign: (id: string) => void;
+  hardDeleteCampaigns: (ids: string[]) => Promise<void>;
+  bulkRestoreCampaigns: (ids: string[]) => Promise<void>;
   updatePartyNote: (taskId: string, role: string, note: string) => void;
   loading: boolean;
 }
@@ -805,6 +807,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const hardDeleteCampaigns = useCallback(async (ids: string[]) => {
+    setCampaigns(prev => prev.filter(c => !ids.includes(c.id)));
+    setIdeas(prev => prev.filter(i => !ids.includes(i.campaignId)));
+    await hardDeleteCampaignsDb(ids);
+  }, []);
+
+  const bulkRestoreCampaigns = useCallback(async (ids: string[]) => {
+    setCampaigns(prev => prev.map(c => ids.includes(c.id) ? { ...c, isDeleted: false } : c));
+    await bulkRestoreCampaignsDb(ids);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -824,7 +837,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
       ideas, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject,
-      campaigns, addCampaign, createDraftCampaign, activateCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign,
+      campaigns, addCampaign, createDraftCampaign, activateCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, hardDeleteCampaigns, bulkRestoreCampaigns,
       updatePartyNote, loading,
     }}>
       {children}

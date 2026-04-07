@@ -20,6 +20,7 @@ import {
   ArchiveRestore,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import AddCampaignDialog from '@/components/AddCampaignDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import ClientManagementDialog from '@/components/ClientManagementDialog';
@@ -69,14 +70,19 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     deleteProject, toggleFreezeProject, assignToProject, completeTask,
     reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
     campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
+    hardDeleteCampaigns, bulkRestoreCampaigns,
   } = useApp();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [isRestoringCampaign, setIsRestoringCampaign] = useState<string | null>(null);
-  const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
+   const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
   const [isActivatingCampaign, setIsActivatingCampaign] = useState<string | null>(null);
+  const [trashSelected, setTrashSelected] = useState<Set<string>>(new Set());
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState<string[] | null>(null);
+  const [isHardDeleting, setIsHardDeleting] = useState(false);
+  const [isBulkRestoring, setIsBulkRestoring] = useState(false);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -1348,6 +1354,21 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {isTrashed && (
+                    <Checkbox
+                      checked={trashSelected.has(campaign.id)}
+                      disabled={isHardDeleting || isBulkRestoring}
+                      onCheckedChange={(checked) => {
+                        setTrashSelected(prev => {
+                          const next = new Set(prev);
+                          if (checked) next.add(campaign.id);
+                          else next.delete(campaign.id);
+                          return next;
+                        });
+                      }}
+                      className="mr-1"
+                    />
+                  )}
                   <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
                   {isTrashed ? (
                     <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs">
@@ -1446,13 +1467,23 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-popover z-50">
                     {isTrashed ? (
-                      <DropdownMenuItem
-                        disabled={isRestoringCampaign === campaign.id}
-                        onClick={() => handleRestore(campaign.id)}
-                      >
-                        <ArchiveRestore className="mr-2 h-4 w-4" />
-                        {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuItem
+                          disabled={isRestoringCampaign === campaign.id}
+                          onClick={() => handleRestore(campaign.id)}
+                        >
+                          <ArchiveRestore className="mr-2 h-4 w-4" />
+                          {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setHardDeleteConfirm([campaign.id])}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Usuń całkowicie z systemu
+                        </DropdownMenuItem>
+                      </>
                     ) : isDraft ? (
                       <>
                         <DropdownMenuItem
@@ -1511,7 +1542,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         {/* Campaign filter tabs */}
         <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
           <button
-            onClick={() => setCampaignTabFilter('active')}
+            onClick={() => { setCampaignTabFilter('active'); setTrashSelected(new Set()); }}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               campaignTabFilter === 'active'
@@ -1522,7 +1553,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             Aktywne ({activeCampaigns.length})
           </button>
           <button
-            onClick={() => setCampaignTabFilter('drafts')}
+            onClick={() => { setCampaignTabFilter('drafts'); setTrashSelected(new Set()); }}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
               campaignTabFilter === 'drafts'
@@ -1580,9 +1611,67 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Select all */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={trashSelected.size === trashedCampaigns.length && trashedCampaigns.length > 0}
+                  disabled={isHardDeleting || isBulkRestoring}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setTrashSelected(new Set(trashedCampaigns.map(c => c.id)));
+                    } else {
+                      setTrashSelected(new Set());
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">Zaznacz wszystkie ({trashedCampaigns.length})</span>
+              </div>
               {trashedCampaigns.map(campaign => renderCampaignCard(campaign, true))}
             </div>
           )
+        )}
+
+        {/* Floating Bulk Action Bar */}
+        {campaignTabFilter === 'trash' && trashSelected.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 shadow-2xl text-background animate-in slide-in-from-bottom-4 fade-in duration-200">
+            <span className="text-sm font-medium">Zaznaczono: {trashSelected.size}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkRestoring || isHardDeleting}
+              className="h-8 text-xs gap-1"
+              onClick={async () => {
+                setIsBulkRestoring(true);
+                try {
+                  await bulkRestoreCampaigns(Array.from(trashSelected));
+                  setTrashSelected(new Set());
+                } finally {
+                  setIsBulkRestoring(false);
+                }
+              }}
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" />
+              {isBulkRestoring ? 'Przywracanie...' : 'Przywróć zaznaczone'}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isHardDeleting || isBulkRestoring}
+              className="h-8 text-xs gap-1"
+              onClick={() => setHardDeleteConfirm(Array.from(trashSelected))}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Usuń trwale
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-background hover:text-background/80 hover:bg-background/10"
+              onClick={() => setTrashSelected(new Set())}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
     );
@@ -2188,7 +2277,44 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         </AlertDialog>
       )}
 
-
+      {/* Hard Delete AlertDialog */}
+      {!readOnly && (
+        <AlertDialog open={!!hardDeleteConfirm} onOpenChange={open => { if (!open && !isHardDeleting) { setHardDeleteConfirm(null); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Trwałe usunięcie kampanii</AlertDialogTitle>
+              <AlertDialogDescription>
+                Ta operacja jest nieodwracalna. {hardDeleteConfirm && hardDeleteConfirm.length > 1 ? `${hardDeleteConfirm.length} kampanii` : 'Kampania'} oraz powiązane zadania zostaną wymazane z bazy danych, ale dane przypisanych Klientów i Zespołu pozostaną bezpieczne. Czy na pewno chcesz kontynuować?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isHardDeleting}>Anuluj</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isHardDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!hardDeleteConfirm) return;
+                  setIsHardDeleting(true);
+                  try {
+                    await hardDeleteCampaigns(hardDeleteConfirm);
+                    setTrashSelected(prev => {
+                      const next = new Set(prev);
+                      hardDeleteConfirm.forEach(id => next.delete(id));
+                      return next;
+                    });
+                  } finally {
+                    setIsHardDeleting(false);
+                    setHardDeleteConfirm(null);
+                  }
+                }}
+              >
+                {isHardDeleting ? 'Usuwanie...' : 'Usuń trwale'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
     </div>
   );
