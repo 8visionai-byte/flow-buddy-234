@@ -880,9 +880,9 @@ const UserDashboard = () => {
                 }`}
               >
                 Do zrobienia
-                {myActionableTasks.length > 0 && (
+                {(myActionableTasks.length + ideasCampaigns.length) > 0 && (
                   <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                    {myActionableTasks.length}
+                    {myActionableTasks.length + ideasCampaigns.length}
                   </span>
                 )}
               </button>
