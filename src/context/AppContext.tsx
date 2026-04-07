@@ -982,6 +982,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, 0);
   }, []);
 
+  // Keep ref in sync
+  acceptIdeaAsProjectRef.current = acceptIdeaAsProject;
+
   // ─── Campaigns ──────────────────────────────────────────────
 
   const addCampaign = useCallback((data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => {
