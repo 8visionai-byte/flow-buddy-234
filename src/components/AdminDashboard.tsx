@@ -1992,6 +1992,40 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         </AlertDialog>
       )}
 
+      {!readOnly && (
+        <AlertDialog open={!!deleteCampaignConfirm} onOpenChange={open => { if (!open && !isDeletingCampaign) setDeleteCampaignConfirm(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Czy na pewno chcesz usunąć tę kampanię?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tej akcji nie można cofnąć. Kampania „{getDeleteCampaignName()}" oraz jej materiały zostaną trwale usunięte z systemu.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeletingCampaign}>Anuluj</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeletingCampaign}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!deleteCampaignConfirm) return;
+                  setIsDeletingCampaign(true);
+                  try {
+                    deleteCampaign(deleteCampaignConfirm);
+                    await new Promise(r => setTimeout(r, 300));
+                  } finally {
+                    setIsDeletingCampaign(false);
+                    setDeleteCampaignConfirm(null);
+                  }
+                }}
+              >
+                {isDeletingCampaign ? 'Usuwanie...' : 'Usuń kampanię'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
     </div>
   );
 };
