@@ -49,6 +49,9 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [resubmitId, setResubmitId] = useState<string | null>(null);
+  const [resubmitTitle, setResubmitTitle] = useState('');
+  const [resubmitDesc, setResubmitDesc] = useState('');
 
   // Client: per-idea action state + re-edit mode
   const [clientAction, setClientAction] = useState<Record<string, ClientAction>>({});
