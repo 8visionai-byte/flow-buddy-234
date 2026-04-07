@@ -174,9 +174,9 @@ const UserDashboard = () => {
 
   // Helper: check if influencer has met the campaign goal
   const isInfluencerCampaignGoalMet = (c: typeof campaigns[0]) => {
-    const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+    const accepted = ideas.filter(i => i.campaignId === c.id && i.status === 'accepted').length;
     const pending = getPendingIdeasCount(c.id);
-    const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision').length;
+    const needsRevision = ideas.filter(i => i.campaignId === c.id && (i.status === 'needs_revision' || i.status === 'accepted_with_notes')).length;
     return accepted >= c.targetIdeaCount && pending === 0 && needsRevision === 0;
   };
 
