@@ -76,9 +76,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [isRestoringCampaign, setIsRestoringCampaign] = useState<string | null>(null);
-  const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
+   const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
   const [isActivatingCampaign, setIsActivatingCampaign] = useState<string | null>(null);
-  const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
+  const [trashSelected, setTrashSelected] = useState<Set<string>>(new Set());
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState<string[] | null>(null);
+  const [isHardDeleting, setIsHardDeleting] = useState(false);
+  const [isBulkRestoring, setIsBulkRestoring] = useState(false);
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [slaInputs, setSlaInputs] = useState<Record<string, string>>({});
