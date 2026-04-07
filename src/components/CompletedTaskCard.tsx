@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Task, ROLE_LABELS, TaskHistoryEntry } from '@/types';
+import { Task, ROLE_LABELS, TaskHistoryEntry, ActorEntry } from '@/types';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { tryParseSocialDates } from '@/components/SocialDatesWidget';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
+import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Twitter, Instagram, Youtube, UserPlus, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { toast } from 'sonner';
 import {
   Accordion,
   AccordionContent,
