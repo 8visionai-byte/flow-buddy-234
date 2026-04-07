@@ -391,10 +391,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         const allGroupDone = projectTasks.filter(t => t.order >= groupStart && t.order <= groupEnd).every(t => t.status === 'done');
         if (allGroupDone) {
-          const nextAfterGroup = projectTasks.find(t => t.order === groupEnd + 1);
+          let nextAfterGroup = projectTasks.find(t => t.order === groupEnd + 1);
           if (nextAfterGroup && nextAfterGroup.status === 'locked') {
+            // Auto-skip "Zaakceptuj przypisanie osoby"
+            if (nextAfterGroup.title === 'Zaakceptuj przypisanie osoby') {
+              const skipId = nextAfterGroup.id;
+              const afterSkip = projectTasks.find(t => t.order === nextAfterGroup!.order + 1);
+              let result = updated.map(t => t.id === skipId ? { ...t, status: 'done' as const, value: 'auto_skipped', completedAt: now, completedBy: 'admin' } : t);
+              if (afterSkip && afterSkip.status === 'locked') {
+                const ns = afterSkip.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+                result = result.map(t => t.id === afterSkip.id ? { ...t, status: ns, previousValue: completedTask.value || value, assignedAt: now } : t);
+              }
+              return result;
+            }
             const newStatus = nextAfterGroup.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
-            return updated.map(t => t.id === nextAfterGroup.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t);
+            return updated.map(t => t.id === nextAfterGroup!.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t);
           }
         }
         return updated;
