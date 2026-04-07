@@ -357,28 +357,46 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
   };
 
   const renderClientIdea = (idea: Idea) => {
+    // Hide ideas that are back with influencer (needs_revision)
+    if (idea.status === 'needs_revision') return null;
+
     const cfg = STATUS_CONFIG[idea.status];
     const Icon = cfg.icon;
-    const alreadyReviewed = currentUser ? !!idea.evaluations?.[currentUser.id] : idea.status !== 'pending';
+    const myVote = currentUser ? idea.evaluations?.[currentUser.id] : null;
+    const alreadyReviewed = !!myVote;
     const isReEditing = reEditingIds.has(idea.id);
 
+    // Show vote progress info
+    const requiredCount = campaign?.reviewerIds?.length ?? 0;
+    const currentVoteCount = Object.keys(idea.evaluations || {}).length;
+    const waitingForOthers = alreadyReviewed && idea.status === 'pending' && requiredCount > 1;
+
     if (alreadyReviewed && !isReEditing) {
-      const borderCls = cfg.color.includes('success') ? 'border-success/30 bg-success/5'
-        : cfg.color.includes('warning') ? 'border-warning/30 bg-warning/5'
-        : cfg.color.includes('primary') ? 'border-primary/30 bg-primary/5'
+      // Show user's own vote decision
+      const myDecision = (myVote as IdeaEvaluation)?.decision;
+      const myCfg = myDecision ? STATUS_CONFIG[myDecision] || cfg : cfg;
+      const MyIcon = myCfg.icon;
+      const borderCls = myCfg.color.includes('success') ? 'border-success/30 bg-success/5'
+        : myCfg.color.includes('warning') ? 'border-warning/30 bg-warning/5'
+        : myCfg.color.includes('primary') ? 'border-primary/30 bg-primary/5'
         : 'border-destructive/30 bg-destructive/5';
       return (
         <div key={idea.id} className={`rounded-xl border p-4 ${borderCls}`}>
           <div className="flex items-start gap-3">
-            <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${cfg.color.split(' ')[1]}`} />
+            <MyIcon className={`h-4 w-4 mt-0.5 shrink-0 ${myCfg.color.split(' ')[1]}`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{idea.title}</span>
-                <Badge variant="secondary" className={`${cfg.color} border-0 text-[10px]`}>{cfg.label}</Badge>
+                <Badge variant="secondary" className={`${myCfg.color} border-0 text-[10px]`}>Twoja ocena: {myCfg.label}</Badge>
+                {waitingForOthers && (
+                  <Badge variant="outline" className="text-[10px] gap-1">
+                    <Clock className="h-3 w-3" /> Opinie: {currentVoteCount}/{requiredCount}
+                  </Badge>
+                )}
               </div>
               {idea.description && <p className="text-xs text-muted-foreground mt-1">{idea.description}</p>}
-              {idea.clientNotes && (
-                <p className="text-xs text-muted-foreground mt-1 italic">Uwagi: „{idea.clientNotes}"</p>
+              {waitingForOthers && (
+                <p className="text-[10px] text-muted-foreground mt-1 italic">Twoja opinia została zapisana. Czekamy na pozostałych decydentów.</p>
               )}
             </div>
             <button
