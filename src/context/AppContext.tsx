@@ -31,6 +31,7 @@ interface AppContextType {
   deleteProject: (projectId: string) => void;
   toggleFreezeProject: (projectId: string) => void;
   assignToProject: (projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId', userId: string | null) => void;
+  toggleClientInProject: (projectId: string, userId: string) => void;
   addUser: (user: Omit<User, 'id'>) => string;
   updateUser: (id: string, data: Partial<Omit<User, 'id'>>) => void;
   deleteUser: (id: string) => void;
