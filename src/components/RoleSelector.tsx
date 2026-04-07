@@ -36,11 +36,13 @@ const RoleSelector = () => {
       campaignCount = campaigns.filter(c =>
         !c.isDeleted &&
         c.assignedInfluencerId === user.id &&
-        c.status === 'awaiting_ideas'
+        (c.status === 'awaiting_ideas' || c.status === 'in_review')
       ).filter(c => {
-        // Only count if influencer hasn't reached target accepted ideas yet
         const acceptedIdeas = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes'));
-        return acceptedIdeas.length < c.targetIdeaCount;
+        const pendingIdeas = ideas.filter(i => i.campaignId === c.id && i.status === 'pending');
+        const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision');
+        // Goal not yet met: either not enough accepted, or has pending/revision items
+        return acceptedIdeas.length < c.targetIdeaCount || pendingIdeas.length > 0 || needsRevision.length > 0;
       }).length;
     }
 
