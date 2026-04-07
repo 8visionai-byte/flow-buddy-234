@@ -340,13 +340,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           if (nextToUnlock.length > 0) {
             const unlockSet = new Set(nextToUnlock);
-            return updated.map(t => {
+            let result = updated.map(t => {
               if (unlockSet.has(t.id)) {
                 const ns = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
                 return { ...t, status: ns, previousValue: completedTask.value || value, assignedAt: now };
               }
               return t;
             });
+            // Auto-skip "Zaakceptuj przypisanie osoby"
+            const skipTask = result.find(t => t.projectId === completedTask.projectId && t.title === 'Zaakceptuj przypisanie osoby' && (t.status === 'pending_client_approval' || t.status === 'todo'));
+            if (skipTask) {
+              const skipPT = result.filter(t => t.projectId === skipTask.projectId).sort((a, b) => a.order - b.order);
+              const afterSkip = skipPT.find(t => t.order === skipTask.order + 1);
+              result = result.map(t => {
+                if (t.id === skipTask.id) return { ...t, status: 'done' as const, value: 'auto_skipped', completedAt: now, completedBy: 'admin' };
+                if (afterSkip && t.id === afterSkip.id && t.status === 'locked') {
+                  const ns2 = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+                  return { ...t, status: ns2, previousValue: skipTask.previousValue, assignedAt: now };
+                }
+                return t;
+              });
+            }
+            return result;
           }
           return updated;
         } else {
