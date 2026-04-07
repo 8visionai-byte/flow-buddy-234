@@ -555,7 +555,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const nextTask = prev.find(t => t.projectId === task.projectId && t.order === task.order + 1);
       return prev.map(t => {
         if (t.id === taskId) return { ...t, status: 'done' as const, value: newValue, completedAt: now, completedBy: t.assignedRole, clientFeedback: null, history: [...t.history, entry] };
-        if (nextTask && t.id === nextTask.id) return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, assignedAt: now, history: [...t.history, entry] };
+        if (nextTask && t.id === nextTask.id) return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, clientVotes: {}, assignedAt: now, history: [...t.history, entry] };
         return t;
       });
     });
