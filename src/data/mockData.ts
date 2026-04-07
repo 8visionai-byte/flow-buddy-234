@@ -35,6 +35,7 @@ export const INITIAL_CAMPAIGNS: Campaign[] = [
     slaHours: 48,
     briefNotes: 'Chcemy serię filmów o higienie jamy ustnej. Pomysły powinny być ciekawe i angażujące dla pacjentów kliniki stomatologicznej.',
     isDeleted: false,
+    requireCastApproval: false,
   },
 ];
 

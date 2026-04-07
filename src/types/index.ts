@@ -174,4 +174,5 @@ export interface Campaign {
   slaHours: number;                     // 48 default — influencer deadline
   briefNotes: string;                   // DZ notes/brief for influencer
   isDeleted: boolean;                   // soft delete flag
+  requireCastApproval: boolean;         // if true, client must manually approve cast; default false (auto-approve)
 }
