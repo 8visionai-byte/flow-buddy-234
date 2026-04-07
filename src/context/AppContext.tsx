@@ -279,6 +279,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [updateTasksAndSync, currentUser, projects, users, ideas, campaigns]);
 
   const completeTaskInner = (prev: Task[], taskId: string, value: string, byRole?: UserRole): Task[] => {
+      const now = new Date().toISOString();
+      const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
 
       const role = byRole || task.assignedRole;
