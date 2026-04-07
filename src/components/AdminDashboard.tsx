@@ -2077,9 +2077,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         <AlertDialog open={!!deleteCampaignConfirm} onOpenChange={open => { if (!open && !isDeletingCampaign) setDeleteCampaignConfirm(null); }}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Czy na pewno chcesz usunąć tę kampanię?</AlertDialogTitle>
+              <AlertDialogTitle>Przenieść do Kosza?</AlertDialogTitle>
               <AlertDialogDescription>
-                Tej akcji nie można cofnąć. Kampania „{getDeleteCampaignName()}" oraz jej materiały zostaną trwale usunięte z systemu.
+                Kampania „{getDeleteCampaignName()}" zostanie ukryta z głównego widoku, ale będzie można ją przywrócić z Kosza.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2092,12 +2092,20 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   if (!deleteCampaignConfirm) return;
                   setIsDeletingCampaign(true);
                   try {
-                    deleteCampaign(deleteCampaignConfirm);
+                    softDeleteCampaign(deleteCampaignConfirm);
                     await new Promise(r => setTimeout(r, 300));
                   } finally {
                     setIsDeletingCampaign(false);
                     setDeleteCampaignConfirm(null);
                   }
+                }}
+              >
+                {isDeletingCampaign ? 'Przenoszenie...' : 'Przenieś do Kosza'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
                 }}
               >
                 {isDeletingCampaign ? 'Usuwanie...' : 'Usuń kampanię'}
