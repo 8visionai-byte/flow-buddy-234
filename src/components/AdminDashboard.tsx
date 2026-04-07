@@ -144,11 +144,29 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     if (!task.assignedRoles.includes('admin')) return false;
     if (isAdminTaskDone(task)) return false;
 
+    // Only consider blocking if this task is at or near the current active stage
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    
+    // Find the current active stage (highest order with an active status)
+    const currentStageOrder = projectTasks.reduce((max, pt) => {
+      if (pt.status === 'todo' || pt.status === 'pending_client_approval' || pt.status === 'needs_influencer_revision') {
+        return Math.max(max, pt.order);
+      }
+      return max;
+    }, -1);
+
+    // If a later task is already active/done, this task is historical — not blocking
+    if (currentStageOrder > task.order) {
+      // Check if any task AFTER this one is already active or done
+      const hasLaterProgress = projectTasks.some(pt => pt.order > task.order && (pt.status === 'done' || pt.status === 'todo' || pt.status === 'pending_client_approval'));
+      if (hasLaterProgress) return false;
+    }
+
     if (task.status === 'todo' || task.status === 'pending_client_approval') {
       return true;
     }
 
-    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    // Check if all prerequisites are done
     for (const pt of projectTasks) {
       if (pt.order < task.order) {
         if (pt.assignedRoles.length > 1) {
