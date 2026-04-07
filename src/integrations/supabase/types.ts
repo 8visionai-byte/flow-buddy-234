@@ -52,6 +52,7 @@ export type Database = {
           created_at: string
           id: string
           is_deleted: boolean
+          reviewer_ids: string[]
           sla_hours: number
           status: Database["public"]["Enums"]["campaign_status"]
           target_idea_count: number
@@ -64,6 +65,7 @@ export type Database = {
           created_at?: string
           id: string
           is_deleted?: boolean
+          reviewer_ids?: string[]
           sla_hours?: number
           status?: Database["public"]["Enums"]["campaign_status"]
           target_idea_count?: number
@@ -76,6 +78,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_deleted?: boolean
+          reviewer_ids?: string[]
           sla_hours?: number
           status?: Database["public"]["Enums"]["campaign_status"]
           target_idea_count?: number
