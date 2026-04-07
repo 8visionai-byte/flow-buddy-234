@@ -895,9 +895,9 @@ const UserDashboard = () => {
                 }`}
               >
                 Wykonane
-                {myDoneTasks.length > 0 && (
+                {(myDoneTasks.length + doneCampaigns.length) > 0 && (
                   <span className="ml-1 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {myDoneTasks.length}
+                    {myDoneTasks.length + doneCampaigns.length}
                   </span>
                 )}
               </button>
