@@ -82,6 +82,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState<string[] | null>(null);
   const [isHardDeleting, setIsHardDeleting] = useState(false);
   const [isBulkRestoring, setIsBulkRestoring] = useState(false);
+  const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
+  const [isBulkRestoring, setIsBulkRestoring] = useState(false);
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [slaInputs, setSlaInputs] = useState<Record<string, string>>({});
