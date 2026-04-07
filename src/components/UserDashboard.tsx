@@ -172,24 +172,37 @@ const UserDashboard = () => {
   const getTotalIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId).length;
 
-  const ideasCampaigns = showIdeasSection
+  // Helper: check if influencer has met the campaign goal
+  const isInfluencerCampaignGoalMet = (c: typeof campaigns[0]) => {
+    const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+    const pending = getPendingIdeasCount(c.id);
+    const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision').length;
+    return accepted >= c.targetIdeaCount && pending === 0 && needsRevision === 0;
+  };
+
+  // All relevant campaigns for this user (not deleted/completed/cancelled/draft)
+  const allMyCampaigns = showIdeasSection
     ? campaigns.filter(c => {
         if (c.status === 'completed' || c.status === 'cancelled' || c.status === 'draft') return false;
-        if (currentUser.role === 'influencer') {
-          if (c.assignedInfluencerId !== currentUser.id) return false;
-          const accepted = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
-          const pending = getPendingIdeasCount(c.id);
-          const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision').length;
-          if (accepted >= c.targetIdeaCount && pending === 0 && needsRevision === 0) return false;
-          return true;
-        }
-        if (currentUser.role === 'klient') {
-          if (!(c.reviewerIds?.includes(currentUser.id) || c.assignedClientUserId === currentUser.id)) return false;
-          return getUnvotedIdeasCount(c.id) > 0;
-        }
+        if (c.isDeleted) return false;
+        if (currentUser.role === 'influencer') return c.assignedInfluencerId === currentUser.id;
+        if (currentUser.role === 'klient') return c.reviewerIds?.includes(currentUser.id) || c.assignedClientUserId === currentUser.id;
         return false;
       })
     : [];
+
+  // Split into todo vs done
+  const ideasCampaigns = allMyCampaigns.filter(c => {
+    if (currentUser.role === 'influencer') return !isInfluencerCampaignGoalMet(c);
+    if (currentUser.role === 'klient') return getUnvotedIdeasCount(c.id) > 0;
+    return false;
+  });
+
+  const doneCampaigns = allMyCampaigns.filter(c => {
+    if (currentUser.role === 'influencer') return isInfluencerCampaignGoalMet(c);
+    if (currentUser.role === 'klient') return getUnvotedIdeasCount(c.id) === 0;
+    return false;
+  });
 
   const taskIcon = (status: string) => {
     if (status === 'needs_influencer_revision') return <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />;
