@@ -431,6 +431,28 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                     </div>
                   );
                 }
+                // Generic key-value object (e.g. multi-party notes: { role: "text", ... })
+                if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                  const ROLE_DISPLAY: Record<string, string> = {
+                    admin: 'Admin',
+                    klient: 'Klient',
+                    influencer: 'Influencer',
+                    montazysta: 'Montażysta',
+                    kierownik_planu: 'Kierownik Planu',
+                    operator: 'Operator',
+                    publikator: 'Publikator',
+                  };
+                  return (
+                    <div className="space-y-2">
+                      {Object.entries(parsed).map(([key, val]) => (
+                        <div key={key} className="text-sm">
+                          <span className="font-semibold text-foreground">{ROLE_DISPLAY[key] || key.replace(/_/g, ' ')}: </span>
+                          <span className="text-foreground/80 whitespace-pre-wrap">{String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
               } catch {}
               return <p className="text-sm text-foreground whitespace-pre-wrap break-all">{task.value}</p>;
             })()
