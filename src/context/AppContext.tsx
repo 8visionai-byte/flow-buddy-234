@@ -423,13 +423,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const source = sourceTasks[i];
           unlockMap.set(item.id, source?.value || completedTask.value || value);
         });
-        const unlocked = updated.map(t => {
+        let unlocked = updated.map(t => {
           if (unlockMap.has(t.id)) {
             const newStatus = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
             return { ...t, status: newStatus, previousValue: unlockMap.get(t.id)!, assignedAt: now };
           }
           return t;
         });
+
+        // ── Auto-skip "Zaakceptuj przypisanie osoby" ──────────────────
+        const skipTask = unlocked.find(t => t.projectId === completedTask.projectId && t.title === 'Zaakceptuj przypisanie osoby' && (t.status === 'pending_client_approval' || t.status === 'todo'));
+        if (skipTask) {
+          const skipProjectTasks = unlocked.filter(t => t.projectId === skipTask.projectId).sort((a, b) => a.order - b.order);
+          const nextAfterSkip = skipProjectTasks.find(t => t.order === skipTask.order + 1);
+          unlocked = unlocked.map(t => {
+            if (t.id === skipTask.id) return { ...t, status: 'done' as const, value: 'auto_skipped', completedAt: now, completedBy: 'admin' };
+            if (nextAfterSkip && t.id === nextAfterSkip.id && t.status === 'locked') {
+              const ns = t.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+              return { ...t, status: ns, previousValue: skipTask.previousValue, assignedAt: now };
+            }
+            return t;
+          });
+        }
 
         if (completedTask.title === 'Weryfikuj film na frame.io' && value === 'approved') {
           const poprawki = unlocked.find(t => t.projectId === completedTask.projectId && t.title === 'Wgraj poprawki');
