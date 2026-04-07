@@ -144,11 +144,29 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     if (!task.assignedRoles.includes('admin')) return false;
     if (isAdminTaskDone(task)) return false;
 
+    // Only consider blocking if this task is at or near the current active stage
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    
+    // Find the current active stage (highest order with an active status)
+    const currentStageOrder = projectTasks.reduce((max, pt) => {
+      if (pt.status === 'todo' || pt.status === 'pending_client_approval' || pt.status === 'needs_influencer_revision') {
+        return Math.max(max, pt.order);
+      }
+      return max;
+    }, -1);
+
+    // If a later task is already active/done, this task is historical — not blocking
+    if (currentStageOrder > task.order) {
+      // Check if any task AFTER this one is already active or done
+      const hasLaterProgress = projectTasks.some(pt => pt.order > task.order && (pt.status === 'done' || pt.status === 'todo' || pt.status === 'pending_client_approval'));
+      if (hasLaterProgress) return false;
+    }
+
     if (task.status === 'todo' || task.status === 'pending_client_approval') {
       return true;
     }
 
-    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    // Check if all prerequisites are done
     for (const pt of projectTasks) {
       if (pt.order < task.order) {
         if (pt.assignedRoles.length > 1) {
@@ -172,7 +190,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     return <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />;
   };
 
-  const statusBadge = (status: string) => {
+  const isAutoCleanedTask = (task: typeof tasks[0]) =>
+    task.status === 'done' && (task.value === 'auto_cleanup' || task.history?.some(h => h.value === 'auto_cleanup'));
+
+  const isAutoSkippedTask = (task: typeof tasks[0]) =>
+    task.status === 'done' && task.completedBy === 'system';
+
+  const statusBadge = (status: string, task?: typeof tasks[0]) => {
+    if (task && isAutoSkippedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Auto-pominięte</Badge>;
+    if (task && isAutoCleanedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Wymuszone przez Admina</Badge>;
     if (status === 'done') return <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge>;
     if (status === 'todo') return <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Aktywne</Badge>;
     if (status === 'pending_client_approval') return <Badge variant="secondary" className="bg-warning/10 text-warning border-0 text-xs">Czeka na klienta</Badge>;
@@ -1292,7 +1318,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status)) : statusBadge(task.status)}
+                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status, task)) : statusBadge(task.status, task)}
                     </td>
                     <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
                     <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
