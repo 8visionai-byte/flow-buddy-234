@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   CheckCircle2, Circle, LogOut, Menu, X, AlertTriangle, Lightbulb,
   Clock, Lock, ChevronRight, FolderOpen, ArrowRight, TrendingUp,
-  Video, CalendarClock, MessageSquare, Film, Star, Pencil,
+  Video, CalendarClock, MessageSquare, Film, Star, Pencil, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +47,7 @@ function getTaskTimeInfo(task: Task, project: Project | undefined) {
 }
 
 const UserDashboard = () => {
-  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote, reopenTask, users } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote, reopenTask } = useApp();
   const [selectedItem, setSelectedItem] = useState<SidebarItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<DashView>('tasks');
