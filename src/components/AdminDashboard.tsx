@@ -2277,7 +2277,44 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         </AlertDialog>
       )}
 
-
+      {/* Hard Delete AlertDialog */}
+      {!readOnly && (
+        <AlertDialog open={!!hardDeleteConfirm} onOpenChange={open => { if (!open && !isHardDeleting) { setHardDeleteConfirm(null); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Trwałe usunięcie kampanii</AlertDialogTitle>
+              <AlertDialogDescription>
+                Ta operacja jest nieodwracalna. {hardDeleteConfirm && hardDeleteConfirm.length > 1 ? `${hardDeleteConfirm.length} kampanii` : 'Kampania'} oraz powiązane zadania zostaną wymazane z bazy danych, ale dane przypisanych Klientów i Zespołu pozostaną bezpieczne. Czy na pewno chcesz kontynuować?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isHardDeleting}>Anuluj</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isHardDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!hardDeleteConfirm) return;
+                  setIsHardDeleting(true);
+                  try {
+                    await hardDeleteCampaigns(hardDeleteConfirm);
+                    setTrashSelected(prev => {
+                      const next = new Set(prev);
+                      hardDeleteConfirm.forEach(id => next.delete(id));
+                      return next;
+                    });
+                  } finally {
+                    setIsHardDeleting(false);
+                    setHardDeleteConfirm(null);
+                  }
+                }}
+              >
+                {isHardDeleting ? 'Usuwanie...' : 'Usuń trwale'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
     </div>
   );
