@@ -2152,6 +2152,14 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {!readOnly && <ClientManagementDialog />}
           {!readOnly && <TeamManagementDialog />}
           {!readOnly && <AddCampaignDialog />}
+          {/* Edit draft dialog — controlled externally */}
+          {!readOnly && (
+            <AddCampaignDialog
+              editDraft={editingDraft}
+              externalOpen={!!editingDraft}
+              onOpenChange={(open) => { if (!open) setEditingDraft(null); }}
+            />
+          )}
           <span className="hidden text-sm text-muted-foreground sm:inline">{currentUser.name}</span>
           <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
             <LogOut className="h-4 w-4" />
