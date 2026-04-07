@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Idea, IdeaStatus } from '@/types';
+import { Idea, IdeaStatus, IdeaEvaluation } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
