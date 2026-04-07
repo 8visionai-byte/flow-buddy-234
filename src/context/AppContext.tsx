@@ -977,16 +977,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (allVoted) {
         const votes = Object.values(newEvaluations) as Array<{ decision: string; comment: string | null }>;
-        const hasNotes = votes.some(v => v.decision === 'accepted_with_notes');
-
-        if (hasNotes) {
-          finalStatus = 'accepted_with_notes';
-          finalNotes = votes.filter(v => v.comment).map(v => v.comment).join(' | ');
-        } else {
-          const allSaved = votes.every(v => v.decision === 'saved_for_later');
-          finalStatus = allSaved ? 'saved_for_later' : 'accepted';
-          finalNotes = null;
-        }
+        const allSaved = votes.every(v => v.decision === 'saved_for_later');
+        finalStatus = allSaved ? 'saved_for_later' : 'accepted';
+        finalNotes = null;
       }
 
       const updated = prev.map(i => i.id === ideaId ? {
