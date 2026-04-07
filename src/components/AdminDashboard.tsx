@@ -1478,6 +1478,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       </>
                     ) : isDraft ? (
                       <>
+                        <DropdownMenuItem onClick={() => setEditingDraft(campaign)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edytuj
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
                           onClick={() => handleActivate(campaign.id)}
