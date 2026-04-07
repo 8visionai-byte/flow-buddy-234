@@ -270,6 +270,7 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
             <span className="text-xs font-medium text-muted-foreground">
               {task.inputType === 'url' ? 'Przesłany link'
                 : task.inputType === 'raw_footage' ? 'Wgrana surówka'
+                : task.inputType === 'actor_assignment' ? 'Przypisane osoby'
                 : 'Zaakceptowana treść'}
             </span>
             {canEditUrl && !editingUrl && (
@@ -283,8 +284,98 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 Popraw link
               </Button>
             )}
+            {canEditActors && !editingActors && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={startEditActors}
+              >
+                <Pencil className="h-3 w-3" />
+                Edytuj obsadę
+              </Button>
+            )}
           </div>
-          {editingUrl ? (
+
+          {/* Actor assignment edit mode */}
+          {editingActors && canEditActors ? (
+            <div className="space-y-3 mt-2">
+              {/* Current actors with remove buttons */}
+              {editActorList.length > 0 ? (
+                <div className="space-y-1.5">
+                  {editActorList.map(actor => (
+                    <div key={actor.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2">
+                      <div className="flex items-center gap-2 text-sm text-foreground min-w-0">
+                        <UserIcon className="h-4 w-4 text-primary shrink-0" />
+                        <span className="font-medium truncate">{actor.name}</span>
+                        {actor.roleLabel && <Badge variant="secondary" className="text-[10px] border-0">{actor.roleLabel}</Badge>}
+                      </div>
+                      <button
+                        onClick={() => removeActor(actor.id)}
+                        className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-2">Brak przypisanych osób</p>
+              )}
+
+              {/* Add person buttons from DB */}
+              {(clientForProject || clientUsersForProject.length > 0) && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dodaj osobę</p>
+                  {clientForProject && (
+                    <button
+                      onClick={() => addActorFromDB(`contact-${clientForProject.id}`, clientForProject.contactName, 'client_contact', 'Klient')}
+                      disabled={isActorAdded(`contact-${clientForProject.id}`)}
+                      className="flex w-full items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm hover:border-primary/40 hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <span className="flex items-center gap-2">
+                        <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-foreground">{clientForProject.contactName}</span>
+                        <Badge variant="outline" className="text-[10px]">Kontakt klienta</Badge>
+                      </span>
+                      {isActorAdded(`contact-${clientForProject.id}`) && <Check className="h-3.5 w-3.5 text-success" />}
+                    </button>
+                  )}
+                  {clientUsersForProject.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => addActorFromDB(u.id, u.name, 'client_user', 'Klient')}
+                      disabled={isActorAdded(u.id)}
+                      className="flex w-full items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm hover:border-primary/40 hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <span className="flex items-center gap-2">
+                        <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-foreground">{u.name}</span>
+                        <Badge variant="outline" className="text-[10px]">Konto klienta</Badge>
+                      </span>
+                      {isActorAdded(u.id) && <Check className="h-3.5 w-3.5 text-success" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {actorError && <p className="text-xs text-destructive">{actorError}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={handleSaveActors}
+                  disabled={editActorList.length === 0}
+                >
+                  <Check className="h-3 w-3" />Zapisz zmiany
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setEditingActors(false); setActorError(''); }}>
+                  <X className="h-3 w-3" />Anuluj
+                </Button>
+              </div>
+            </div>
+          ) : editingUrl ? (
             <div className="space-y-2 mt-1">
               <div className="relative">
                 <LinkIcon className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
