@@ -951,8 +951,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() },
       };
 
-      // VETO: If this vote is a rejection, immediately bounce back without waiting for others
-      if (status === 'rejected' || status === 'needs_revision') {
+      // VETO: If this vote is a rejection OR "accepted_with_notes" (has feedback), immediately bounce back
+      if (status === 'rejected' || status === 'needs_revision' || status === 'accepted_with_notes') {
         const combinedNotes = Object.values(newEvaluations as Record<string, any>)
           .filter((v: any) => v.comment).map((v: any) => v.comment).join(' | ');
         const updated = prev.map(i => i.id === ideaId ? {
