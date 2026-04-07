@@ -930,14 +930,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // If no multi-reviewer setup, fall back to immediate status change
       if (requiredReviewers.length <= 1) {
         const finalSt = status;
+        // "accepted_with_notes" means client has feedback → treat as needs_revision (ping-pong)
+        const effectiveStatus: IdeaStatus = finalSt === 'accepted_with_notes' ? 'needs_revision' : finalSt;
         const updated = prev.map(i => i.id === ideaId ? {
-          ...i, status: finalSt, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
+          ...i, status: effectiveStatus, clientNotes, reviewedAt: new Date().toISOString(), reviewedByUserId,
           evaluations: { ...i.evaluations, [reviewedByUserId]: { decision: status as any, comment: clientNotes, timestamp: new Date().toISOString() } },
         } : i);
         const changed = updated.find(i => i.id === ideaId);
         if (changed) upsertIdea(changed);
-        // Auto-create project if accepted
-        if (finalSt === 'accepted' || finalSt === 'accepted_with_notes') {
+        // Auto-create project ONLY if purely accepted (no notes/revisions)
+        if (finalSt === 'accepted') {
           setTimeout(() => acceptIdeaAsProjectRef.current(ideaId), 0);
         }
         return updated;
