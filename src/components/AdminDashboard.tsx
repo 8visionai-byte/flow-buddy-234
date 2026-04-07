@@ -71,6 +71,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   } = useApp();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -186,6 +188,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     project.clientId ? clients.find(c => c.id === project.clientId) : null;
 
   const getDeleteProjectName = () => projects.find(p => p.id === deleteConfirm)?.name || '';
+  const getDeleteCampaignName = () => {
+    const c = campaigns.find(c => c.id === deleteCampaignConfirm);
+    if (!c) return '';
+    const client = clients.find(cl => cl.id === c.clientId);
+    return client?.companyName || c.id;
+  };
 
   const handleDeleteConfirm = () => {
     if (deleteConfirm) {
@@ -1384,7 +1392,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'in_review' })}>Klient ocenia</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'completed' })}>Zakończona</DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteCampaign(campaign.id)}>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
                           <Trash2 className="mr-2 h-4 w-4" />Usuń kampanię
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -1978,6 +1986,40 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               <AlertDialogCancel>Anuluj</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Usuń projekt
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {!readOnly && (
+        <AlertDialog open={!!deleteCampaignConfirm} onOpenChange={open => { if (!open && !isDeletingCampaign) setDeleteCampaignConfirm(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Czy na pewno chcesz usunąć tę kampanię?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tej akcji nie można cofnąć. Kampania „{getDeleteCampaignName()}" oraz jej materiały zostaną trwale usunięte z systemu.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeletingCampaign}>Anuluj</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeletingCampaign}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!deleteCampaignConfirm) return;
+                  setIsDeletingCampaign(true);
+                  try {
+                    deleteCampaign(deleteCampaignConfirm);
+                    await new Promise(r => setTimeout(r, 300));
+                  } finally {
+                    setIsDeletingCampaign(false);
+                    setDeleteCampaignConfirm(null);
+                  }
+                }}
+              >
+                {isDeletingCampaign ? 'Usuwanie...' : 'Usuń kampanię'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
