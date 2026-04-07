@@ -1354,8 +1354,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       W koszu
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                      {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
+                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'draft' ? 'bg-muted text-muted-foreground' : campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                      {campaign.status === 'draft' ? 'Szkic' :
+                       campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
                        campaign.status === 'in_review' ? 'Klient ocenia' :
                        campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
                     </Badge>
