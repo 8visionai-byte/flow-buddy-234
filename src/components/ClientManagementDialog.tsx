@@ -325,7 +325,16 @@ const ClientManagementDialog = () => {
 
   // ── Contacts section for an existing company ──────────────────────────────
   const renderContactsSection = (clientId: string) => {
-    const linked = getLinkedUsers(clientId);
+    const client = clients.find(c => c.id === clientId);
+    const allLinked = getLinkedUsers(clientId);
+    // Deduplicate by name (case-insensitive)
+    const seen = new Set<string>();
+    const linked = allLinked.filter(u => {
+      const key = u.name.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     const isAddingHere = addingContactForId === clientId;
 
     return (
@@ -353,22 +362,37 @@ const ClientManagementDialog = () => {
           </p>
         )}
 
-        {linked.map(user => (
-          <div key={user.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-              {user.name.charAt(0).toUpperCase()}
+        {linked.map(user => {
+          const primary = client ? isPrimaryContact(user, client) : false;
+          const isLastUser = linked.length <= 1;
+          return (
+            <div key={user.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="flex-1 text-xs font-medium text-foreground">{user.name}</span>
+              {primary && (
+                <Badge variant="secondary" className="border-0 bg-primary/10 text-primary text-[10px] px-1.5">
+                  Główny kontakt
+                </Badge>
+              )}
+              <Badge variant="secondary" className="border-0 bg-success/10 text-success text-[10px] px-1.5">klient</Badge>
+              {!isLastUser ? (
+                <button
+                  onClick={() => setDeleteUserConfirm(user.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                  title="Usuń dostęp"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              ) : (
+                <span title="Firma musi mieć co najmniej jednego przedstawiciela" className="text-muted-foreground/30">
+                  <Trash2 className="h-3 w-3" />
+                </span>
+              )}
             </div>
-            <span className="flex-1 text-xs font-medium text-foreground">{user.name}</span>
-            <Badge variant="secondary" className="border-0 bg-success/10 text-success text-[10px] px-1.5">klient</Badge>
-            <button
-              onClick={() => setDeleteUserConfirm(user.id)}
-              className="text-muted-foreground hover:text-destructive"
-              title="Usuń dostęp"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
+          );
+        })}
 
         {isAddingHere && (
           <div className="flex gap-1.5">
