@@ -1542,7 +1542,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         {/* Campaign filter tabs */}
         <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
           <button
-            onClick={() => setCampaignTabFilter('active')}
+            onClick={() => { setCampaignTabFilter('active'); setTrashSelected(new Set()); }}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               campaignTabFilter === 'active'
