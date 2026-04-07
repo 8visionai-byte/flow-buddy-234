@@ -632,11 +632,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!task) return prev;
       const entry: TaskHistoryEntry = { action: 'resubmitted', by: task.assignedRole, value: newValue, timestamp: now };
       const nextTask = prev.find(t => t.projectId === task.projectId && t.order === task.order + 1);
-      return prev.map(t => {
+      let result = prev.map(t => {
         if (t.id === taskId) return { ...t, status: 'done' as const, value: newValue, completedAt: now, completedBy: t.assignedRole, clientFeedback: null, history: [...t.history, entry] };
         if (nextTask && t.id === nextTask.id) return { ...t, status: 'pending_client_approval' as const, previousValue: newValue, clientFeedback: null, clientVotes: {}, assignedAt: now, history: [...t.history, entry] };
         return t;
       });
+      // Cleanup stale tasks from previous stages
+      return cleanupPreviousStageTasks(result, task.projectId, task.order);
     });
   }, [updateTasksAndSync]);
 
