@@ -68,14 +68,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     currentUser, setCurrentUser, tasks, projects, clients, users, ideas,
     deleteProject, toggleFreezeProject, assignToProject, completeTask,
     reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
-    campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, addUser,
+    campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
   } = useApp();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [isRestoringCampaign, setIsRestoringCampaign] = useState<string | null>(null);
-  const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'trash'>('active');
+  const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
+  const [isActivatingCampaign, setIsActivatingCampaign] = useState<string | null>(null);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -1302,7 +1303,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const getCampaignClient = (campaign: typeof campaigns[0]) => clients.find(c => c.id === campaign.clientId);
     const getCampaignInfluencer = (campaign: typeof campaigns[0]) => users.find(u => u.id === campaign.assignedInfluencerId);
 
-    const activeCampaigns = campaigns.filter(c => !c.isDeleted);
+    const activeCampaigns = campaigns.filter(c => !c.isDeleted && c.status !== 'draft');
+    const draftCampaigns = campaigns.filter(c => !c.isDeleted && c.status === 'draft');
     const trashedCampaigns = campaigns.filter(c => c.isDeleted);
 
     const handleRestore = async (id: string) => {
@@ -1312,6 +1314,16 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         await new Promise(r => setTimeout(r, 300));
       } finally {
         setIsRestoringCampaign(null);
+      }
+    };
+
+    const handleActivate = async (id: string) => {
+      setIsActivatingCampaign(id);
+      try {
+        activateCampaign(id);
+        await new Promise(r => setTimeout(r, 300));
+      } finally {
+        setIsActivatingCampaign(null);
       }
     };
 
@@ -1327,8 +1339,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       const isOverdue = msTilDeadline < 0;
       const isExpanded = expandedCampaignId === campaign.id;
 
+      const isDraft = campaign.status === 'draft';
+
       return (
-        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70")}>
+        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70", isDraft && "border-dashed border-muted-foreground/30")}>
           {/* Campaign header */}
           <div className="px-4 py-4 md:px-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -1340,8 +1354,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       W koszu
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                      {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
+                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'draft' ? 'bg-muted text-muted-foreground' : campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                      {campaign.status === 'draft' ? 'Szkic' :
+                       campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
                        campaign.status === 'in_review' ? 'Klient ocenia' :
                        campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
                     </Badge>
@@ -1365,13 +1380,19 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               </div>
 
               <div className="flex gap-3 items-start shrink-0">
-                {/* SLA countdown - hidden for trashed */}
-                {!isTrashed && (
+                {/* SLA countdown - hidden for trashed and drafts */}
+                {!isTrashed && !isDraft && (
                   <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
                     <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
                       {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
                     </div>
                     <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
+                  </div>
+                )}
+                {isDraft && (
+                  <div className="text-center rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-1.5">
+                    <div className="text-sm font-bold tabular-nums text-muted-foreground">Pauza</div>
+                    <div className="text-[10px] text-muted-foreground">SLA nieaktywne</div>
                   </div>
                 )}
 
@@ -1384,13 +1405,35 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 </div>
 
                 {/* Expand button */}
-                {!isTrashed && (
+                {!isTrashed && !isDraft && (
                   <Button
                     variant="ghost" size="sm" className="h-8 text-xs gap-1"
                     onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
                   >
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     {isExpanded ? 'Zwiń' : 'Pomysły'}
+                  </Button>
+                )}
+
+                {/* Activate button for drafts */}
+                {isDraft && (
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs gap-1"
+                    disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
+                    onClick={() => handleActivate(campaign.id)}
+                  >
+                    {isActivatingCampaign === campaign.id ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                        Uruchamianie...
+                      </>
+                    ) : (
+                      <>
+                        <Lightbulb className="h-3.5 w-3.5" />
+                        Uruchom kampanię
+                      </>
+                    )}
                   </Button>
                 )}
 
@@ -1410,6 +1453,20 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                         <ArchiveRestore className="mr-2 h-4 w-4" />
                         {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
                       </DropdownMenuItem>
+                    ) : isDraft ? (
+                      <>
+                        <DropdownMenuItem
+                          disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
+                          onClick={() => handleActivate(campaign.id)}
+                        >
+                          <Lightbulb className="mr-2 h-4 w-4" />
+                          Uruchom kampanię
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
+                        </DropdownMenuItem>
+                      </>
                     ) : (
                       <>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'awaiting_ideas' })}>Oczekuje na pomysły</DropdownMenuItem>
@@ -1440,7 +1497,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           </div>
 
           {/* Expanded ideas panel */}
-          {isExpanded && !isTrashed && (
+          {isExpanded && !isTrashed && !isDraft && (
             <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
               <IdeasPanel campaignId={campaign.id} role="admin" />
             </div>
@@ -1463,6 +1520,18 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             )}
           >
             Aktywne ({activeCampaigns.length})
+          </button>
+          <button
+            onClick={() => setCampaignTabFilter('drafts')}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+              campaignTabFilter === 'drafts'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Szkice ({draftCampaigns.length})
           </button>
           <button
             onClick={() => setCampaignTabFilter('trash')}
@@ -1488,6 +1557,18 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           ) : (
             <div className="space-y-4">
               {activeCampaigns.map(campaign => renderCampaignCard(campaign, false))}
+            </div>
+          )
+        ) : campaignTabFilter === 'drafts' ? (
+          draftCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Brak szkiców</p>
+              <p className="text-sm text-muted-foreground">Rozpocznij tworzenie kampanii — szkice zapisują się automatycznie.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {draftCampaigns.map(campaign => renderCampaignCard(campaign, false))}
             </div>
           )
         ) : (

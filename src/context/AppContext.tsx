@@ -53,6 +53,8 @@ interface AppContextType {
   acceptIdeaAsProject: (ideaId: string) => void;
   campaigns: Campaign[];
   addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => void;
+  createDraftCampaign: (data: Partial<Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>>) => string;
+  activateCampaign: (id: string) => void;
   updateCampaign: (id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => void;
   deleteCampaign: (id: string) => void;
   softDeleteCampaign: (id: string) => void;
@@ -741,6 +743,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     upsertCampaign(campaign);
   }, []);
 
+  const createDraftCampaign = useCallback((data: Partial<Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>>): string => {
+    const id = `camp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const campaign: Campaign = {
+      clientId: data.clientId || '',
+      assignedInfluencerId: data.assignedInfluencerId || '',
+      assignedClientUserId: data.assignedClientUserId ?? null,
+      reviewerIds: data.reviewerIds || [],
+      targetIdeaCount: data.targetIdeaCount || 12,
+      slaHours: data.slaHours || 48,
+      briefNotes: data.briefNotes || '',
+      id,
+      createdAt: new Date().toISOString(),
+      status: 'draft',
+      isDeleted: false,
+    };
+    setCampaigns(prev => [...prev, campaign]);
+    upsertCampaign(campaign);
+    return id;
+  }, []);
+
+  const activateCampaign = useCallback((id: string) => {
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, status: 'awaiting_ideas' as const, createdAt: new Date().toISOString() } : c);
+      const changed = updated.find(c => c.id === id);
+      if (changed) upsertCampaign(changed);
+      return updated;
+    });
+  }, []);
+
   const updateCampaign = useCallback((id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => {
     setCampaigns(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, ...data } : c);
@@ -793,7 +824,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
       ideas, addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject,
-      campaigns, addCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign,
+      campaigns, addCampaign, createDraftCampaign, activateCampaign, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign,
       updatePartyNote, loading,
     }}>
       {children}

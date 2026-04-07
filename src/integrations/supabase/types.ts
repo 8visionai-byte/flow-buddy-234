@@ -452,6 +452,7 @@ export type Database = {
     }
     Enums: {
       campaign_status:
+        | "draft"
         | "awaiting_ideas"
         | "in_review"
         | "completed"
@@ -622,6 +623,7 @@ export const Constants = {
   public: {
     Enums: {
       campaign_status: [
+        "draft",
         "awaiting_ideas",
         "in_review",
         "completed",

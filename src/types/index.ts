@@ -151,7 +151,7 @@ export interface Idea {
   reviewedByUserId: string | null;
 }
 
-export type CampaignStatus = 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';
+export type CampaignStatus = 'draft' | 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';
 
 export interface Campaign {
   id: string;

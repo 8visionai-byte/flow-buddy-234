@@ -136,7 +136,7 @@ const UserDashboard = () => {
 
   const ideasCampaigns = showIdeasSection
     ? campaigns.filter(c => {
-        if (c.status === 'completed' || c.status === 'cancelled') return false;
+        if (c.status === 'completed' || c.status === 'cancelled' || c.status === 'draft') return false;
         if (currentUser.role === 'influencer') {
           if (c.assignedInfluencerId !== currentUser.id) return false;
           const total = getTotalIdeasCount(c.id);
