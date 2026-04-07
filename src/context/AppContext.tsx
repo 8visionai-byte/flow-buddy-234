@@ -52,9 +52,11 @@ interface AppContextType {
   reviewIdea: (ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => void;
   acceptIdeaAsProject: (ideaId: string) => void;
   campaigns: Campaign[];
-  addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status'>) => void;
+  addCampaign: (data: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'isDeleted'>) => void;
   updateCampaign: (id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => void;
   deleteCampaign: (id: string) => void;
+  softDeleteCampaign: (id: string) => void;
+  restoreCampaign: (id: string) => void;
   updatePartyNote: (taskId: string, role: string, note: string) => void;
   loading: boolean;
 }
