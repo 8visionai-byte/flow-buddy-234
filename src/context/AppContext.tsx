@@ -358,7 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             });
             // Auto-skip "Zaakceptuj przypisanie osoby"
             const skipTask = result.find(t => t.projectId === completedTask.projectId && t.title === 'Zaakceptuj przypisanie osoby' && (t.status === 'pending_client_approval' || t.status === 'todo'));
-            if (skipTask) {
+            if (skipTask && shouldAutoSkipCast(completedTask.projectId)) {
               const skipPT = result.filter(t => t.projectId === skipTask.projectId).sort((a, b) => a.order - b.order);
               const afterSkip = skipPT.find(t => t.order === skipTask.order + 1);
               result = result.map(t => {
@@ -419,6 +419,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (nextAfterGroup && nextAfterGroup.status === 'locked') {
             // Auto-skip "Zaakceptuj przypisanie osoby"
             if (nextAfterGroup.title === 'Zaakceptuj przypisanie osoby') {
+              if (!shouldAutoSkipCast(completedTask.projectId)) {
+                // Manual approval required — unlock normally
+                const newStatus = nextAfterGroup.inputType === 'approval' ? 'pending_client_approval' as const : 'todo' as const;
+                return updated.map(t => t.id === nextAfterGroup!.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t);
+              }
               const skipId = nextAfterGroup.id;
               const afterSkip = projectTasks.find(t => t.order === nextAfterGroup!.order + 1);
               let result = updated.map(t => t.id === skipId ? { ...t, status: 'done' as const, value: 'auto_skipped', completedAt: now, completedBy: 'admin' } : t);
@@ -468,7 +473,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // ── Auto-skip "Zaakceptuj przypisanie osoby" ──────────────────
         const skipTask = unlocked.find(t => t.projectId === completedTask.projectId && t.title === 'Zaakceptuj przypisanie osoby' && (t.status === 'pending_client_approval' || t.status === 'todo'));
-        if (skipTask) {
+        if (skipTask && shouldAutoSkipCast(completedTask.projectId)) {
           const skipProjectTasks = unlocked.filter(t => t.projectId === skipTask.projectId).sort((a, b) => a.order - b.order);
           const nextAfterSkip = skipProjectTasks.find(t => t.order === skipTask.order + 1);
           unlocked = unlocked.map(t => {
