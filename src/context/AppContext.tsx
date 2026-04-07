@@ -246,6 +246,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const isMultiRole = task.assignedRoles.length > 1;
       const userId = currentUser?.id;
 
+      // Helper: check if auto-skip of cast approval is allowed for this project
+      const shouldAutoSkipCast = (projectId: string): boolean => {
+        const idea = ideas.find(i => i.resultingProjectId === projectId);
+        if (!idea) return true; // no campaign link → default auto-skip
+        const campaign = campaigns.find(c => c.id === idea.campaignId);
+        if (!campaign) return true;
+        return !campaign.requireCastApproval;
+      };
+
       // Script review with file notes → bounce back to influencer
       if (task.inputType === 'script_review' && value === 'approved_with_file_notes') {
         const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
