@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Lightbulb, Plus, X, Check, UserPlus } from 'lucide-react';
+import { Lightbulb, Plus, X, Check, UserPlus, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
 
 interface AddCampaignDialogProps {
   /** If provided, opens in edit mode with this draft's data */
@@ -47,6 +47,8 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
   const [slaHours, setSlaHours] = useState('48');
   const [briefNotes, setBriefNotes] = useState('');
   const [reviewerError, setReviewerError] = useState(false);
+  const [requireCastApproval, setRequireCastApproval] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Draft tracking
   const draftIdRef = useRef<string | null>(null);
@@ -66,6 +68,8 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
       setBriefNotes(editDraft.briefNotes || '');
       draftIdRef.current = editDraft.id;
       setReviewerError(false);
+      setRequireCastApproval(editDraft.requireCastApproval ?? false);
+      setShowAdvanced(editDraft.requireCastApproval ?? false);
       setShowNewInfluencer(false);
       setNewInfluencerName('');
     }
@@ -88,6 +92,7 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
       targetIdeaCount: Math.max(1, parseInt(overrides?.targetCount ?? targetCount) || 12),
       slaHours: Math.max(1, parseInt(overrides?.slaHours ?? slaHours) || 48),
       briefNotes: (overrides?.briefNotes ?? briefNotes).trim(),
+      requireCastApproval: overrides?.requireCastApproval ?? requireCastApproval,
     };
 
     if (!draftIdRef.current) {
@@ -96,7 +101,7 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
     } else {
       updateCampaign(draftIdRef.current, data);
     }
-  }, [clientId, influencerId, reviewerIds, targetCount, slaHours, briefNotes, createDraftCampaign, updateCampaign]);
+  }, [clientId, influencerId, reviewerIds, targetCount, slaHours, briefNotes, requireCastApproval, createDraftCampaign, updateCampaign]);
 
   const handleAddNewInfluencer = () => {
     if (!newInfluencerName.trim()) return;
@@ -146,6 +151,7 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
         slaHours: Math.max(1, parseInt(slaHours) || 48),
         briefNotes: briefNotes.trim(),
         status: 'awaiting_ideas',
+        requireCastApproval,
       });
       // If editing a draft, also activate it (resets createdAt for SLA)
       if (isEditMode) {
@@ -160,6 +166,7 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
         targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
         slaHours: Math.max(1, parseInt(slaHours) || 48),
         briefNotes: briefNotes.trim(),
+        requireCastApproval,
       });
     }
     resetAndClose();
@@ -170,6 +177,8 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
     setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
     setShowNewInfluencer(false); setNewInfluencerName('');
     setReviewerError(false);
+    setRequireCastApproval(false);
+    setShowAdvanced(false);
     draftIdRef.current = null;
   };
 
@@ -383,6 +392,40 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
               💾 Szkic zapisany automatycznie — możesz zamknąć i wrócić później
             </p>
           )}
+
+          {/* Advanced settings */}
+          <div className="border border-border rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(prev => !prev)}
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              Ustawienia zaawansowane
+              {showAdvanced ? <ChevronDown className="h-3.5 w-3.5 ml-auto" /> : <ChevronRight className="h-3.5 w-3.5 ml-auto" />}
+            </button>
+            {showAdvanced && (
+              <div className="px-3 pb-3 pt-1 border-t border-border">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <Checkbox
+                    checked={requireCastApproval}
+                    onCheckedChange={(checked) => {
+                      const val = !!checked;
+                      setRequireCastApproval(val);
+                      setTimeout(() => saveDraft({ requireCastApproval: val }), 0);
+                    }}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-foreground">Wymagaj akceptacji obsady przez klienta</span>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Domyślnie obsada jest zatwierdzana automatycznie. Zaznacz, jeśli klient ma ręcznie akceptować przypisane osoby.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter>

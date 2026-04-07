@@ -50,6 +50,7 @@ export function mapCampaign(row: any): Campaign {
     targetIdeaCount: row.target_idea_count,
     status: row.status, createdAt: row.created_at, slaHours: row.sla_hours, briefNotes: row.brief_notes,
     isDeleted: row.is_deleted ?? false,
+    requireCastApproval: row.require_cast_approval ?? false,
   };
 }
 
@@ -180,6 +181,7 @@ export async function upsertCampaign(campaign: Campaign) {
     target_idea_count: campaign.targetIdeaCount,
     status: campaign.status, created_at: campaign.createdAt, sla_hours: campaign.slaHours,
     brief_notes: campaign.briefNotes, is_deleted: campaign.isDeleted ?? false,
+    require_cast_approval: campaign.requireCastApproval ?? false,
   });
 }
 
