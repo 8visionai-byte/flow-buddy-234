@@ -1026,7 +1026,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               clientName: '', company: '', clientEmail: '', clientPhone: '',
               currentStageIndex: SCRIPT_STAGE, status: 'active',
               assignedInfluencerId: camp.assignedInfluencerId, assignedEditorId: null,
-              assignedClientId: camp.assignedClientUserId, assignedClientIds: camp.assignedClientUserId ? [camp.assignedClientUserId] : [],
+              assignedClientId: camp.assignedClientUserId, assignedClientIds: camp.reviewerIds?.length ? camp.reviewerIds : (camp.assignedClientUserId ? [camp.assignedClientUserId] : []),
               assignedKierownikId: null,
               assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: camp.slaHours || 48,
             };

@@ -26,7 +26,8 @@ const RoleSelector = () => {
       assignedProjectIds.includes(t.projectId) &&
       t.assignedRoles.includes(user.role as any) &&
       (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision') &&
-      !(t.assignedRoles.length > 1 && t.roleCompletions[user.role])
+      !(t.assignedRoles.length > 1 && t.roleCompletions[user.role]) &&
+      !(t.status === 'pending_client_approval' && t.inputType === 'approval' && t.clientVotes[user.id])
     ).length;
 
     // 2. For influencers: count campaigns awaiting ideas where they need to submit
