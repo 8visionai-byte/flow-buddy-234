@@ -52,7 +52,7 @@ const RoleSelector = () => {
       ).filter(c => {
         const unvotedIdeas = ideas.filter(i =>
           i.campaignId === c.id &&
-          (i.status === 'pending' || i.status === 'needs_revision' ? false : true) === false &&
+          i.status === 'pending' &&
           !i.evaluations?.[user.id]
         );
         return unvotedIdeas.length > 0;
