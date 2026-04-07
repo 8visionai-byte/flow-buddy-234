@@ -190,7 +190,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     return <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />;
   };
 
-  const statusBadge = (status: string) => {
+  const isAutoCleanedTask = (task: typeof tasks[0]) =>
+    task.status === 'done' && (task.value === 'auto_cleanup' || task.history?.some(h => h.value === 'auto_cleanup'));
+
+  const isAutoSkippedTask = (task: typeof tasks[0]) =>
+    task.status === 'done' && task.completedBy === 'system';
+
+  const statusBadge = (status: string, task?: typeof tasks[0]) => {
+    if (task && isAutoSkippedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Auto-pominięte</Badge>;
+    if (task && isAutoCleanedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Wymuszone przez Admina</Badge>;
     if (status === 'done') return <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge>;
     if (status === 'todo') return <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Aktywne</Badge>;
     if (status === 'pending_client_approval') return <Badge variant="secondary" className="bg-warning/10 text-warning border-0 text-xs">Czeka na klienta</Badge>;
