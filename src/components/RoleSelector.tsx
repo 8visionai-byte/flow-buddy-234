@@ -47,8 +47,8 @@ const RoleSelector = () => {
     if (user.role === 'klient') {
       campaignCount = campaigns.filter(c =>
         !c.isDeleted &&
-        (c.reviewerIds?.includes(user.id) || c.assignedClientUserId === user.id) &&
-        c.status === 'in_review'
+        c.status !== 'completed' && c.status !== 'cancelled' && c.status !== 'draft' &&
+        (c.reviewerIds?.includes(user.id) || c.assignedClientUserId === user.id)
       ).filter(c => {
         const pendingIdeas = ideas.filter(i => i.campaignId === c.id && i.status === 'pending');
         return pendingIdeas.length > 0;
