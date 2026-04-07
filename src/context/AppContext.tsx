@@ -472,7 +472,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       return updated;
     });
-  }, [updateTasksAndSync]);
+  }, [updateTasksAndSync, currentUser, projects, users]);
 
   const rejectTask = useCallback((taskId: string, feedback: string) => {
     updateTasksAndSync(prev => {
