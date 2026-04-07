@@ -630,7 +630,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId', userId: string | null) => {
     setProjects(prev => {
-      const updated = prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p);
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const newP = { ...p, [field]: userId };
+        // Sync assignedClientIds when assignedClientId changes
+        if (field === 'assignedClientId') {
+          if (userId && !newP.assignedClientIds.includes(userId)) {
+            newP.assignedClientIds = [...newP.assignedClientIds, userId];
+          }
+        }
+        return newP;
+      });
+      const changed = updated.find(p => p.id === projectId);
+      if (changed) upsertProject(changed);
+      return updated;
+    });
+  }, []);
+
+  const toggleClientInProject = useCallback((projectId: string, userId: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const has = p.assignedClientIds.includes(userId);
+        const newIds = has ? p.assignedClientIds.filter(id => id !== userId) : [...p.assignedClientIds, userId];
+        return { ...p, assignedClientIds: newIds };
+      });
       const changed = updated.find(p => p.id === projectId);
       if (changed) upsertProject(changed);
       return updated;
