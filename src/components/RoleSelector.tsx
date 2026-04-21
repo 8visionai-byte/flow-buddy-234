@@ -3,9 +3,7 @@ import { ROLE_LABELS } from '@/types';
 import { User, ChevronRight, Bell } from 'lucide-react';
 
 const RoleSelector = () => {
-  const { setCurrentUser, users, tasks, projects } = useApp();
-
-  const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
+  const { setCurrentUser, users, tasks, projects, campaigns, ideas } = useApp();
 
   const getAssignedProjectIds = (user: typeof users[0]) => {
     return projects.filter(p => {
@@ -13,22 +11,60 @@ const RoleSelector = () => {
       if (user.role === 'admin') return true;
       if (user.role === 'influencer') return p.assignedInfluencerId === user.id;
       if (user.role === 'montazysta') return p.assignedEditorId === user.id;
-      if (user.role === 'klient') return p.assignedClientId === user.id;
+      if (user.role === 'klient') return p.assignedClientId === user.id || p.assignedClientIds?.includes(user.id);
       if (user.role === 'kierownik_planu') return p.assignedKierownikId === user.id;
+      if (user.role === 'operator') return p.assignedOperatorId === user.id;
       if (user.role === 'publikator') return tasks.some(t => t.projectId === p.id && t.assignedRoles.includes('publikator') && t.status === 'todo');
       return false;
     }).map(p => p.id);
   };
 
   const getActiveTaskCount = (user: typeof users[0]) => {
+    // 1. Count tasks from projects
     const assignedProjectIds = getAssignedProjectIds(user);
-    return tasks.filter(t =>
+    const taskCount = tasks.filter(t =>
       assignedProjectIds.includes(t.projectId) &&
       t.assignedRoles.includes(user.role as any) &&
       (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision') &&
-      !(t.assignedRoles.length > 1 && t.roleCompletions[user.role])
+      !(t.assignedRoles.length > 1 && t.roleCompletions[user.role]) &&
+      !(t.status === 'pending_client_approval' && t.inputType === 'approval' && t.clientVotes[user.id])
     ).length;
+
+    // 2. For influencers: count campaigns awaiting ideas where they need to submit
+    let campaignCount = 0;
+    if (user.role === 'influencer') {
+      campaignCount = campaigns.filter(c =>
+        !c.isDeleted &&
+        c.assignedInfluencerId === user.id &&
+        (c.status === 'awaiting_ideas' || c.status === 'in_review')
+      ).filter(c => {
+        const acceptedIdeas = ideas.filter(i => i.campaignId === c.id && (i.status === 'accepted' || i.status === 'accepted_with_notes'));
+        const pendingIdeas = ideas.filter(i => i.campaignId === c.id && i.status === 'pending');
+        const needsRevision = ideas.filter(i => i.campaignId === c.id && i.status === 'needs_revision');
+        // Goal not yet met: either not enough accepted, or has pending/revision items
+        return acceptedIdeas.length < c.targetIdeaCount || pendingIdeas.length > 0 || needsRevision.length > 0;
+      }).length;
+    }
+
+    // 3. For clients: count campaigns in_review where they are a reviewer and have pending ideas
+    if (user.role === 'klient') {
+      campaignCount = campaigns.filter(c =>
+        !c.isDeleted &&
+        c.status !== 'completed' && c.status !== 'cancelled' && c.status !== 'draft' &&
+        (c.reviewerIds?.includes(user.id) || c.assignedClientUserId === user.id)
+      ).filter(c => {
+        const unvotedIdeas = ideas.filter(i =>
+          i.campaignId === c.id &&
+          i.status === 'pending' &&
+          !i.evaluations?.[user.id]
+        );
+        return unvotedIdeas.length > 0;
+      }).length;
+    }
+
+    return taskCount + campaignCount;
   };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">

@@ -175,7 +175,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
   };
 
   const getClient = (p: typeof project) =>
-    p ? (clients.find(c => c.id === p.clientId)?.name ?? '—') : '—';
+    p ? (clients.find(c => c.id === p.clientId)?.contactName ?? '—') : '—';
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -189,7 +189,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
           <DialogDescription>
             Przypisz priorytet i montażystę dla projektu{' '}
             <span className="font-semibold text-foreground">{project?.name}</span>
-            {client && <span className="text-muted-foreground"> · {client.name}</span>}
+            {client && <span className="text-muted-foreground"> · {client.contactName}</span>}
           </DialogDescription>
         </DialogHeader>
 

@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   CheckCircle2, Circle, LogOut, Menu, X, AlertTriangle, Lightbulb,
   Clock, Lock, ChevronRight, FolderOpen, ArrowRight, TrendingUp,
-  Video, CalendarClock, MessageSquare, Film, Star, Pencil,
+  Video, CalendarClock, MessageSquare, Film, Star, Pencil, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,10 +47,11 @@ function getTaskTimeInfo(task: Task, project: Project | undefined) {
 }
 
 const UserDashboard = () => {
-  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote, reopenTask } = useApp();
   const [selectedItem, setSelectedItem] = useState<SidebarItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<DashView>('tasks');
+  const [taskSubTab, setTaskSubTab] = useState<'todo' | 'done'>('todo');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedQueueProjectId, setSelectedQueueProjectId] = useState<string | null>(null);
   const [frameioInputs, setFrameioInputs] = useState<Record<string, string>>({});
@@ -67,7 +68,7 @@ const UserDashboard = () => {
     switch (currentUser.role) {
       case 'influencer':    return p.assignedInfluencerId === currentUser.id;
       case 'montazysta':    return p.assignedEditorId === currentUser.id;
-      case 'klient':        return p.assignedClientId === currentUser.id;
+      case 'klient':        return p.assignedClientId === currentUser.id || p.assignedClientIds?.includes(currentUser.id);
       case 'kierownik_planu': return p.assignedKierownikId === currentUser.id;
       case 'operator':      return p.assignedOperatorId === currentUser.id;
       case 'publikator':    return tasks.some(t => t.projectId === p.id && t.assignedRoles.includes('publikator') && t.status === 'todo');
@@ -80,8 +81,16 @@ const UserDashboard = () => {
   // ── ONLY currently actionable tasks (not locked, not done) ────────────────
   const myActionableTasks = tasks.filter(t => {
     if (!activeProjectIds.includes(t.projectId)) return false;
+    // Hide "Zaakceptuj przypisanie osoby" only when auto-skip is active (requireCastApproval=false)
+    if (t.title === 'Zaakceptuj przypisanie osoby') {
+      const idea = ideas.find(i => i.resultingProjectId === t.projectId);
+      const campaign = idea ? campaigns.find(c => c.id === idea.campaignId) : null;
+      if (!campaign?.requireCastApproval) return false;
+    }
     if (!t.assignedRoles.includes(currentUser.role)) return false;
     if (t.status === 'done') return false;
+    // For consensus approval tasks: hide if this user already voted
+    if (t.status === 'pending_client_approval' && t.inputType === 'approval' && currentUser.id && t.clientVotes[currentUser.id]) return false;
     if (t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return false;
 
     // Special: influencer can access "Brief dla montażysty" early as soon as
@@ -108,6 +117,31 @@ const UserDashboard = () => {
       )
     : [];
 
+  // ── DONE tasks for "Wykonane" tab (klient, admin, and other roles) ────────
+  const myDoneTasks = tasks.filter(t => {
+    if (!activeProjectIds.includes(t.projectId)) return false;
+    if (!t.assignedRoles.includes(currentUser.role)) return false;
+    if (t.status !== 'done') {
+      // Also include tasks where this user already voted (multi-role completion)
+      if (t.assignedRoles.length > 1 && t.roleCompletions[currentUser.role]) return true;
+      return false;
+    }
+    return true;
+  });
+
+  // Check if editing a done task is safe (project hasn't advanced 2+ steps beyond)
+  const canReopenTask = (task: Task): boolean => {
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    // Find how far the project has progressed past this task
+    let stepsAhead = 0;
+    for (const pt of projectTasks) {
+      if (pt.order > task.order && pt.status !== 'locked') {
+        stepsAhead++;
+      }
+    }
+    return stepsAhead <= 2;
+  };
+
   const myUpcomingCount = tasks.filter(t => {
     if (!activeProjectIds.includes(t.projectId)) return false;
     if (!t.assignedRoles.includes(currentUser.role)) return false;
@@ -131,26 +165,44 @@ const UserDashboard = () => {
   const getPendingIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId && i.status === 'pending').length;
 
+  // For client: count ideas they haven't voted on yet
+  const getUnvotedIdeasCount = (campaignId: string) =>
+    ideas.filter(i => i.campaignId === campaignId && i.status === 'pending' && !i.evaluations?.[currentUser.id]).length;
+
   const getTotalIdeasCount = (campaignId: string) =>
     ideas.filter(i => i.campaignId === campaignId).length;
 
-  const ideasCampaigns = showIdeasSection
+  // Helper: check if influencer has met the campaign goal
+  const isInfluencerCampaignGoalMet = (c: typeof campaigns[0]) => {
+    const accepted = ideas.filter(i => i.campaignId === c.id && i.status === 'accepted').length;
+    const pending = getPendingIdeasCount(c.id);
+    const needsRevision = ideas.filter(i => i.campaignId === c.id && (i.status === 'needs_revision' || i.status === 'accepted_with_notes')).length;
+    return accepted >= c.targetIdeaCount && pending === 0 && needsRevision === 0;
+  };
+
+  // All relevant campaigns for this user (not deleted/completed/cancelled/draft)
+  const allMyCampaigns = showIdeasSection
     ? campaigns.filter(c => {
-        if (c.status === 'completed' || c.status === 'cancelled') return false;
-        if (currentUser.role === 'influencer') {
-          if (c.assignedInfluencerId !== currentUser.id) return false;
-          const total = getTotalIdeasCount(c.id);
-          const pending = getPendingIdeasCount(c.id);
-          if (total >= c.targetIdeaCount && pending === 0) return false;
-          return true;
-        }
-        if (currentUser.role === 'klient') {
-          if (c.assignedClientUserId !== currentUser.id) return false;
-          return getPendingIdeasCount(c.id) > 0;
-        }
+        if (c.status === 'completed' || c.status === 'cancelled' || c.status === 'draft') return false;
+        if (c.isDeleted) return false;
+        if (currentUser.role === 'influencer') return c.assignedInfluencerId === currentUser.id;
+        if (currentUser.role === 'klient') return c.reviewerIds?.includes(currentUser.id) || c.assignedClientUserId === currentUser.id;
         return false;
       })
     : [];
+
+  // Split into todo vs done
+  const ideasCampaigns = allMyCampaigns.filter(c => {
+    if (currentUser.role === 'influencer') return !isInfluencerCampaignGoalMet(c);
+    if (currentUser.role === 'klient') return getUnvotedIdeasCount(c.id) > 0;
+    return false;
+  });
+
+  const doneCampaigns = allMyCampaigns.filter(c => {
+    if (currentUser.role === 'influencer') return isInfluencerCampaignGoalMet(c);
+    if (currentUser.role === 'klient') return getUnvotedIdeasCount(c.id) === 0;
+    return false;
+  });
 
   const taskIcon = (status: string) => {
     if (status === 'needs_influencer_revision') return <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />;
@@ -817,165 +869,322 @@ const UserDashboard = () => {
         {view === 'tasks' && (
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
 
-            {/* Ideas / campaigns */}
-            {showIdeasSection && ideasCampaigns.length > 0 && (
-              <div>
-                <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {currentUser.role === 'influencer' ? 'Pomysły do złożenia' : 'Pomysły do oceny'}
-                </div>
-                {ideasCampaigns.map(campaign => {
-                  const pending = getPendingIdeasCount(campaign.id);
-                  const total = getTotalIdeasCount(campaign.id);
-                  const client = clients.find(c => c.id === campaign.clientId);
-                  const isSelected = selectedItem?.type === 'ideas' && selectedItem.campaignId === campaign.id;
+            {/* Sub-tabs: Do zrobienia / Wykonane */}
+            <div className="flex rounded-lg bg-muted p-0.5 gap-0.5">
+              <button
+                onClick={() => setTaskSubTab('todo')}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  taskSubTab === 'todo'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Do zrobienia
+                {(myActionableTasks.length + ideasCampaigns.length) > 0 && (
+                  <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    {myActionableTasks.length + ideasCampaigns.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setTaskSubTab('done')}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  taskSubTab === 'done'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Wykonane
+                {(myDoneTasks.length + doneCampaigns.length) > 0 && (
+                  <span className="ml-1 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {myDoneTasks.length + doneCampaigns.length}
+                  </span>
+                )}
+              </button>
+            </div>
 
-                  const msLeft = new Date(campaign.createdAt).getTime() + campaign.slaHours * 3600000 - Date.now();
-                  const hoursLeft = Math.max(0, Math.floor(msLeft / 3600000));
-                  const minsLeft = Math.max(0, Math.floor((msLeft % 3600000) / 60000));
-                  const isOverdue = msLeft < 0;
+            {taskSubTab === 'todo' && (
+              <>
+                {/* Ideas / campaigns */}
+                {showIdeasSection && ideasCampaigns.length > 0 && (
+                  <div>
+                    <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {currentUser.role === 'influencer' ? 'Pomysły do złożenia' : 'Pomysły do oceny'}
+                    </div>
+                    {ideasCampaigns.map(campaign => {
+                      const pending = getPendingIdeasCount(campaign.id);
+                      const total = getTotalIdeasCount(campaign.id);
+                      const client = clients.find(c => c.id === campaign.clientId);
+                      const isSelected = selectedItem?.type === 'ideas' && selectedItem.campaignId === campaign.id;
 
-                  return (
-                    <button
-                      key={campaign.id}
-                      onClick={() => selectItem({ type: 'ideas', campaignId: campaign.id })}
-                      className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                        isSelected ? 'bg-warning/10 text-warning' : 'text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      <Lightbulb className="h-4 w-4 shrink-0 text-warning" />
-                      <div className="flex-1 truncate">
-                        <div className="truncate font-medium">{client?.companyName || 'Kampania'}</div>
-                        <div className={`truncate text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                          {isOverdue
-                            ? '⚠ Po terminie!'
-                            : `${String(hoursLeft).padStart(2, '0')}h ${String(minsLeft).padStart(2, '0')}m · ${total}/${campaign.targetIdeaCount} pomysłów`}
+                      const msLeft = new Date(campaign.createdAt).getTime() + campaign.slaHours * 3600000 - Date.now();
+                      const hoursLeft = Math.max(0, Math.floor(msLeft / 3600000));
+                      const minsLeft = Math.max(0, Math.floor((msLeft % 3600000) / 60000));
+                      const isOverdue = msLeft < 0;
+
+                      return (
+                        <button
+                          key={campaign.id}
+                          onClick={() => selectItem({ type: 'ideas', campaignId: campaign.id })}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                            isSelected ? 'bg-warning/10 text-warning' : 'text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <Lightbulb className="h-4 w-4 shrink-0 text-warning" />
+                          <div className="flex-1 truncate">
+                            <div className="truncate font-medium">{client?.companyName || 'Kampania'}</div>
+                            <div className={`truncate text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                              {(() => {
+                                const accepted = ideas.filter(i => i.campaignId === campaign.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+                                return isOverdue
+                                  ? '⚠ Po terminie!'
+                                  : `${String(hoursLeft).padStart(2, '0')}h ${String(minsLeft).padStart(2, '0')}m · ${Math.min(accepted, campaign.targetIdeaCount)}/${campaign.targetIdeaCount} zaakceptowanych`;
+                              })()}
+                            </div>
+                          </div>
+                          {pending > 0 && currentUser.role === 'klient' && (
+                            <Badge variant="secondary" className="border-0 bg-warning/15 text-warning text-[10px] shrink-0">
+                              {pending}
+                            </Badge>
+                          )}
+                          {isOverdue && (
+                            <Badge variant="secondary" className="border-0 bg-destructive/10 text-destructive text-[10px] shrink-0">
+                              !
+                            </Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Currently actionable tasks */}
+                {myActionableTasks.length > 0 && (
+                  <div>
+                    <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Do zrobienia ({myActionableTasks.length})
+                    </div>
+                    {myActionableTasks.map(task => {
+                      const project = getProject(task.projectId);
+                      const timeInfo = getTaskTimeInfo(task, project);
+                      const isSelected = selectedItem?.type === 'task' && selectedItem.taskId === task.id;
+
+                      return (
+                        <button
+                          key={task.id}
+                          onClick={() => selectItem({ type: 'task', taskId: task.id })}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                            isSelected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {taskIcon(task.status)}
+                          <div className="flex-1 truncate min-w-0">
+                            {project?.name && (
+                              <div className="mb-0.5 truncate">
+                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
+                                  {project.name}
+                                </span>
+                              </div>
+                            )}
+                            <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
+                            {timeInfo && (
+                              <div className={`flex items-center gap-0.5 text-[11px] font-medium mt-0.5 ${timeInfo.isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                <Clock className="h-2.5 w-2.5" />
+                                {timeInfo.isOverdue ? 'Po terminie' : timeInfo.label}
+                              </div>
+                            )}
+                          </div>
+                          {task.status === 'needs_influencer_revision' && (
+                            <span className="text-[10px] font-bold text-destructive shrink-0">POPRAW</span>
+                          )}
+                          {task.status === 'pending_client_approval' && (
+                            <span className="text-[10px] font-medium text-warning shrink-0">CZEKA</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Done URL tasks — influencer can correct submitted links */}
+                {myDoneUrlTasks.length > 0 && (
+                  <div className="mt-3">
+                    <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Wysłane linki ({myDoneUrlTasks.length})
+                    </div>
+                    {myDoneUrlTasks.map(task => {
+                      const project = getProject(task.projectId);
+                      const isSelected = selectedItem?.type === 'task' && selectedItem.taskId === task.id;
+                      return (
+                        <button
+                          key={task.id}
+                          onClick={() => selectItem({ type: 'task', taskId: task.id })}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                            isSelected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                          <div className="flex-1 truncate min-w-0">
+                            {project?.name && (
+                              <div className="mb-0.5 truncate">
+                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
+                                  {project.name}
+                                </span>
+                              </div>
+                            )}
+                            <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
+                            {task.value && (
+                              <div className="truncate text-[11px] text-muted-foreground mt-0.5">{task.value}</div>
+                            )}
+                          </div>
+                          <Pencil className="h-3 w-3 text-muted-foreground shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Waiting state */}
+                {isWaiting && (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-4 text-center space-y-1.5">
+                    <Lock className="h-5 w-5 mx-auto text-muted-foreground/50" />
+                    <p className="text-xs font-medium text-foreground">
+                      {myUpcomingCount} {myUpcomingCount === 1 ? 'zadanie' : myUpcomingCount < 5 ? 'zadania' : 'zadań'} nadchodzi
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Oczekujesz aż inne etapy zostaną ukończone przez resztę zespołu
+                    </p>
+                  </div>
+                )}
+
+                {/* Truly done */}
+                {isTrulyDone && (
+                  <div className="rounded-lg border border-success/20 bg-success/5 px-3 py-4 text-center space-y-1.5">
+                    <CheckCircle2 className="h-5 w-5 mx-auto text-success" />
+                    <p className="text-xs font-medium text-success">Wszystko gotowe!</p>
+                    <p className="text-[11px] text-muted-foreground">Brak oczekujących zadań</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── DONE sub-tab ── */}
+            {taskSubTab === 'done' && (
+              <>
+                {/* Done campaigns (influencer goal met) */}
+                {showIdeasSection && doneCampaigns.length > 0 && (
+                  <div>
+                    <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {currentUser.role === 'influencer' ? 'Ukończone kampanie' : 'Ocenione kampanie'} ({doneCampaigns.length})
+                    </div>
+                    {doneCampaigns.map(campaign => {
+                      const client = clients.find(c => c.id === campaign.clientId);
+                      const accepted = ideas.filter(i => i.campaignId === campaign.id && (i.status === 'accepted' || i.status === 'accepted_with_notes')).length;
+                      const isSelected = selectedItem?.type === 'ideas' && selectedItem.campaignId === campaign.id;
+                      return (
+                        <button
+                          key={campaign.id}
+                          onClick={() => selectItem({ type: 'ideas', campaignId: campaign.id })}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                            isSelected ? 'bg-success/10 text-success' : 'text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                          <div className="flex-1 truncate">
+                            <div className="truncate font-medium">{client?.companyName || 'Kampania'}</div>
+                            <div className="truncate text-xs text-success">
+                              ✅ Cel osiągnięty · {Math.min(accepted, campaign.targetIdeaCount)}/{campaign.targetIdeaCount}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {myDoneTasks.length === 0 && doneCampaigns.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-6 text-center space-y-1.5">
+                    <CheckCircle2 className="h-6 w-6 mx-auto text-muted-foreground/40" />
+                    <p className="text-xs font-medium text-muted-foreground">Brak wykonanych zadań</p>
+                    <p className="text-[11px] text-muted-foreground">Ukończone zadania pojawią się tutaj.</p>
+                  </div>
+                ) : myDoneTasks.length > 0 ? (
+                  <div>
+                    <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Wykonane ({myDoneTasks.length})
+                    </div>
+                    {myDoneTasks.map(task => {
+                      const project = getProject(task.projectId);
+                      const isSelected = selectedItem?.type === 'task' && selectedItem.taskId === task.id;
+                      const canEdit = canReopenTask(task);
+
+                      // Determine status label
+                      const isApproval = task.inputType === 'approval';
+                      const userVoted = task.clientVotes?.[currentUser.id];
+                      const statusLabel = isApproval
+                        ? (userVoted?.decision === 'rejected' ? 'Odrzucono' : 'Zaakceptowano')
+                        : 'Ukończone';
+                      const statusColor = isApproval && userVoted?.decision === 'rejected'
+                        ? 'text-destructive'
+                        : 'text-success';
+
+                      return (
+                        <div
+                          key={task.id}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                            isSelected ? 'bg-primary/10' : 'hover:bg-muted'
+                          }`}
+                        >
+                          <button
+                            className="flex-1 flex items-center gap-3 min-w-0 text-left"
+                            onClick={() => selectItem({ type: 'task', taskId: task.id })}
+                          >
+                            <CheckCircle2 className={`h-4 w-4 shrink-0 ${statusColor}`} />
+                            <div className="flex-1 truncate min-w-0">
+                              {project?.name && (
+                                <div className="mb-0.5 truncate">
+                                  <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
+                                    {project.name}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="truncate text-sm font-medium leading-snug text-foreground">{task.title}</div>
+                              <div className={`text-[11px] font-medium mt-0.5 ${statusColor}`}>
+                                {statusLabel}
+                                {task.completedAt && (
+                                  <span className="text-muted-foreground font-normal ml-1">
+                                    · {format(new Date(task.completedAt), 'dd.MM HH:mm', { locale: pl })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                              title="Edytuj decyzję"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                reopenTask(task.id);
+                                setTaskSubTab('todo');
+                              }}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {!canEdit && (
+                            <span title="Projekt zbyt zaawansowany — edycja zablokowana">
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+                            </span>
+                          )}
                         </div>
-                      </div>
-                      {pending > 0 && currentUser.role === 'klient' && (
-                        <Badge variant="secondary" className="border-0 bg-warning/15 text-warning text-[10px] shrink-0">
-                          {pending}
-                        </Badge>
-                      )}
-                      {isOverdue && (
-                        <Badge variant="secondary" className="border-0 bg-destructive/10 text-destructive text-[10px] shrink-0">
-                          !
-                        </Badge>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Currently actionable tasks */}
-            {myActionableTasks.length > 0 && (
-              <div>
-                <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Do zrobienia ({myActionableTasks.length})
-                </div>
-                {myActionableTasks.map(task => {
-                  const project = getProject(task.projectId);
-                  const timeInfo = getTaskTimeInfo(task, project);
-                  const isSelected = selectedItem?.type === 'task' && selectedItem.taskId === task.id;
-
-                  return (
-                    <button
-                      key={task.id}
-                      onClick={() => selectItem({ type: 'task', taskId: task.id })}
-                      className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                        isSelected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {taskIcon(task.status)}
-                      <div className="flex-1 truncate min-w-0">
-                        {/* Project name — prominent chip */}
-                        {project?.name && (
-                          <div className="mb-0.5 truncate">
-                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
-                              {project.name}
-                            </span>
-                          </div>
-                        )}
-                        {/* Task title */}
-                        <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
-                        {/* Time info */}
-                        {timeInfo && (
-                          <div className={`flex items-center gap-0.5 text-[11px] font-medium mt-0.5 ${timeInfo.isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-                            <Clock className="h-2.5 w-2.5" />
-                            {timeInfo.isOverdue ? 'Po terminie' : timeInfo.label}
-                          </div>
-                        )}
-                      </div>
-                      {task.status === 'needs_influencer_revision' && (
-                        <span className="text-[10px] font-bold text-destructive shrink-0">POPRAW</span>
-                      )}
-                      {task.status === 'pending_client_approval' && (
-                        <span className="text-[10px] font-medium text-warning shrink-0">CZEKA</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Done URL tasks — influencer can correct submitted links */}
-            {myDoneUrlTasks.length > 0 && (
-              <div className="mt-3">
-                <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Wysłane linki ({myDoneUrlTasks.length})
-                </div>
-                {myDoneUrlTasks.map(task => {
-                  const project = getProject(task.projectId);
-                  const isSelected = selectedItem?.type === 'task' && selectedItem.taskId === task.id;
-                  return (
-                    <button
-                      key={task.id}
-                      onClick={() => selectItem({ type: 'task', taskId: task.id })}
-                      className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                        isSelected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                      <div className="flex-1 truncate min-w-0">
-                        {project?.name && (
-                          <div className="mb-0.5 truncate">
-                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
-                              {project.name}
-                            </span>
-                          </div>
-                        )}
-                        <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
-                        {task.value && (
-                          <div className="truncate text-[11px] text-muted-foreground mt-0.5">{task.value}</div>
-                        )}
-                      </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Waiting state */}
-            {isWaiting && (
-              <div className="rounded-lg border border-border bg-muted/30 px-3 py-4 text-center space-y-1.5">
-                <Lock className="h-5 w-5 mx-auto text-muted-foreground/50" />
-                <p className="text-xs font-medium text-foreground">
-                  {myUpcomingCount} {myUpcomingCount === 1 ? 'zadanie' : myUpcomingCount < 5 ? 'zadania' : 'zadań'} nadchodzi
-                </p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Oczekujesz aż inne etapy zostaną ukończone przez resztę zespołu
-                </p>
-              </div>
-            )}
-
-            {/* Truly done */}
-            {isTrulyDone && (
-              <div className="rounded-lg border border-success/20 bg-success/5 px-3 py-4 text-center space-y-1.5">
-                <CheckCircle2 className="h-5 w-5 mx-auto text-success" />
-                <p className="text-xs font-medium text-success">Wszystko gotowe!</p>
-                <p className="text-[11px] text-muted-foreground">Brak oczekujących zadań</p>
-              </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </>
             )}
 
           </div>

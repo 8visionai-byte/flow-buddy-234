@@ -17,8 +17,10 @@ import {
   RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList,
   Calendar as CalendarIcon, Flag, FileText, ChevronDown, ChevronRight, ChevronLeft,
   Building2, Clock, LayoutList, Users, Phone, Mail, Lightbulb, UserPlus, Check, X,
+  ArchiveRestore, Pencil,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import AddCampaignDialog from '@/components/AddCampaignDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import ClientManagementDialog from '@/components/ClientManagementDialog';
@@ -65,12 +67,22 @@ const VIEWS: { id: ViewId; label: string; icon: React.FC<{ className?: string }>
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
   const {
     currentUser, setCurrentUser, tasks, projects, clients, users, ideas,
-    deleteProject, toggleFreezeProject, assignToProject, completeTask,
+    deleteProject, toggleFreezeProject, assignToProject, toggleClientInProject, completeTask,
     reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
-    campaigns, updateCampaign, deleteCampaign, addUser,
+    campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
+    hardDeleteCampaigns, bulkRestoreCampaigns,
   } = useApp();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+  const [isRestoringCampaign, setIsRestoringCampaign] = useState<string | null>(null);
+   const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
+  const [isActivatingCampaign, setIsActivatingCampaign] = useState<string | null>(null);
+  const [trashSelected, setTrashSelected] = useState<Set<string>>(new Set());
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState<string[] | null>(null);
+  const [isHardDeleting, setIsHardDeleting] = useState(false);
+  const [isBulkRestoring, setIsBulkRestoring] = useState(false);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -87,6 +99,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [priorityDialogTask, setPriorityDialogTask] = useState<Task | null>(null);
   const [inlineNewKP, setInlineNewKP] = useState<Record<string, string>>({});
   const [inlineNewOp, setInlineNewOp] = useState<Record<string, string>>({});
+  // Draft editing
+  const [editingDraft, setEditingDraft] = useState<typeof campaigns[0] | null>(null);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects(prev => {
@@ -130,11 +144,29 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     if (!task.assignedRoles.includes('admin')) return false;
     if (isAdminTaskDone(task)) return false;
 
+    // Only consider blocking if this task is at or near the current active stage
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    
+    // Find the current active stage (highest order with an active status)
+    const currentStageOrder = projectTasks.reduce((max, pt) => {
+      if (pt.status === 'todo' || pt.status === 'pending_client_approval' || pt.status === 'needs_influencer_revision') {
+        return Math.max(max, pt.order);
+      }
+      return max;
+    }, -1);
+
+    // If a later task is already active/done, this task is historical — not blocking
+    if (currentStageOrder > task.order) {
+      // Check if any task AFTER this one is already active or done
+      const hasLaterProgress = projectTasks.some(pt => pt.order > task.order && (pt.status === 'done' || pt.status === 'todo' || pt.status === 'pending_client_approval'));
+      if (hasLaterProgress) return false;
+    }
+
     if (task.status === 'todo' || task.status === 'pending_client_approval') {
       return true;
     }
 
-    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+    // Check if all prerequisites are done
     for (const pt of projectTasks) {
       if (pt.order < task.order) {
         if (pt.assignedRoles.length > 1) {
@@ -158,7 +190,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     return <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />;
   };
 
-  const statusBadge = (status: string) => {
+  const isAutoCleanedTask = (task: typeof tasks[0]) =>
+    task.status === 'done' && (task.value === 'auto_cleanup' || task.history?.some(h => h.value === 'auto_cleanup'));
+
+  const isAutoSkippedTask = (task: typeof tasks[0]) =>
+    task.status === 'done' && task.completedBy === 'system';
+
+  const statusBadge = (status: string, task?: typeof tasks[0]) => {
+    if (task && isAutoSkippedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Auto-pominięte</Badge>;
+    if (task && isAutoCleanedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Wymuszone przez Admina</Badge>;
     if (status === 'done') return <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge>;
     if (status === 'todo') return <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Aktywne</Badge>;
     if (status === 'pending_client_approval') return <Badge variant="secondary" className="bg-warning/10 text-warning border-0 text-xs">Czeka na klienta</Badge>;
@@ -186,6 +226,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     project.clientId ? clients.find(c => c.id === project.clientId) : null;
 
   const getDeleteProjectName = () => projects.find(p => p.id === deleteConfirm)?.name || '';
+  const getDeleteCampaignName = () => {
+    const c = campaigns.find(c => c.id === deleteCampaignConfirm);
+    if (!c) return '';
+    const client = clients.find(cl => cl.id === c.clientId);
+    return client?.companyName || c.id;
+  };
 
   const handleDeleteConfirm = () => {
     if (deleteConfirm) {
@@ -1106,9 +1152,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{editors.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={project.assignedClientId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedClientId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Klient" /></SelectTrigger>
+                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Klient główny" /></SelectTrigger>
                 <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{clientUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
               </Select>
+              {/* Multi-client checkboxes for consensus */}
+              {clientUsers.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] text-muted-foreground font-medium">Decydenci:</span>
+                  {clientUsers.map(u => (
+                    <label key={u.id} className="flex items-center gap-1 text-[11px] cursor-pointer">
+                      <Checkbox
+                        checked={project.assignedClientIds.includes(u.id)}
+                        onCheckedChange={() => toggleClientInProject(project.id, u.id)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className="text-foreground">{u.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
               <Select value={project.assignedKierownikId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedKierownikId', v === 'none' ? null : v)}>
                 <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Kierownik" /></SelectTrigger>
                 <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{kierownicy.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
@@ -1256,7 +1318,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status)) : statusBadge(task.status)}
+                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status, task)) : statusBadge(task.status, task)}
                     </td>
                     <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
                     <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
@@ -1291,129 +1353,364 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const getCampaignClient = (campaign: typeof campaigns[0]) => clients.find(c => c.id === campaign.clientId);
     const getCampaignInfluencer = (campaign: typeof campaigns[0]) => users.find(u => u.id === campaign.assignedInfluencerId);
 
-    if (campaigns.length === 0) {
+    const activeCampaigns = campaigns.filter(c => !c.isDeleted && c.status !== 'draft');
+    const draftCampaigns = campaigns.filter(c => !c.isDeleted && c.status === 'draft');
+    const trashedCampaigns = campaigns.filter(c => c.isDeleted);
+
+    const handleRestore = async (id: string) => {
+      setIsRestoringCampaign(id);
+      try {
+        restoreCampaign(id);
+        await new Promise(r => setTimeout(r, 300));
+      } finally {
+        setIsRestoringCampaign(null);
+      }
+    };
+
+    const handleActivate = async (id: string) => {
+      setIsActivatingCampaign(id);
+      try {
+        activateCampaign(id);
+        await new Promise(r => setTimeout(r, 300));
+      } finally {
+        setIsActivatingCampaign(null);
+      }
+    };
+
+    const renderCampaignCard = (campaign: typeof campaigns[0], isTrashed: boolean) => {
+      const client = getCampaignClient(campaign);
+      const influencer = getCampaignInfluencer(campaign);
+      const campaignIdeas = getCampaignIdeas(campaign.id);
+      const pendingCount = campaignIdeas.filter(i => i.status === 'pending').length;
+      const acceptedCount = campaignIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
+      const msTilDeadline = getSlaRemaining(campaign);
+      const hoursLeft = Math.floor(Math.abs(msTilDeadline) / 3600000);
+      const minutesLeft = Math.floor((Math.abs(msTilDeadline) % 3600000) / 60000);
+      const isOverdue = msTilDeadline < 0;
+      const isExpanded = expandedCampaignId === campaign.id;
+
+      const isDraft = campaign.status === 'draft';
+
       return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-          <Lightbulb className="h-12 w-12 text-muted-foreground opacity-40" />
-          <p className="text-lg font-semibold text-foreground">Brak kampanii</p>
-          <p className="text-sm text-muted-foreground">Utwórz kampanię, aby zlecić influencerowi przygotowanie pomysłów.</p>
-        </div>
-      );
-    }
+        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70", isDraft && "border-dashed border-muted-foreground/30")}>
+          {/* Campaign header */}
+          <div className="px-4 py-4 md:px-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isTrashed && (
+                    <Checkbox
+                      checked={trashSelected.has(campaign.id)}
+                      disabled={isHardDeleting || isBulkRestoring}
+                      onCheckedChange={(checked) => {
+                        setTrashSelected(prev => {
+                          const next = new Set(prev);
+                          if (checked) next.add(campaign.id);
+                          else next.delete(campaign.id);
+                          return next;
+                        });
+                      }}
+                      className="mr-1"
+                    />
+                  )}
+                  <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
+                  {isTrashed ? (
+                    <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs">
+                      W koszu
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'draft' ? 'bg-muted text-muted-foreground' : campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                      {campaign.status === 'draft' ? 'Szkic' :
+                       campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
+                       campaign.status === 'in_review' ? 'Klient ocenia' :
+                       campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {influencer?.name || 'Brak influencera'}
+                  </span>
+                  {client?.phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      {client.phone}
+                    </span>
+                  )}
+                </div>
+                {campaign.briefNotes && (
+                  <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">Brief: {campaign.briefNotes}</p>
+                )}
+              </div>
 
-    return (
-      <div className="space-y-4">
-        {campaigns.map(campaign => {
-          const client = getCampaignClient(campaign);
-          const influencer = getCampaignInfluencer(campaign);
-          const campaignIdeas = getCampaignIdeas(campaign.id);
-          const pendingCount = campaignIdeas.filter(i => i.status === 'pending').length;
-          const acceptedCount = campaignIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
-          const msTilDeadline = getSlaRemaining(campaign);
-          const hoursLeft = Math.floor(Math.abs(msTilDeadline) / 3600000);
-          const minutesLeft = Math.floor((Math.abs(msTilDeadline) % 3600000) / 60000);
-          const isOverdue = msTilDeadline < 0;
-          const isExpanded = expandedCampaignId === campaign.id;
-
-          return (
-            <div key={campaign.id} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-              {/* Campaign header */}
-              <div className="px-4 py-4 md:px-6">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
-                      <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                        {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
-                         campaign.status === 'in_review' ? 'Klient ocenia' :
-                         campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
-                      </Badge>
+              <div className="flex gap-3 items-start shrink-0">
+                {/* SLA countdown - hidden for trashed and drafts */}
+                {!isTrashed && !isDraft && (
+                  <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
+                    <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
+                      {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
                     </div>
-                    <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5" />
-                        {influencer?.name || 'Brak influencera'}
-                      </span>
-                      {client?.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5" />
-                          {client.phone}
-                        </span>
-                      )}
-                    </div>
-                    {campaign.briefNotes && (
-                      <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">Brief: {campaign.briefNotes}</p>
-                    )}
+                    <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
                   </div>
+                )}
+                {isDraft && (
+                  <div className="text-center rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-1.5">
+                    <div className="text-sm font-bold tabular-nums text-muted-foreground">Pauza</div>
+                    <div className="text-[10px] text-muted-foreground">SLA nieaktywne</div>
+                  </div>
+                )}
 
-                  <div className="flex gap-3 items-start shrink-0">
-                    {/* SLA countdown */}
-                    <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
-                      <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
-                        {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
-                    </div>
+                {/* Idea count */}
+                <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
+                  <div className="text-sm font-bold tabular-nums text-foreground">
+                    {Math.min(acceptedCount, campaign.targetIdeaCount)}/{campaign.targetIdeaCount}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">zaakceptowanych</div>
+                </div>
 
-                    {/* Idea count */}
-                    <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
-                      <div className="text-sm font-bold tabular-nums text-foreground">
-                        {campaignIdeas.length}/{campaign.targetIdeaCount}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">pomysłów</div>
-                    </div>
+                {/* Expand button */}
+                {!isTrashed && !isDraft && (
+                  <Button
+                    variant="ghost" size="sm" className="h-8 text-xs gap-1"
+                    onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    {isExpanded ? 'Zwiń' : 'Pomysły'}
+                  </Button>
+                )}
 
-                    {/* Expand button */}
-                    <Button
-                      variant="ghost" size="sm" className="h-8 text-xs gap-1"
-                      onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
-                    >
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      {isExpanded ? 'Zwiń' : 'Pomysły'}
+                {/* Activate button for drafts */}
+                {isDraft && (
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs gap-1"
+                    onClick={() => setEditingDraft(campaign)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edytuj szkic
+                  </Button>
+                )}
+
+                {/* Dropdown menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical className="h-4 w-4" />
                     </Button>
-
-                    {/* Status change */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-popover z-50">
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-popover z-50">
+                    {isTrashed ? (
+                      <>
+                        <DropdownMenuItem
+                          disabled={isRestoringCampaign === campaign.id}
+                          onClick={() => handleRestore(campaign.id)}
+                        >
+                          <ArchiveRestore className="mr-2 h-4 w-4" />
+                          {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setHardDeleteConfirm([campaign.id])}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Usuń całkowicie z systemu
+                        </DropdownMenuItem>
+                      </>
+                    ) : isDraft ? (
+                      <>
+                        <DropdownMenuItem onClick={() => setEditingDraft(campaign)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edytuj
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
+                          onClick={() => handleActivate(campaign.id)}
+                        >
+                          <Lightbulb className="mr-2 h-4 w-4" />
+                          Uruchom kampanię
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
+                        </DropdownMenuItem>
+                      </>
+                    ) : (
+                      <>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'awaiting_ideas' })}>Oczekuje na pomysły</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'in_review' })}>Klient ocenia</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'completed' })}>Zakończona</DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteCampaign(campaign.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />Usuń kampanię
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {/* Progress bar for ideas */}
-                <div className="mt-3 space-y-1">
-                  <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${Math.min(100, (campaignIdeas.length / campaign.targetIdeaCount) * 100)}%` }} />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stały się projektami` : 'Brak pomysłów'}</span>
-                    <span>{campaignIdeas.length} z {campaign.targetIdeaCount}</span>
-                  </div>
-                </div>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-
-              {/* Expanded ideas panel */}
-              {isExpanded && (
-                <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
-                  <IdeasPanel campaignId={campaign.id} role="admin" />
-                </div>
-              )}
             </div>
-          );
-        })}
+
+            {/* Progress bar for ideas */}
+            <div className="mt-3 space-y-1">
+              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                <div className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${Math.min(100, (acceptedCount / campaign.targetIdeaCount) * 100)}%` }} />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>{pendingCount > 0 ? `${pendingCount} w trakcie weryfikacji` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych` : 'Brak pomysłów'}</span>
+                <span>{Math.min(acceptedCount, campaign.targetIdeaCount)} z {campaign.targetIdeaCount} zaakceptowanych</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded ideas panel */}
+          {isExpanded && !isTrashed && !isDraft && (
+            <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
+              <IdeasPanel campaignId={campaign.id} role="admin" />
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Campaign filter tabs */}
+        <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
+          <button
+            onClick={() => { setCampaignTabFilter('active'); setTrashSelected(new Set()); }}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              campaignTabFilter === 'active'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Aktywne ({activeCampaigns.length})
+          </button>
+          <button
+            onClick={() => { setCampaignTabFilter('drafts'); setTrashSelected(new Set()); }}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+              campaignTabFilter === 'drafts'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Szkice ({draftCampaigns.length})
+          </button>
+          <button
+            onClick={() => setCampaignTabFilter('trash')}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+              campaignTabFilter === 'trash'
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Kosz ({trashedCampaigns.length})
+          </button>
+        </div>
+
+        {campaignTabFilter === 'active' ? (
+          activeCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <Lightbulb className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Brak aktywnych kampanii</p>
+              <p className="text-sm text-muted-foreground">Utwórz kampanię, aby zlecić influencerowi przygotowanie pomysłów.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activeCampaigns.map(campaign => renderCampaignCard(campaign, false))}
+            </div>
+          )
+        ) : campaignTabFilter === 'drafts' ? (
+          draftCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Brak szkiców</p>
+              <p className="text-sm text-muted-foreground">Rozpocznij tworzenie kampanii — szkice zapisują się automatycznie.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {draftCampaigns.map(campaign => renderCampaignCard(campaign, false))}
+            </div>
+          )
+        ) : (
+          trashedCampaigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <Trash2 className="h-12 w-12 text-muted-foreground opacity-40" />
+              <p className="text-lg font-semibold text-foreground">Kosz jest pusty</p>
+              <p className="text-sm text-muted-foreground">W koszu nie ma jeszcze żadnych usuniętych kampanii.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Select all */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={trashSelected.size === trashedCampaigns.length && trashedCampaigns.length > 0}
+                  disabled={isHardDeleting || isBulkRestoring}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setTrashSelected(new Set(trashedCampaigns.map(c => c.id)));
+                    } else {
+                      setTrashSelected(new Set());
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">Zaznacz wszystkie ({trashedCampaigns.length})</span>
+              </div>
+              {trashedCampaigns.map(campaign => renderCampaignCard(campaign, true))}
+            </div>
+          )
+        )}
+
+        {/* Floating Bulk Action Bar */}
+        {campaignTabFilter === 'trash' && trashSelected.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 shadow-2xl text-background animate-in slide-in-from-bottom-4 fade-in duration-200">
+            <span className="text-sm font-medium">Zaznaczono: {trashSelected.size}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkRestoring || isHardDeleting}
+              className="h-8 text-xs gap-1"
+              onClick={async () => {
+                setIsBulkRestoring(true);
+                try {
+                  await bulkRestoreCampaigns(Array.from(trashSelected));
+                  setTrashSelected(new Set());
+                } finally {
+                  setIsBulkRestoring(false);
+                }
+              }}
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" />
+              {isBulkRestoring ? 'Przywracanie...' : 'Przywróć zaznaczone'}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isHardDeleting || isBulkRestoring}
+              className="h-8 text-xs gap-1"
+              onClick={() => setHardDeleteConfirm(Array.from(trashSelected))}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Usuń trwale
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-background hover:text-background/80 hover:bg-background/10"
+              onClick={() => setTrashSelected(new Set())}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -1897,6 +2194,14 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {!readOnly && <ClientManagementDialog />}
           {!readOnly && <TeamManagementDialog />}
           {!readOnly && <AddCampaignDialog />}
+          {/* Edit draft dialog — controlled externally */}
+          {!readOnly && (
+            <AddCampaignDialog
+              editDraft={editingDraft}
+              externalOpen={!!editingDraft}
+              onOpenChange={(open) => { if (!open) setEditingDraft(null); }}
+            />
+          )}
           <span className="hidden text-sm text-muted-foreground sm:inline">{currentUser.name}</span>
           <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
             <LogOut className="h-4 w-4" />
@@ -1978,6 +2283,79 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               <AlertDialogCancel>Anuluj</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Usuń projekt
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {!readOnly && (
+        <AlertDialog open={!!deleteCampaignConfirm} onOpenChange={open => { if (!open && !isDeletingCampaign) setDeleteCampaignConfirm(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Przenieść do Kosza?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Kampania „{getDeleteCampaignName()}" zostanie ukryta z głównego widoku, ale będzie można ją przywrócić z Kosza.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeletingCampaign}>Anuluj</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeletingCampaign}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!deleteCampaignConfirm) return;
+                  setIsDeletingCampaign(true);
+                  try {
+                    softDeleteCampaign(deleteCampaignConfirm);
+                    await new Promise(r => setTimeout(r, 300));
+                  } finally {
+                    setIsDeletingCampaign(false);
+                    setDeleteCampaignConfirm(null);
+                  }
+                }}
+              >
+                {isDeletingCampaign ? 'Przenoszenie...' : 'Przenieś do Kosza'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Hard Delete AlertDialog */}
+      {!readOnly && (
+        <AlertDialog open={!!hardDeleteConfirm} onOpenChange={open => { if (!open && !isHardDeleting) { setHardDeleteConfirm(null); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Trwałe usunięcie kampanii</AlertDialogTitle>
+              <AlertDialogDescription>
+                Ta operacja jest nieodwracalna. {hardDeleteConfirm && hardDeleteConfirm.length > 1 ? `${hardDeleteConfirm.length} kampanii` : 'Kampania'} oraz powiązane zadania zostaną wymazane z bazy danych, ale dane przypisanych Klientów i Zespołu pozostaną bezpieczne. Czy na pewno chcesz kontynuować?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isHardDeleting}>Anuluj</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isHardDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!hardDeleteConfirm) return;
+                  setIsHardDeleting(true);
+                  try {
+                    await hardDeleteCampaigns(hardDeleteConfirm);
+                    setTrashSelected(prev => {
+                      const next = new Set(prev);
+                      hardDeleteConfirm.forEach(id => next.delete(id));
+                      return next;
+                    });
+                  } finally {
+                    setIsHardDeleting(false);
+                    setHardDeleteConfirm(null);
+                  }
+                }}
+              >
+                {isHardDeleting ? 'Usuwanie...' : 'Usuń trwale'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -25,8 +25,15 @@ export type ProjectStatus = 'active' | 'frozen';
 export interface TaskHistoryEntry {
   action: 'submitted' | 'approved' | 'rejected' | 'resubmitted' | 'deferred' | 'rejected_final';
   by: UserRole;
+  userId?: string;
   value?: string | null;
   feedback?: string | null;
+  timestamp: string;
+}
+
+export interface ClientVote {
+  decision: 'approved' | 'rejected';
+  comment: string;
   timestamp: string;
 }
 
@@ -49,6 +56,7 @@ export interface Task {
   deadlineDate: string | null;
   history: TaskHistoryEntry[];
   roleCompletions: Record<string, string>;
+  clientVotes: Record<string, ClientVote>;
 }
 
 export interface Recording {
@@ -80,6 +88,7 @@ export interface Project {
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
   assignedClientId: string | null;
+  assignedClientIds: string[];
   assignedKierownikId: string | null;
   assignedOperatorId: string | null;
   publicationDate: string | null;
@@ -135,7 +144,13 @@ export interface ActorEntry {
   telegramHandle: string;        // @username or +48... — used by Make.com webhook
 }
 
-export type IdeaStatus = 'pending' | 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected';
+export type IdeaStatus = 'pending' | 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected' | 'needs_revision';
+
+export interface IdeaEvaluation {
+  decision: 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected';
+  comment: string | null;
+  timestamp: string;
+}
 
 export interface Idea {
   id: string;
@@ -149,18 +164,22 @@ export interface Idea {
   clientNotes: string | null;   // for 'accepted_with_notes' or 'rejected' reasons
   reviewedAt: string | null;
   reviewedByUserId: string | null;
+  evaluations: Record<string, IdeaEvaluation>; // userId → vote
 }
 
-export type CampaignStatus = 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';
+export type CampaignStatus = 'draft' | 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';
 
 export interface Campaign {
   id: string;
   clientId: string;
   assignedInfluencerId: string;
-  assignedClientUserId: string | null;  // which klient user sees this campaign
+  assignedClientUserId: string | null;  // legacy single reviewer (kept for backward compat)
+  reviewerIds: string[];                // multi-reviewer array
   targetIdeaCount: number;              // default 12
   status: CampaignStatus;
   createdAt: string;
   slaHours: number;                     // 48 default — influencer deadline
   briefNotes: string;                   // DZ notes/brief for influencer
+  isDeleted: boolean;                   // soft delete flag
+  requireCastApproval: boolean;         // if true, client must manually approve cast; default false (auto-approve)
 }

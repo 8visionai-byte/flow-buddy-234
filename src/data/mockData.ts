@@ -28,60 +28,45 @@ export const INITIAL_CAMPAIGNS: Campaign[] = [
     clientId: 'c1',
     assignedInfluencerId: 'u3',
     assignedClientUserId: 'u2',
+    reviewerIds: ['u2'],
     targetIdeaCount: 12,
     status: 'awaiting_ideas',
     createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), // 2 hours ago
     slaHours: 48,
     briefNotes: 'Chcemy serię filmów o higienie jamy ustnej. Pomysły powinny być ciekawe i angażujące dla pacjentów kliniki stomatologicznej.',
+    isDeleted: false,
+    requireCastApproval: false,
   },
 ];
 
 export const INITIAL_IDEAS: Idea[] = [
   {
-    id: 'idea1',
-    campaignId: 'camp1',
-    resultingProjectId: null,
+    id: 'idea1', campaignId: 'camp1', resultingProjectId: null,
     title: 'Ile razy dziennie myć zęby?',
     description: 'Film edukacyjny pokazujący prawidłową technikę mycia zębów i dlaczego 2x dziennie to absolutne minimum. Skupiamy się na ciekawostkach, które zaskakują pacjentów.',
-    createdByUserId: 'u3',
-    createdAt: new Date(Date.now() - 90 * 60000).toISOString(),
-    status: 'pending',
-    clientNotes: null,
-    reviewedAt: null,
-    reviewedByUserId: null,
+    createdByUserId: 'u3', createdAt: new Date(Date.now() - 90 * 60000).toISOString(),
+    status: 'pending', clientNotes: null, reviewedAt: null, reviewedByUserId: null, evaluations: {},
   },
   {
-    id: 'idea2',
-    campaignId: 'camp1',
-    resultingProjectId: null,
+    id: 'idea2', campaignId: 'camp1', resultingProjectId: null,
     title: 'Elektryczna vs szczoteczka ręczna — co wybrać?',
     description: 'Porównanie skuteczności obu metod poparte badaniami. Pokazujemy konkretne przypadki pacjentów i opinie dentysty.',
-    createdByUserId: 'u3',
-    createdAt: new Date(Date.now() - 75 * 60000).toISOString(),
-    status: 'pending',
-    clientNotes: null,
-    reviewedAt: null,
-    reviewedByUserId: null,
+    createdByUserId: 'u3', createdAt: new Date(Date.now() - 75 * 60000).toISOString(),
+    status: 'pending', clientNotes: null, reviewedAt: null, reviewedByUserId: null, evaluations: {},
   },
   {
-    id: 'idea3',
-    campaignId: 'camp1',
-    resultingProjectId: null,
+    id: 'idea3', campaignId: 'camp1', resultingProjectId: null,
     title: '5 produktów, które niszczą Twoje zęby bez wiedzy',
     description: 'Zaskakujące produkty codziennego użytku, o których szkodliwości mało kto wie — sok pomarańczowy, gumy do żucia, napoje energetyczne.',
-    createdByUserId: 'u3',
-    createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
-    status: 'pending',
-    clientNotes: null,
-    reviewedAt: null,
-    reviewedByUserId: null,
+    createdByUserId: 'u3', createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
+    status: 'pending', clientNotes: null, reviewedAt: null, reviewedByUserId: null, evaluations: {},
   },
 ];
 
 export const INITIAL_PROJECTS: Project[] = [
-  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', assignedKierownikId: 'u5', assignedOperatorId: 'u6', publicationDate: null, priority: 'medium', slaHours: 48 },
-  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
-  { id: 'p3', name: '5 trików na produktywność', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', assignedClientIds: ['u2'], assignedKierownikId: 'u5', assignedOperatorId: 'u6', publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedClientIds: [], assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p3', name: '5 trików na produktywność', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedClientIds: [], assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
 ];
 
 interface StageDefinition {
@@ -139,6 +124,7 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     deadlineDate: null,
     history: [],
     roleCompletions: {},
+    clientVotes: {},
   }));
 }
 
