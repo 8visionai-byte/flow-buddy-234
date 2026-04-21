@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Task, ROLE_LABELS, TaskHistoryEntry, ActorEntry } from '@/types';
+import { Task, ROLE_LABELS, UserRole, TaskHistoryEntry } from '@/types';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { tryParseSocialDates } from '@/components/SocialDatesWidget';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Twitter, Instagram, Youtube, UserPlus } from 'lucide-react';
+import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Instagram, Youtube } from 'lucide-react';
+const TikTokIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.74a8.18 8.18 0 0 0 4.79 1.52V6.79a4.85 4.85 0 0 1-1.02-.1z"/>
+  </svg>
+);
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { toast } from 'sonner';
 import {
   Accordion,
   AccordionContent,
@@ -25,8 +29,9 @@ const actionLabels: Record<TaskHistoryEntry['action'], string> = {
   submitted: 'Przesłano',
   approved: 'Zaakceptowano',
   rejected: 'Odrzucono z uwagami',
+  file_notes: 'Uwagi naniesione',
   resubmitted: 'Poprawiono i wysłano ponownie',
-  deferred: 'Odroczono',
+  deferred: 'Odłożono na później',
   rejected_final: 'Odrzucono ostatecznie',
 };
 
@@ -34,6 +39,7 @@ const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
   submitted: <Send className="h-3.5 w-3.5 text-primary" />,
   approved: <ThumbsUp className="h-3.5 w-3.5 text-success" />,
   rejected: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
+  file_notes: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   deferred: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
   rejected_final: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
@@ -77,17 +83,10 @@ const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
 );
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
-  const { currentUser, updateTaskValue, projects, clients, users } = useApp();
+  const { currentUser, updateTaskValue, tasks } = useApp();
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
-
-  // Actor assignment edit state
-  const [editingActors, setEditingActors] = useState(false);
-  const [editActorList, setEditActorList] = useState<ActorEntry[]>([]);
-  const [actorError, setActorError] = useState('');
-
-  const project = projects.find(p => p.id === task.projectId);
 
   // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
   const canEditUrl =
@@ -95,69 +94,6 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
     task.status === 'done' &&
     currentUser?.role === 'influencer' &&
     task.assignedRoles.includes('influencer');
-
-  // Can edit actor assignment (influencer only, done task)
-  const canEditActors =
-    task.inputType === 'actor_assignment' &&
-    task.status === 'done' &&
-    currentUser?.role === 'influencer' &&
-    task.assignedRoles.includes('influencer');
-
-  const parseCurrentActors = (): ActorEntry[] => {
-    if (!task.value) return [];
-    try {
-      const parsed = JSON.parse(task.value);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) return parsed;
-    } catch {}
-    return [];
-  };
-
-  const startEditActors = () => {
-    setEditActorList(parseCurrentActors());
-    setEditingActors(true);
-    setActorError('');
-  };
-
-  const removeActor = (id: string) => {
-    setEditActorList(prev => prev.filter(a => a.id !== id));
-  };
-
-  // Get available client users for adding
-  const clientUsersForProject = users.filter(u => u.role === 'klient' && u.clientId === project?.clientId);
-  const clientForProject = clients.find(c => c.id === project?.clientId) ?? null;
-
-  const isActorAdded = (sourceId: string) => editActorList.some(a => a.sourceId === sourceId);
-
-  const addActorFromDB = (sourceId: string, name: string, sourceType: 'client_contact' | 'client_user', defaultRole: string) => {
-    if (isActorAdded(sourceId)) return;
-    setEditActorList(prev => [...prev, {
-      id: Math.random().toString(36).slice(2, 9),
-      sourceType,
-      sourceId,
-      name,
-      roleLabel: defaultRole,
-      notifyChannel: 'none',
-      telegramHandle: '',
-    }]);
-  };
-
-  const handleSaveActors = () => {
-    if (editActorList.length === 0) {
-      setActorError('Przypisz co najmniej jedną osobę');
-      return;
-    }
-    const historyEntry: TaskHistoryEntry = {
-      action: 'submitted',
-      by: 'influencer',
-      userId: currentUser?.id,
-      value: JSON.stringify(editActorList),
-      timestamp: new Date().toISOString(),
-    };
-    updateTaskValue(task.id, JSON.stringify(editActorList), historyEntry);
-    setEditingActors(false);
-    setActorError('');
-    toast.success('Zapisano zmiany');
-  };
 
   const handleSaveUrl = () => {
     if (!URL_REGEX.test(editUrlValue.trim())) {
@@ -237,7 +173,7 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         if (!dates) return null;
         const PLATFORM_CONFIG = [
           { dateKey: 'facebookDate' as const, label: 'Facebook', icon: <Facebook className="h-3.5 w-3.5 text-[#1877F2]" /> },
-          { dateKey: 'twitterDate' as const, label: 'Twitter / X', icon: <Twitter className="h-3.5 w-3.5 text-foreground" /> },
+          { dateKey: 'tiktokDate' as const, label: 'TikTok', icon: <TikTokIcon className="h-3.5 w-3.5 text-foreground" /> },
           { dateKey: 'instagramDate' as const, label: 'Instagram', icon: <Instagram className="h-3.5 w-3.5 text-[#E4405F]" /> },
           { dateKey: 'youtubeDate' as const, label: 'YouTube', icon: <Youtube className="h-3.5 w-3.5 text-[#FF0000]" /> },
         ] as const;
@@ -264,14 +200,73 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         );
       })()}
 
-      {task.value && task.value !== 'true' && task.value !== 'approved' && task.value !== 'approved_with_file_notes' && task.value !== 'skipped' && task.inputType !== 'social_dates' && (
+      {/* Multi-party notes (Wnieś uwagi przed montażem) */}
+      {task.inputType === 'multi_party_notes' && task.value && (() => {
+        try {
+          const notes: Record<string, string> = JSON.parse(task.value);
+          const entries = Object.entries(notes).filter(([, v]) => v);
+          if (!entries.length) return null;
+          return (
+            <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4 space-y-3">
+              <div className="text-xs font-medium text-muted-foreground">Uwagi przed montażem</div>
+              {entries.map(([role, note]) => (
+                <div key={role}>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">
+                    {ROLE_LABELS[role as UserRole] || role}
+                  </div>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{note}</p>
+                </div>
+              ))}
+            </div>
+          );
+        } catch { return null; }
+      })()}
+
+      {task.inputType === 'publication_confirm' && task.value && (() => {
+        try {
+          const confirmedRaw: Record<string, string | boolean | null> = JSON.parse(task.value);
+          const PLAT_LABELS: Record<string, string> = { facebook: 'Facebook', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube' };
+          const PLAT_ICONS: Record<string, React.ReactNode> = {
+            facebook: <Facebook className="h-3.5 w-3.5 text-[#1877F2]" />,
+            tiktok: <TikTokIcon className="h-3.5 w-3.5 text-foreground" />,
+            instagram: <Instagram className="h-3.5 w-3.5 text-[#E4405F]" />,
+            youtube: <Youtube className="h-3.5 w-3.5 text-[#FF0000]" />,
+          };
+          return (
+            <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4 space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">Publikacja per platforma</span>
+              {Object.entries(confirmedRaw).map(([platform, v]) => {
+                const isDone = !!v;
+                const timestamp = typeof v === 'string' ? v : null;
+                return (
+                  <div key={platform} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      {PLAT_ICONS[platform]}
+                      <span className="font-medium">{PLAT_LABELS[platform] || platform}</span>
+                    </div>
+                    {isDone
+                      ? timestamp
+                        ? <span className="text-xs text-success">{format(new Date(timestamp), 'dd.MM.yyyy, HH:mm', { locale: pl })}</span>
+                        : <span className="text-xs text-success">Potwierdzono</span>
+                      : <span className="text-xs text-muted-foreground italic">Nie wykonano</span>
+                    }
+                  </div>
+                );
+              })}
+            </div>
+          );
+        } catch { return null; }
+      })()}
+
+      {task.value && task.value !== 'true' && task.value !== 'approved' && task.value !== 'approved_with_file_notes' && task.value !== 'skipped' && task.inputType !== 'social_dates' && task.inputType !== 'publication_confirm' && task.inputType !== 'multi_party_notes' && (
         <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
           <div className="mb-1 flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               {task.inputType === 'url' ? 'Przesłany link'
                 : task.inputType === 'raw_footage' ? 'Wgrana surówka'
-                : task.inputType === 'actor_assignment' ? 'Przypisane osoby'
-                : 'Zaakceptowana treść'}
+                : task.inputType === 'actor_approval' ? 'Komentarz do akceptacji'
+                : task.inputType === 'filming_confirmation' ? 'Potwierdzenie nagrania'
+                : 'Przesłana treść'}
             </span>
             {canEditUrl && !editingUrl && (
               <Button
@@ -284,98 +279,8 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 Popraw link
               </Button>
             )}
-            {canEditActors && !editingActors && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
-                onClick={startEditActors}
-              >
-                <Pencil className="h-3 w-3" />
-                Edytuj obsadę
-              </Button>
-            )}
           </div>
-
-          {/* Actor assignment edit mode */}
-          {editingActors && canEditActors ? (
-            <div className="space-y-3 mt-2">
-              {/* Current actors with remove buttons */}
-              {editActorList.length > 0 ? (
-                <div className="space-y-1.5">
-                  {editActorList.map(actor => (
-                    <div key={actor.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2">
-                      <div className="flex items-center gap-2 text-sm text-foreground min-w-0">
-                        <UserIcon className="h-4 w-4 text-primary shrink-0" />
-                        <span className="font-medium truncate">{actor.name}</span>
-                        {actor.roleLabel && <Badge variant="secondary" className="text-[10px] border-0">{actor.roleLabel}</Badge>}
-                      </div>
-                      <button
-                        onClick={() => removeActor(actor.id)}
-                        className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground text-center py-2">Brak przypisanych osób</p>
-              )}
-
-              {/* Add person buttons from DB */}
-              {(clientForProject || clientUsersForProject.length > 0) && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dodaj osobę</p>
-                  {clientForProject && (
-                    <button
-                      onClick={() => addActorFromDB(`contact-${clientForProject.id}`, clientForProject.contactName, 'client_contact', 'Klient')}
-                      disabled={isActorAdded(`contact-${clientForProject.id}`)}
-                      className="flex w-full items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm hover:border-primary/40 hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <span className="flex items-center gap-2">
-                        <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-foreground">{clientForProject.contactName}</span>
-                        <Badge variant="outline" className="text-[10px]">Kontakt klienta</Badge>
-                      </span>
-                      {isActorAdded(`contact-${clientForProject.id}`) && <Check className="h-3.5 w-3.5 text-success" />}
-                    </button>
-                  )}
-                  {clientUsersForProject.map(u => (
-                    <button
-                      key={u.id}
-                      onClick={() => addActorFromDB(u.id, u.name, 'client_user', 'Klient')}
-                      disabled={isActorAdded(u.id)}
-                      className="flex w-full items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm hover:border-primary/40 hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <span className="flex items-center gap-2">
-                        <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-foreground">{u.name}</span>
-                        <Badge variant="outline" className="text-[10px]">Konto klienta</Badge>
-                      </span>
-                      {isActorAdded(u.id) && <Check className="h-3.5 w-3.5 text-success" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {actorError && <p className="text-xs text-destructive">{actorError}</p>}
-
-              <div className="flex gap-2 pt-1">
-                <Button
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={handleSaveActors}
-                  disabled={editActorList.length === 0}
-                >
-                  <Check className="h-3 w-3" />Zapisz zmiany
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setEditingActors(false); setActorError(''); }}>
-                  <X className="h-3 w-3" />Anuluj
-                </Button>
-              </div>
-            </div>
-          ) : editingUrl ? (
+          {editingUrl ? (
             <div className="space-y-2 mt-1">
               <div className="relative">
                 <LinkIcon className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -431,30 +336,12 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                     </div>
                   );
                 }
-                // Generic key-value object (e.g. multi-party notes: { role: "text", ... })
-                if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                  const ROLE_DISPLAY: Record<string, string> = {
-                    admin: 'Admin',
-                    klient: 'Klient',
-                    influencer: 'Influencer',
-                    montazysta: 'Montażysta',
-                    kierownik_planu: 'Kierownik Planu',
-                    operator: 'Operator',
-                    publikator: 'Publikator',
-                  };
-                  return (
-                    <div className="space-y-2">
-                      {Object.entries(parsed).map(([key, val]) => (
-                        <div key={key} className="text-sm">
-                          <span className="font-semibold text-foreground">{ROLE_DISPLAY[key] || key.replace(/_/g, ' ')}: </span>
-                          <span className="text-foreground/80 whitespace-pre-wrap">{String(val)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
               } catch {}
-              return <p className="text-sm text-foreground whitespace-pre-wrap break-all">{task.value}</p>;
+              // Strip "approved: " prefix from actor_approval comments
+              const displayValue = task.inputType === 'actor_approval' && task.value?.startsWith('approved: ')
+                ? task.value.slice('approved: '.length)
+                : task.value;
+              return <p className="text-sm text-foreground whitespace-pre-wrap break-all">{displayValue}</p>;
             })()
           )}
         </div>
@@ -485,30 +372,52 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                         <Badge variant="secondary" className="text-[10px] border-0">{ROLE_LABELS[entry.by]}</Badge>
                         <span className="text-xs text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
                       </div>
-                      {entry.value && entry.value !== 'approved' && (
-                        tryParseSocialDescriptions(entry.value) ? (
-                          <div className="mt-1"><SocialDescriptionsDisplay value={entry.value} /></div>
-                        ) : (() => {
-                          const rf = tryParseRawFootage(entry.value!);
-                          if (rf) return <div className="mt-1"><RawFootageDisplay payload={rf} /></div>;
-                          try {
-                            const parsed = JSON.parse(entry.value!);
-                            // New format: ActorEntry[]
-                            if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) {
+                      {entry.value && entry.value !== 'approved' && entry.value !== 'true' && (() => {
+                        const v = entry.value!;
+                        // Social descriptions
+                        if (tryParseSocialDescriptions(v)) return <div className="mt-1"><SocialDescriptionsDisplay value={v} /></div>;
+                        // Raw footage
+                        const rf = tryParseRawFootage(v);
+                        if (rf) return <div className="mt-1"><RawFootageDisplay payload={rf} /></div>;
+                        // Try JSON
+                        try {
+                          const parsed = JSON.parse(v);
+                          // ActorEntry[]
+                          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) {
+                            return <p className="mt-1 text-muted-foreground text-xs">{parsed.map((a: { name: string }) => a.name).join(', ')}</p>;
+                          }
+                          // Old actor format
+                          if (parsed.type && parsed.name) {
+                            return <p className="mt-1 text-muted-foreground text-xs">Osoba: {parsed.name}</p>;
+                          }
+                          // Multi-party notes
+                          if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            const notes = Object.entries(parsed).filter(([, nv]) => nv && typeof nv === 'string') as [string, string][];
+                            if (notes.length && !notes.some(([k]) => ['facebookDate','tiktokDate','instagramDate','youtubeDate'].includes(k))) {
                               return (
-                                <p className="mt-1 text-muted-foreground text-xs">
-                                  {parsed.map((a: { name: string }) => a.name).join(', ')}
-                                </p>
+                                <div className="mt-1 space-y-1">
+                                  {notes.map(([role, note]) => (
+                                    <div key={role} className="text-xs text-muted-foreground">
+                                      <span className="font-medium">{ROLE_LABELS[role as UserRole] || role}: </span>
+                                      <span className="whitespace-pre-wrap">{note}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               );
                             }
-                            // Old format
-                            if (parsed.type && parsed.name) {
-                              return <p className="mt-1 text-muted-foreground text-xs">Osoba: {parsed.name} ({parsed.type === 'client' ? 'Klient' : 'Inna osoba'})</p>;
+                            // Social dates
+                            const dateKeys = ['facebookDate','tiktokDate','instagramDate','youtubeDate'];
+                            const dateEntries = Object.entries(parsed).filter(([k, dv]) => dateKeys.includes(k) && dv) as [string, string][];
+                            if (dateEntries.length) {
+                              const labelMap: Record<string, string> = { facebookDate: 'FB', tiktokDate: 'TT', instagramDate: 'IG', youtubeDate: 'YT' };
+                              return <p className="mt-1 text-xs text-muted-foreground">{dateEntries.map(([k, dv]) => `${labelMap[k]} ${format(new Date(dv), 'dd.MM', { locale: pl })}`).join(' · ')}</p>;
                             }
-                          } catch {}
-                          return <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{entry.value}</p>;
-                        })()
-                      )}
+                          }
+                        } catch {}
+                        // Strip "approved: " prefix
+                        const display = v.startsWith('approved: ') ? v.slice('approved: '.length) : v;
+                        return <p className="mt-1 text-muted-foreground whitespace-pre-wrap text-xs">{display}</p>;
+                      })()}
                       {entry.feedback && (
                         <p className="mt-1 text-destructive whitespace-pre-wrap text-xs">Uwagi: {entry.feedback}</p>
                       )}

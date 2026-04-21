@@ -1,1 +1,0 @@
-ALTER TABLE public.campaigns ADD COLUMN require_cast_approval boolean NOT NULL DEFAULT false;

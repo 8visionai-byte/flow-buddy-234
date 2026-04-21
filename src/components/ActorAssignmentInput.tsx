@@ -8,6 +8,72 @@ import {
   CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
+// ─── Phone helpers ─────────────────────────────────────────────────────────────
+
+// Used only for parsing legacy compact format (no UI dropdown)
+const KNOWN_DIAL_CODES = ['+420', '+380', '+381', '+385', '+386', '+421',
+  '+48', '+49', '+44', '+33', '+39', '+34', '+31', '+32', '+41', '+43',
+  '+45', '+46', '+47', '+30', '+36', '+40', '+7', '+1'];
+
+function parsePhone(phone: string): { dialCode: string; local: string } {
+  if (!phone) return { dialCode: '+48', local: '' };
+  // Preferred format with space separator: "+48 507345902"
+  const spaceIdx = phone.indexOf(' ');
+  if (spaceIdx > 0) return { dialCode: phone.slice(0, spaceIdx), local: phone.slice(spaceIdx + 1) };
+  // Legacy compact format — match known codes (longest first to avoid ambiguity)
+  for (const code of KNOWN_DIAL_CODES) {
+    if (phone.startsWith(code) && phone.length > code.length) {
+      return { dialCode: code, local: phone.slice(code.length) };
+    }
+  }
+  return { dialCode: '+48', local: phone };
+}
+
+function toCompactPhone(dialCode: string, local: string): string {
+  const localNoSpaces = local.replace(/\s/g, '');
+  // Store with space separator so re-parsing is unambiguous
+  return localNoSpaces ? `${dialCode} ${localNoSpaces}` : '';
+}
+
+interface PhoneFieldProps {
+  value: string;
+  onChange: (compact: string) => void;
+  className?: string;
+}
+
+const PhoneField = ({ value, onChange, className = '' }: PhoneFieldProps) => {
+  const { dialCode, local } = parsePhone(value);
+
+  const handleDialCode = (raw: string) => {
+    const code = raw.startsWith('+') ? raw : '+' + raw;
+    onChange(toCompactPhone(code, local));
+  };
+  const handleLocal = (raw: string) => {
+    onChange(toCompactPhone(dialCode, raw));
+  };
+
+  return (
+    <div className={`flex gap-1.5 ${className}`}>
+      <Input
+        className="h-7 text-xs w-16 shrink-0 font-mono tabular-nums px-2"
+        type="text"
+        value={dialCode}
+        onChange={e => handleDialCode(e.target.value)}
+        maxLength={5}
+      />
+      <Input
+        className="h-7 text-xs flex-1 tabular-nums"
+        type="tel"
+        inputMode="numeric"
+        value={local}
+        onChange={e => handleLocal(e.target.value)}
+        placeholder="600 100 200"
+        maxLength={15}
+      />
+    </div>
+  );
+};
+
 // ─── tiny helpers ──────────────────────────────────────────────────────────────
 function uid() {
   return Math.random().toString(36).slice(2, 9);
@@ -52,10 +118,10 @@ const ActorRow = ({ actor, onRemove, onToggleNotify, onTelegramChange }: ActorRo
       </div>
 
       {/* Telegram notification row */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => onToggleNotify(actor.id)}
-          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors shrink-0 ${
             actor.notifyChannel === 'telegram'
               ? 'bg-primary/10 text-primary'
               : 'bg-muted text-muted-foreground'
@@ -67,11 +133,10 @@ const ActorRow = ({ actor, onRemove, onToggleNotify, onTelegramChange }: ActorRo
           }
         </button>
         {actor.notifyChannel === 'telegram' && (
-          <Input
-            placeholder="@username lub +48..."
+          <PhoneField
             value={actor.telegramHandle}
-            onChange={e => onTelegramChange(actor.id, e.target.value)}
-            className="h-7 text-xs flex-1"
+            onChange={compact => onTelegramChange(actor.id, compact)}
+            className="flex-1 min-w-[160px]"
           />
         )}
       </div>
@@ -115,8 +180,9 @@ const SuggestionCard = ({ name, label, sourceType, alreadyAdded, onAdd }: Sugges
 
 interface ActorAssignmentInputProps {
   client: Client | null;
-  clientUsers: User[];          // klient-role users linked to this client
+  clientUsers: User[];
   onSubmit: (actors: ActorEntry[]) => void;
+  initialActors?: ActorEntry[];
   disabled?: boolean;
 }
 
@@ -124,13 +190,14 @@ export default function ActorAssignmentInput({
   client,
   clientUsers,
   onSubmit,
+  initialActors,
   disabled,
 }: ActorAssignmentInputProps) {
-  const [actors, setActors] = useState<ActorEntry[]>([]);
+  const [actors, setActors] = useState<ActorEntry[]>(initialActors ?? []);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('');
-  const [newTelegram, setNewTelegram] = useState('');
+  const [newPhone, setNewPhone] = useState('');  // compact format
   const [error, setError] = useState('');
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -141,16 +208,19 @@ export default function ActorAssignmentInput({
     name: string,
     sourceType: ActorSourceType,
     defaultRole: string,
+    phone?: string,
   ) => {
     if (isAdded(sourceId)) return;
+    // phone is already compact from client data
+    const handle = phone || '';
     setActors(prev => [...prev, {
       id: uid(),
       sourceType,
       sourceId,
       name,
       roleLabel: defaultRole,
-      notifyChannel: 'telegram',
-      telegramHandle: '',
+      notifyChannel: handle ? 'telegram' : 'none',
+      telegramHandle: handle,
     }]);
   };
 
@@ -162,10 +232,10 @@ export default function ActorAssignmentInput({
       sourceType: 'external',
       name: newName.trim(),
       roleLabel: newRole.trim(),
-      notifyChannel: newTelegram.trim() ? 'telegram' : 'none',
-      telegramHandle: newTelegram.trim(),
+      notifyChannel: newPhone ? 'telegram' : 'none',
+      telegramHandle: newPhone,
     }]);
-    setNewName(''); setNewRole(''); setNewTelegram('');
+    setNewName(''); setNewRole(''); setNewPhone('');
     setShowAddForm(false);
   };
 
@@ -201,19 +271,17 @@ export default function ActorAssignmentInput({
             {client?.companyName ?? 'Z bazy klientów'}
           </div>
 
-          {/* Main client contact */}
-          {client && (
+          {client && !clientUsers.some(u => u.name.trim().toLowerCase() === client.contactName.trim().toLowerCase()) && (
             <SuggestionCard
               name={client.contactName}
               label={`Kontakt — ${client.email || client.phone || 'brak danych kontaktowych'}`}
               sourceType="client_contact"
               sourceId={`contact-${client.id}`}
               alreadyAdded={isAdded(`contact-${client.id}`)}
-              onAdd={() => addFromDB(`contact-${client.id}`, client.contactName, 'client_contact', 'Klient')}
+              onAdd={() => addFromDB(`contact-${client.id}`, client.contactName, 'client_contact', 'Klient', client.phone)}
             />
           )}
 
-          {/* Registered klient users */}
           {clientUsers.map(u => (
             <SuggestionCard
               key={u.id}
@@ -222,7 +290,7 @@ export default function ActorAssignmentInput({
               sourceType="client_user"
               sourceId={u.id}
               alreadyAdded={isAdded(u.id)}
-              onAdd={() => addFromDB(u.id, u.name, 'client_user', 'Klient')}
+              onAdd={() => addFromDB(u.id, u.name, 'client_user', 'Klient', (u as User & { phone?: string }).phone)}
             />
           ))}
         </div>
@@ -266,15 +334,10 @@ export default function ActorAssignmentInput({
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Telegram / telefon
+                Telefon do Telegrama
                 <span className="ml-1 font-normal opacity-60">(opcjonalnie — do powiadomień)</span>
               </label>
-              <Input
-                placeholder="@username lub +48 600 000 000"
-                value={newTelegram}
-                onChange={e => setNewTelegram(e.target.value)}
-                className="h-8 text-sm"
-              />
+              <PhoneField value={newPhone} onChange={setNewPhone} className="[&>button]:h-8 [&>input]:h-8 [&>input]:text-sm" />
             </div>
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex gap-2 pt-1">

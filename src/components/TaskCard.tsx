@@ -19,7 +19,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare, CalendarClock, UserPlus, User as UserIcon, Clock, XCircle, ExternalLink, BookOpen, CheckCheck, Copy, Check } from 'lucide-react';
+import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare, CalendarClock, UserPlus, User as UserIcon, Clock, XCircle, ExternalLink, BookOpen, CheckCheck, Copy, Check, Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import SlaTimer from '@/components/SlaTimer';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -28,6 +29,7 @@ const actionLabels: Record<TaskHistoryEntry['action'], string> = {
   submitted: 'Przesłano',
   approved: 'Zaakceptowano',
   rejected: 'Odrzucono z uwagami',
+  file_notes: 'Uwagi naniesione',
   resubmitted: 'Poprawiono i wysłano ponownie',
   deferred: 'Odłożono na później',
   rejected_final: 'Odrzucono ostatecznie',
@@ -94,7 +96,7 @@ interface TaskCardProps {
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
 const TaskCard = ({ task, projectName }: TaskCardProps) => {
-  const { completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote, ideas, campaigns } = useApp();
+  const { completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -109,6 +111,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   const [showAcceptWithNotesForm, setShowAcceptWithNotesForm] = useState(false);
   const [acceptNotes, setAcceptNotes] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [fileNotesSubmitted, setFileNotesSubmitted] = useState(false);
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [briefDraft, setBriefDraft] = useState<string>(() => {
@@ -116,6 +119,14 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     return task.roleCompletions?.['influencer'] ?? '';
   });
   const [briefDraftSaved, setBriefDraftSaved] = useState(false);
+  // Private notes for "Brief dla montażysty" card (stored in the "Wnieś uwagi" task)
+  const notesTaskForBrief = task.title === 'Brief dla montażysty'
+    ? tasks.find(nt => nt.projectId === task.projectId && nt.title === 'Wnieś uwagi przed montażem')
+    : null;
+  const [privateNotesDraft, setPrivateNotesDraft] = useState<string>(
+    () => notesTaskForBrief?.roleCompletions?.['influencer'] ?? ''
+  );
+  const [privateNotesSaved, setPrivateNotesSaved] = useState(false);
   const [recordingNumber, setRecordingNumber] = useState('');
 
   const project = projects.find(p => p.id === task.projectId);
@@ -293,8 +304,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           <Button
             variant="outline"
             className="w-full justify-start gap-3 h-12 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
-            onClick={() => completeTask(task.id, 'approved_with_file_notes', 'klient')}
-            disabled={!scriptUrl}
+            onClick={() => { setFileNotesSubmitted(true); completeTask(task.id, 'approved_with_file_notes', 'klient'); }}
+            disabled={!scriptUrl || fileNotesSubmitted}
           >
             <MessageSquare className="h-5 w-5 shrink-0" />
             <div className="text-left">
@@ -405,20 +416,14 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   }
 
   // === APPROVAL VIEW (Client sees influencer's content) ===
-  if (task.status === 'pending_client_approval' && task.inputType === 'approval') {
-    const project = projects.find(p => p.id === task.projectId);
-    let clientIds = (project?.assignedClientIds || []).filter(Boolean);
-    // Fallback: use campaign reviewerIds
-    if (clientIds.length === 0) {
-      const idea = ideas.find(i => i.resultingProjectId === task.projectId);
-      const camp = idea ? campaigns.find(c => c.id === idea.campaignId) : null;
-      if (camp?.reviewerIds?.length) clientIds = camp.reviewerIds;
-    }
-    const isConsensusMode = clientIds.length > 1;
-    const currentUserVote = currentUser?.id ? task.clientVotes[currentUser.id] : undefined;
-    const hasAlreadyVoted = !!currentUserVote;
-    const voteCount = clientIds.filter(cid => task.clientVotes[cid]).length;
-    const totalVoters = clientIds.length;
+  if (task.status === 'pending_client_approval' && (task.inputType === 'approval' || task.inputType === 'actor_approval')) {
+    // actor_approval tasks OR legacy 'approval' tasks whose previousValue is ActorEntry[]
+    const isActorApproval = task.inputType === 'actor_approval' || (() => {
+      try {
+        const p = JSON.parse(task.previousValue ?? '');
+        return Array.isArray(p) && p.length > 0 && !!p[0].sourceType;
+      } catch { return false; }
+    })();
 
     return (
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -426,44 +431,34 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide">{projectName}</span>
           <SlaTimer assignedAt={task.assignedAt} compact />
         </div>
-        <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
+        <div className="mb-2 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-foreground">{task.title}</h3>
+          <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-default text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="h-4 w-4" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs space-y-2 p-3 text-xs">
+                  {isActorApproval ? (
+                    <>
+                      <p><span className="font-semibold text-success">Zaakceptuj</span> — aktorzy zatwierdzeni, produkcja idzie dalej.</p>
+                      <p><span className="font-semibold text-success">Zaakceptuj z uwagami</span> — akceptujesz skład, ale influencer wprowadzi drobne poprawki samodzielnie. Nie wraca do Ciebie.</p>
+                      <p><span className="font-semibold text-warning">Poproś o poprawki</span> — chcesz innych aktorów. Influencer proponuje nowy skład i czeka na Twoją ponowną akceptację.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p><span className="font-semibold text-success">Zaakceptuj</span> — materiał zatwierdzony. Produkcja przechodzi do kolejnego etapu.</p>
+                      <p><span className="font-semibold text-success">Zaakceptuj z uwagami</span> — akceptujesz materiał, ale przekazujesz montażyście informację zwrotną do przemyślenia. Nie wraca do Ciebie ponownie.</p>
+                      <p><span className="font-semibold text-warning">Poproś o poprawki</span> — materiał wymaga zmian. Montażysta wprowadzi poprawki i prześle ponownie do Twojej akceptacji.</p>
+                    </>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+        </div>
         <p className="mb-4 text-sm text-muted-foreground">{task.description}</p>
-
-        {/* Consensus progress indicator */}
-        {isConsensusMode && (
-          <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opinie: {voteCount}/{totalVoters}</span>
-              <Badge variant="secondary" className="text-[10px]">Konsensus wymagany</Badge>
-            </div>
-            {/* Voter list */}
-            <div className="space-y-1.5">
-              {clientIds.map(cid => {
-                const voter = users.find(u => u.id === cid);
-                const vote = task.clientVotes[cid];
-                return (
-                  <div key={cid} className="flex items-center gap-2 text-sm">
-                    {vote ? (
-                      vote.decision === 'approved' ? (
-                        <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4 text-warning shrink-0" />
-                      )
-                    ) : (
-                      <Clock className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-                    )}
-                    <span className={vote ? 'text-foreground font-medium' : 'text-muted-foreground'}>{voter?.name || 'Nieznany użytkownik'}</span>
-                    {vote && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {vote.decision === 'approved' ? '— zaakceptował/a' : '— prosi o zmiany'}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Show influencer's submission */}
         {task.previousValue && (() => {
@@ -484,11 +479,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                         <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
                         <span className="text-sm font-medium text-foreground">{a.name}</span>
                         {a.roleLabel && <Badge variant="secondary" className="text-[10px] border-0">{a.roleLabel}</Badge>}
-                        {a.notifyChannel === 'telegram' && a.telegramHandle && (
-                          <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
-                            Telegram: {a.telegramHandle}
-                          </Badge>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -544,134 +534,110 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           );
         })()}
 
-        {/* Already voted message */}
-        {isConsensusMode && hasAlreadyVoted ? (
-          <div className="rounded-lg border border-success/30 bg-success/5 p-4 text-center space-y-1">
-            <div className="flex items-center justify-center gap-2 text-sm font-medium text-success">
-              <CheckCircle2 className="h-4 w-4" />
-              Twoja opinia została zapisana
+        {/* Decision buttons */}
+        {!showFeedbackForm && !showRejectFinalForm && !showAcceptWithNotesForm ? (
+          <div className="space-y-2">
+            {/* Primary row: Approve + Accept with notes */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={handleApprove} className="bg-success hover:bg-success/90 text-success-foreground" size="lg">
+                <ThumbsUp className="mr-2 h-4 w-4" />
+                Zaakceptuj
+              </Button>
+              <Button
+                onClick={() => setShowAcceptWithNotesForm(true)}
+                variant="outline"
+                className="border-success/50 text-success hover:bg-success/10"
+                size="lg"
+              >
+                <CheckCheck className="mr-2 h-4 w-4" />
+                Zaakceptuj z uwagami
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {currentUserVote?.decision === 'approved' ? 'Zaakceptowałeś/aś materiał.' : 'Zgłosiłeś/aś uwagi.'}
-              {' '}Czekamy na pozostałych decydentów ({totalVoters - voteCount} {totalVoters - voteCount === 1 ? 'osoba' : 'osoby'}).
+            {/* Secondary row: Request changes */}
+            <Button
+              onClick={() => setShowFeedbackForm(true)}
+              variant="outline"
+              className="w-full border-warning/50 text-warning hover:bg-warning/10"
+              size="sm"
+            >
+              <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
+              Poproś o poprawki
+            </Button>
+          </div>
+        ) : showAcceptWithNotesForm ? (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-foreground">
+              {isActorApproval ? 'Twoje uwagi dla influencera (wymagane):' : 'Dodaj uwagi dla influencera (opcjonalnie):'}
             </p>
+            <Textarea
+              placeholder={isActorApproval ? 'Opisz jakie zmiany chcesz wprowadzić do składu...' : 'Wpisz komentarz, sugestie lub wskazówki do następnych etapów...'}
+              value={acceptNotes}
+              onChange={e => setAcceptNotes(e.target.value)}
+              rows={3}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  completeTask(task.id, acceptNotes.trim() ? `approved: ${acceptNotes.trim()}` : 'approved', currentUser?.role);
+                  setShowAcceptWithNotesForm(false);
+                  setAcceptNotes('');
+                }}
+                className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                disabled={isActorApproval && !acceptNotes.trim()}
+              >
+                <CheckCheck className="mr-2 h-4 w-4" />
+                Zatwierdź z uwagami
+              </Button>
+              <Button variant="ghost" onClick={() => { setShowAcceptWithNotesForm(false); setAcceptNotes(''); }}>
+                Anuluj
+              </Button>
+            </div>
+          </div>
+        ) : showRejectFinalForm ? (
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Powód odrzucenia (opcjonalnie)..."
+              value={rejectFinalReason}
+              onChange={e => setRejectFinalReason(e.target.value)}
+              rows={3}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button onClick={() => { rejectFinalTask(task.id, rejectFinalReason || undefined); }} variant="destructive" className="flex-1">
+                <XCircle className="mr-2 h-4 w-4" />
+                Potwierdź odrzucenie
+              </Button>
+              <Button variant="ghost" onClick={() => { setShowRejectFinalForm(false); setRejectFinalReason(''); }}>
+                Anuluj
+              </Button>
+            </div>
           </div>
         ) : (
-          <>
-            {/* Decision buttons */}
-            {!showFeedbackForm && !showRejectFinalForm && !showAcceptWithNotesForm ? (
-              <div className="space-y-2">
-                {/* Primary row: Approve + Accept with notes */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={handleApprove} className="bg-success hover:bg-success/90 text-success-foreground" size="lg">
-                    <ThumbsUp className="mr-2 h-4 w-4" />
-                    Zaakceptuj
-                  </Button>
-                  <Button
-                    onClick={() => setShowAcceptWithNotesForm(true)}
-                    variant="outline"
-                    className="border-success/50 text-success hover:bg-success/10"
-                    size="lg"
-                  >
-                    <CheckCheck className="mr-2 h-4 w-4" />
-                    Z uwagami
-                  </Button>
-                </div>
-                {/* Secondary row: Request changes */}
-                <Button
-                  onClick={() => setShowFeedbackForm(true)}
-                  variant="outline"
-                  className="w-full border-warning/50 text-warning hover:bg-warning/10"
-                  size="sm"
-                >
-                  <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
-                  Poproś o poprawki
-                </Button>
-                {/* Final reject — destructive, less prominent */}
-                {!isConsensusMode && (
-                  <Button
-                    onClick={() => setShowRejectFinalForm(true)}
-                    variant="ghost"
-                    className="w-full text-destructive hover:bg-destructive/10 text-xs h-7"
-                  >
-                    <XCircle className="mr-1.5 h-3 w-3" />
-                    Odrzuć całkowicie
-                  </Button>
-                )}
-              </div>
-            ) : showAcceptWithNotesForm ? (
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">Dodaj uwagi dla influencera (opcjonalnie):</p>
-                <Textarea
-                  placeholder="Wpisz komentarz, sugestie lub wskazówki do następnych etapów..."
-                  value={acceptNotes}
-                  onChange={e => setAcceptNotes(e.target.value)}
-                  rows={3}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => {
-                      completeTask(task.id, acceptNotes.trim() ? `approved: ${acceptNotes.trim()}` : 'approved', currentUser?.role);
-                      setShowAcceptWithNotesForm(false);
-                      setAcceptNotes('');
-                    }}
-                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
-                  >
-                    <CheckCheck className="mr-2 h-4 w-4" />
-                    Zatwierdź z uwagami
-                  </Button>
-                  <Button variant="ghost" onClick={() => { setShowAcceptWithNotesForm(false); setAcceptNotes(''); }}>
-                    Anuluj
-                  </Button>
-                </div>
-              </div>
-            ) : showRejectFinalForm ? (
-              <div className="space-y-3">
-                <Textarea
-                  placeholder="Powód odrzucenia (opcjonalnie)..."
-                  value={rejectFinalReason}
-                  onChange={e => setRejectFinalReason(e.target.value)}
-                  rows={3}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <Button onClick={() => { rejectFinalTask(task.id, rejectFinalReason || undefined); }} variant="destructive" className="flex-1">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Potwierdź odrzucenie
-                  </Button>
-                  <Button variant="ghost" onClick={() => { setShowRejectFinalForm(false); setRejectFinalReason(''); }}>
-                    Anuluj
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <Textarea
-                  placeholder="Opisz, co należy zmienić..."
-                  value={feedbackValue}
-                  onChange={e => { setFeedbackValue(e.target.value); setError(''); }}
-                  rows={4}
-                  autoFocus
-                />
-                {error && (
-                  <div className="flex items-center gap-1.5 text-xs text-destructive">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    {error}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button onClick={handleReject} className="flex-1" disabled={feedbackValue.trim().length === 0}>
-                    <Send className="mr-2 h-4 w-4" />
-                    Wyślij do poprawy
-                  </Button>
-                  <Button variant="ghost" onClick={() => { setShowFeedbackForm(false); setError(''); }}>
-                    Anuluj
-                  </Button>
-                </div>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Opisz, co należy zmienić..."
+              value={feedbackValue}
+              onChange={e => { setFeedbackValue(e.target.value); setError(''); }}
+              rows={4}
+              autoFocus
+            />
+            {error && (
+              <div className="flex items-center gap-1.5 text-xs text-destructive">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {error}
               </div>
             )}
-          </>
+            <div className="flex gap-2">
+              <Button onClick={handleReject} className="flex-1" disabled={feedbackValue.trim().length === 0}>
+                <Send className="mr-2 h-4 w-4" />
+                Wyślij do poprawy
+              </Button>
+              <Button variant="ghost" onClick={() => { setShowFeedbackForm(false); setError(''); }}>
+                Anuluj
+              </Button>
+            </div>
+          </div>
         )}
 
         <HistoryAccordion history={task.history} />
@@ -698,44 +664,32 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           </Alert>
         )}
 
-        {/* Show original submission */}
-        {task.value && (
+        {/* Show original submission — only for text tasks (URL shown inline, actors pre-loaded) */}
+        {task.value && task.inputType !== 'actor_assignment' && task.inputType !== 'url' && (
           <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4">
             <div className="mb-1 text-xs font-medium text-muted-foreground">Twoja poprzednia propozycja</div>
-            {task.inputType === 'actor_assignment' ? (() => {
-              try {
-                const actors = JSON.parse(task.value!) as ActorEntry[];
-                if (Array.isArray(actors) && actors.length > 0 && actors[0].sourceType) {
-                  return (
-                    <div className="space-y-1.5">
-                      {actors.map(a => (
-                        <div key={a.id} className="flex items-center gap-2 text-sm">
-                          <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
-                          <span className="font-medium text-foreground">{a.name}</span>
-                          {a.roleLabel && <Badge variant="secondary" className="text-[10px] border-0">{a.roleLabel}</Badge>}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
-              } catch {}
-              return <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>;
-            })() : (
-              <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>
-            )}
+            <p className="text-sm text-foreground whitespace-pre-wrap">{task.value}</p>
           </div>
         )}
 
         <div className="space-y-3">
-          {task.inputType === 'actor_assignment' ? (
-            <ActorAssignmentInput
-              client={clients.find(c => c.id === project?.clientId) ?? null}
-              clientUsers={users.filter(u => u.role === 'klient' && u.clientId === project?.clientId)}
-              onSubmit={(actors: ActorEntry[]) => {
-                resubmitTask(task.id, JSON.stringify(actors));
-              }}
-            />
-          ) : task.inputType === 'url' && task.title === 'Dodaj link do scenariusza' ? (
+          {task.inputType === 'actor_assignment' ? (() => {
+            let initialActors: ActorEntry[] = [];
+            try {
+              const parsed = JSON.parse(task.value ?? '');
+              if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) initialActors = parsed;
+            } catch {}
+            return (
+              <ActorAssignmentInput
+                client={clients.find(c => c.id === project?.clientId) ?? null}
+                clientUsers={users.filter(u => u.role === 'klient' && u.clientId === project?.clientId)}
+                initialActors={initialActors}
+                onSubmit={(actors: ActorEntry[]) => {
+                  resubmitTask(task.id, JSON.stringify(actors));
+                }}
+              />
+            );
+          })() : task.inputType === 'url' && task.title === 'Dodaj link do scenariusza' ? (
             // Script revision: influencer edited the same file — just confirm, no new URL needed
             <div className="space-y-3">
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-center gap-2">
@@ -744,7 +698,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                   {task.value}
                 </a>
               </div>
-              <p className="text-xs text-muted-foreground">Nanieś poprawki bezpośrednio w pliku (pod tym samym linkiem), a następnie kliknij poniżej.</p>
               <Button onClick={() => resubmitTask(task.id, task.value!)} className="w-full">
                 <Send className="mr-2 h-4 w-4" />
                 Poprawki wprowadzone — proszę o weryfikację
@@ -789,11 +742,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     );
   }
 
-  // === PRE-MONTAGE NOTES — show collected notes from KP + DZ + Klient ===
-  const preMontageNotes = task.title === 'Brief dla montażysty' && task.previousValue
-    ? (() => { try { return JSON.parse(task.previousValue) as Record<string, string>; } catch { return null; } })()
-    : null;
-
   // === PARTIAL MULTI-ROLE NOTES — show already submitted notes for "Wnieś uwagi" ===
   const partialNotes = task.title === 'Wnieś uwagi przed montażem' && Object.keys(task.roleCompletions).length > 0
     ? task.roleCompletions
@@ -825,18 +773,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
       <p className="mb-4 text-sm text-muted-foreground">{task.description}</p>
 
       {deadlineDisplay}
-
-      {preMontageNotes && (
-        <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/40 p-4">
-          <div className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Uwagi do uwzględnienia w briefie</div>
-          {Object.entries(preMontageNotes).map(([role, note]) => note ? (
-            <div key={role} className="text-sm">
-              <Badge variant="secondary" className="mb-1 text-[10px] border-0">{ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}</Badge>
-              <p className="text-foreground whitespace-pre-wrap pl-1">{note}</p>
-            </div>
-          ) : null)}
-        </div>
-      )}
 
       {partialNotes && (
         <div className="mb-4 space-y-2 rounded-lg border border-warning/20 bg-warning/5 p-4">
@@ -978,7 +914,23 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
         };
         return (
           <div className="space-y-4">
-            {/* Pending roles info (notes already shown above in preMontageNotes block) */}
+            {/* Live team notes at top */}
+            {liveNotes.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageSquare className="h-3 w-3" />
+                  Uwagi od zespołu
+                </div>
+                {liveNotes.map(([r, note]) => note ? (
+                  <div key={r} className="text-sm">
+                    <Badge variant="secondary" className="mb-1 text-[10px] border-0">{notesRoleLabels[r] ?? r}</Badge>
+                    <p className="text-foreground whitespace-pre-wrap pl-1">{note}</p>
+                  </div>
+                ) : null)}
+              </div>
+            )}
+
+            {/* Pending roles */}
             {pendingRoles.length > 0 && (
               <div className="flex items-center gap-2 rounded-lg bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning">
                 <Clock className="h-3.5 w-3.5 shrink-0" />
@@ -986,6 +938,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
               </div>
             )}
 
+            {/* Main action: brief textarea */}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Twój brief dla montażysty
@@ -1026,6 +979,36 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             <p className="text-[11px] text-muted-foreground text-center">
               Wersja robocza jest widoczna tylko dla Ciebie. Wysłanie zamknie ten etap i przekaże brief do montażysty.
             </p>
+
+            {/* Private scratchpad — subtle, at very bottom */}
+            {notesTask && (
+              <div className="border-t border-border/40 pt-3 space-y-2 opacity-60 hover:opacity-100 transition-opacity">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <UserIcon className="h-3 w-3" />
+                  Twoje prywatne notatki robocze
+                </div>
+                <Textarea
+                  placeholder="Notatki robocze — widoczne tylko dla Ciebie..."
+                  value={privateNotesDraft}
+                  onChange={e => setPrivateNotesDraft(e.target.value)}
+                  rows={3}
+                  className="text-xs bg-muted/20 border-border/50 placeholder:text-muted-foreground/50"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  disabled={!privateNotesDraft.trim()}
+                  onClick={() => {
+                    updatePartyNote(notesTask.id, 'influencer', privateNotesDraft.trim());
+                    setPrivateNotesSaved(true);
+                    setTimeout(() => setPrivateNotesSaved(false), 2000);
+                  }}
+                >
+                  {privateNotesSaved ? <><Check className="mr-1 h-3 w-3" />Zapisano</> : 'Zapisz notatki'}
+                </Button>
+              </div>
+            )}
           </div>
         );
       })() : task.inputType === 'text' ? (
@@ -1086,7 +1069,9 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             videoUrl={videoUrl}
             descriptionsJson={descriptionsTask?.value ?? null}
             datesJson={datesTask?.value ?? null}
-            onConfirm={() => completeTask(task.id, 'true', currentUser?.role)}
+            currentValue={task.value}
+            onConfirmPlatform={(value) => saveDraftValue(task.id, value)}
+            onConfirmAll={(value) => completeTask(task.id, value, currentUser?.role)}
           />
         );
       })() : null}

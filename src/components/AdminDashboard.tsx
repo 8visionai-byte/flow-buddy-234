@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { ROLE_LABELS, ROLE_COLORS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority, Task } from '@/types';
+import { ROLE_LABELS, ROLE_COLORS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority, Task, UserRole } from '@/types';
 import PriorityAssignmentDialog from '@/components/PriorityAssignmentDialog';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import SocialDatesWidget, { tryParseSocialDates } from '@/components/SocialDatesWidget';
@@ -16,11 +16,9 @@ import {
   LogOut, CheckCircle2, Circle, Lock, MoreVertical, Snowflake, Trash2, AlertTriangle,
   RotateCcw, CalendarClock, ExternalLink, Link as LinkIcon, Send, ClipboardList,
   Calendar as CalendarIcon, Flag, FileText, ChevronDown, ChevronRight, ChevronLeft,
-  Building2, Clock, LayoutList, Users, Phone, Mail, Lightbulb, UserPlus, Check, X,
-  ArchiveRestore, Pencil,
+  Building2, Clock, LayoutList, Users, Phone, Mail, Lightbulb, UserPlus, Check, X, Eye,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import AddCampaignDialog from '@/components/AddCampaignDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import ClientManagementDialog from '@/components/ClientManagementDialog';
@@ -67,22 +65,13 @@ const VIEWS: { id: ViewId; label: string; icon: React.FC<{ className?: string }>
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
   const {
     currentUser, setCurrentUser, tasks, projects, clients, users, ideas,
-    deleteProject, toggleFreezeProject, assignToProject, toggleClientInProject, completeTask,
-    reopenTask, setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
-    campaigns, updateCampaign, deleteCampaign, softDeleteCampaign, restoreCampaign, activateCampaign, addUser,
-    hardDeleteCampaigns, bulkRestoreCampaigns,
+    deleteProject, toggleFreezeProject, assignToProject, completeTask,
+    setTaskDeadline, setPublicationDate, setProjectPriority, setProjectSla,
+    campaigns, updateCampaign, deleteCampaign, addUser, setFilmingDate,
   } = useApp();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
-  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
-  const [isRestoringCampaign, setIsRestoringCampaign] = useState<string | null>(null);
-   const [campaignTabFilter, setCampaignTabFilter] = useState<'active' | 'drafts' | 'trash'>('active');
-  const [isActivatingCampaign, setIsActivatingCampaign] = useState<string | null>(null);
-  const [trashSelected, setTrashSelected] = useState<Set<string>>(new Set());
-  const [hardDeleteConfirm, setHardDeleteConfirm] = useState<string[] | null>(null);
-  const [isHardDeleting, setIsHardDeleting] = useState(false);
-  const [isBulkRestoring, setIsBulkRestoring] = useState(false);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -95,12 +84,12 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const [previousView, setPreviousView] = useState<Exclude<ViewId, 'project'>>('campaigns');
   // Two-step filming-date setup: step 1 = pick date, step 2 = assign KP + Operator + confirm
   const [filmingSetup, setFilmingSetup] = useState<Record<string, { date: Date; kierownikId: string; operatorId: string; selectedProjectIds: string[] }>>({});
+  // Quick filming date picker per project (projectId → open state)
+  const [filmingDateOpen, setFilmingDateOpen] = useState<Record<string, boolean>>({});
   // Priority assignment dialog
   const [priorityDialogTask, setPriorityDialogTask] = useState<Task | null>(null);
   const [inlineNewKP, setInlineNewKP] = useState<Record<string, string>>({});
   const [inlineNewOp, setInlineNewOp] = useState<Record<string, string>>({});
-  // Draft editing
-  const [editingDraft, setEditingDraft] = useState<typeof campaigns[0] | null>(null);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects(prev => {
@@ -129,13 +118,17 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const isAdminTaskActionable = (task: typeof tasks[0]) => {
     if (!task.assignedRoles.includes('admin')) return false;
-    if (task.status === 'locked') return false;  // locked = pipeline hasn't reached this stage yet
+    if (task.status === 'locked') return false;
+    // Filming task with value already set is done — not actionable
+    if (task.title === 'Ustaw termin planu zdjęciowego' && !!task.value) return false;
     if (task.assignedRoles.length > 1) return !task.roleCompletions['admin'];
     return task.status === 'todo' || task.status === 'pending_client_approval';
   };
 
   const isAdminTaskDone = (task: typeof tasks[0]) => {
     if (!task.assignedRoles.includes('admin')) return false;
+    // Filming date is "done" as soon as a value is stored, regardless of pipeline status
+    if (task.title === 'Ustaw termin planu zdjęciowego') return !!task.value;
     if (task.assignedRoles.length > 1) return !!task.roleCompletions['admin'];
     return task.status === 'done';
   };
@@ -144,29 +137,11 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     if (!task.assignedRoles.includes('admin')) return false;
     if (isAdminTaskDone(task)) return false;
 
-    // Only consider blocking if this task is at or near the current active stage
-    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
-    
-    // Find the current active stage (highest order with an active status)
-    const currentStageOrder = projectTasks.reduce((max, pt) => {
-      if (pt.status === 'todo' || pt.status === 'pending_client_approval' || pt.status === 'needs_influencer_revision') {
-        return Math.max(max, pt.order);
-      }
-      return max;
-    }, -1);
-
-    // If a later task is already active/done, this task is historical — not blocking
-    if (currentStageOrder > task.order) {
-      // Check if any task AFTER this one is already active or done
-      const hasLaterProgress = projectTasks.some(pt => pt.order > task.order && (pt.status === 'done' || pt.status === 'todo' || pt.status === 'pending_client_approval'));
-      if (hasLaterProgress) return false;
-    }
-
     if (task.status === 'todo' || task.status === 'pending_client_approval') {
       return true;
     }
 
-    // Check if all prerequisites are done
+    const projectTasks = tasks.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
     for (const pt of projectTasks) {
       if (pt.order < task.order) {
         if (pt.assignedRoles.length > 1) {
@@ -190,15 +165,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     return <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />;
   };
 
-  const isAutoCleanedTask = (task: typeof tasks[0]) =>
-    task.status === 'done' && (task.value === 'auto_cleanup' || task.history?.some(h => h.value === 'auto_cleanup'));
-
-  const isAutoSkippedTask = (task: typeof tasks[0]) =>
-    task.status === 'done' && task.completedBy === 'system';
-
-  const statusBadge = (status: string, task?: typeof tasks[0]) => {
-    if (task && isAutoSkippedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Auto-pominięte</Badge>;
-    if (task && isAutoCleanedTask(task)) return <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-xs">Wymuszone przez Admina</Badge>;
+  const statusBadge = (status: string) => {
     if (status === 'done') return <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge>;
     if (status === 'todo') return <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Aktywne</Badge>;
     if (status === 'pending_client_approval') return <Badge variant="secondary" className="bg-warning/10 text-warning border-0 text-xs">Czeka na klienta</Badge>;
@@ -226,12 +193,6 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     project.clientId ? clients.find(c => c.id === project.clientId) : null;
 
   const getDeleteProjectName = () => projects.find(p => p.id === deleteConfirm)?.name || '';
-  const getDeleteCampaignName = () => {
-    const c = campaigns.find(c => c.id === deleteCampaignConfirm);
-    if (!c) return '';
-    const client = clients.find(cl => cl.id === c.clientId);
-    return client?.companyName || c.id;
-  };
 
   const handleDeleteConfirm = () => {
     if (deleteConfirm) {
@@ -246,7 +207,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   };
 
   const roleLabel = readOnly ? 'Kierownik Planu' : 'Panel Admina';
-  const roleSubtitle = readOnly ? 'Widok tylko do odczytu' : 'Widok helikoptera — wszystkie projekty';
+  const roleSubtitle = readOnly ? 'Widok tylko do odczytu' : 'Centrum zarządzania';
 
   const renderAdminAction = (task: typeof tasks[0], compact = false) => {
     const adminDone = isAdminTaskDone(task);
@@ -282,7 +243,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           return (
             <div className="flex flex-wrap gap-1">
               {entries.map(([key, val]) => {
-                const label = key.replace('Date', '').replace('facebook','FB').replace('twitter','TW').replace('instagram','IG').replace('youtube','YT');
+                const label = key.replace('Date', '').replace('facebook','FB').replace('tiktok','TT').replace('instagram','IG').replace('youtube','YT');
                 return (
                   <span key={key} className="inline-flex items-center gap-0.5 rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
                     {label} {format(new Date(val as string), 'dd.MM', { locale: pl })}
@@ -322,14 +283,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         selectedProjectIds.forEach(projId => {
           if (kierownikId) assignToProject(projId, 'assignedKierownikId', kierownikId);
           if (operatorId) assignToProject(projId, 'assignedOperatorId', operatorId);
-          const filmingTask = tasks.find(t => t.projectId === projId && t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'todo');
-          if (filmingTask) {
-            const rekwizytyTask = tasks.find(t => t.projectId === projId && t.title === 'Określ rekwizyty');
-            if (rekwizytyTask) setTaskDeadline(rekwizytyTask.id, date.toISOString());
-            const confirmTask = tasks.find(t => t.projectId === projId && t.title === 'Potwierdź nagranie');
-            if (confirmTask) setTaskDeadline(confirmTask.id, date.toISOString());
-            completeTask(filmingTask.id, date.toISOString(), 'admin');
-          }
+          setFilmingDate(projId, date.toISOString());
         });
         setFilmingSetup(prev => { const n = { ...prev }; delete n[task.id]; return n; });
       };
@@ -351,7 +305,11 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 onSelect={date => {
                   if (date) {
                     const pendingProjectIds = tasks
-                      .filter(t => t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'todo')
+                      .filter(t => {
+                        if (t.title !== 'Ustaw termin planu zdjęciowego' || t.value) return false;
+                        const relatedProject = projects.find(p => p.id === t.projectId);
+                        return relatedProject?.clientId === project?.clientId;
+                      })
                       .map(t => t.projectId);
                     setFilmingSetup(prev => ({
                       ...prev,
@@ -364,6 +322,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     }));
                   }
                 }}
+                disabled={(date) => { const t = new Date(); t.setHours(0, 0, 0, 0); return date < t; }}
+                locale={pl}
                 initialFocus
                 className={cn('p-3 pointer-events-auto')}
               />
@@ -376,11 +336,13 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   <span className="text-sm font-semibold text-foreground">
                     {format(setup.date, 'EEEE, dd.MM.yyyy', { locale: pl })}
                   </span>
-                  {isPast && (
-                    <Badge className="ml-auto shrink-0 bg-warning/15 text-warning border-0 text-[10px]">
-                      Przeszłość
-                    </Badge>
-                  )}
+                  <button
+                    type="button"
+                    className="ml-auto text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
+                    onClick={() => setFilmingSetup(prev => { const n = { ...prev }; delete n[task.id]; return n; })}
+                  >
+                    Zmień datę
+                  </button>
                 </div>
 
                 {isPast && (
@@ -523,57 +485,57 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 </div>
 
                 {/* Project selection */}
-                {setup.selectedProjectIds && setup.selectedProjectIds.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Projekty w tej sesji
-                    </label>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {setup.selectedProjectIds.concat(
-                        tasks
-                          .filter(t => t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'todo' && !setup.selectedProjectIds.includes(t.projectId))
-                          .map(t => t.projectId)
-                      ).filter((id, i, a) => a.indexOf(id) === i).map(projId => {
-                        const proj = projects.find(p => p.id === projId);
-                        if (!proj) return null;
-                        const isChecked = setup.selectedProjectIds.includes(projId);
-                        return (
-                          <label key={projId} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="rounded"
-                              checked={isChecked}
-                              onChange={e => setFilmingSetup(prev => ({
-                                ...prev,
-                                [task.id]: {
-                                  ...prev[task.id],
-                                  selectedProjectIds: e.target.checked
-                                    ? [...prev[task.id].selectedProjectIds, projId]
-                                    : prev[task.id].selectedProjectIds.filter(id => id !== projId),
-                                },
-                              }))}
-                            />
-                            <span className="text-xs text-foreground truncate">{proj.name}</span>
-                          </label>
-                        );
-                      })}
+                {(() => {
+                  const taskProject = projects.find(p => p.id === task.projectId);
+                  const allClientFilmingIds = tasks
+                    .filter(t => {
+                      if (t.title !== 'Ustaw termin planu zdjęciowego') return false;
+                      const relatedProject = projects.find(p => p.id === t.projectId);
+                      return relatedProject?.clientId === taskProject?.clientId;
+                    })
+                    .map(t => t.projectId)
+                    .filter((id, i, a) => a.indexOf(id) === i);
+                  if (!allClientFilmingIds.length) return null;
+                  return (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Projekty w tej sesji
+                      </label>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {allClientFilmingIds.map(projId => {
+                          const proj = projects.find(p => p.id === projId);
+                          if (!proj) return null;
+                          const isChecked = setup.selectedProjectIds.includes(projId);
+                          return (
+                            <label key={projId} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="rounded"
+                                checked={isChecked}
+                                onChange={e => setFilmingSetup(prev => ({
+                                  ...prev,
+                                  [task.id]: {
+                                    ...prev[task.id],
+                                    selectedProjectIds: e.target.checked
+                                      ? [...prev[task.id].selectedProjectIds, projId]
+                                      : prev[task.id].selectedProjectIds.filter(id => id !== projId),
+                                  },
+                                }))}
+                              />
+                              <span className="text-xs text-foreground truncate">{proj.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="flex-1" onClick={applyFilmingDate} disabled={!setup.selectedProjectIds?.length}>
                     <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                    Zatwierdź termin ({setup.selectedProjectIds?.length ?? 0})
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-muted-foreground"
-                    onClick={() => setFilmingSetup(prev => { const n = { ...prev }; delete n[task.id]; return n; })}
-                  >
-                    ← Zmień
+                    Zatwierdź termin
                   </Button>
                 </div>
               </div>
@@ -704,10 +666,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         : durationMs > SLA_MS;
 
       return (
-        <span className={`text-xs font-medium ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-          Wykonano w: {formatDurationFromMs(durationMs)}
-          {overdue && ' (Przekroczony)'}
-        </span>
+        <div className={`text-xs ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+          <div className="font-medium">{format(new Date(task.completedAt), 'dd.MM · HH:mm')}</div>
+          <div className="text-[10px] opacity-70">{formatDurationFromMs(durationMs)}{overdue && ' (!)'}</div>
+        </div>
       );
     }
 
@@ -803,116 +765,190 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     return <span className="text-xs text-muted-foreground">—</span>;
   };
 
-  const renderValueColumn = (task: typeof tasks[0]) => {
-    const isActive = task.status === 'todo' || task.status === 'pending_client_approval' || task.status === 'needs_influencer_revision';
-    const canInteract = readOnly ? isNagrywkaTask(task.id) && isActive : false;
-    const isKierownikConfirm = task.assignedRoles.includes('kierownik_planu') && task.title === 'Potwierdź nagranie';
-    const isAdminTask = task.assignedRoles.includes('admin');
+  // Returns the person's name assigned to a role in the project
+  const getPersonForRole = (role: UserRole, projectId: string): string | null => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return null;
+    const idMap: Partial<Record<UserRole, string | null>> = {
+      influencer: project.assignedInfluencerId,
+      klient: project.assignedClientId,
+      montazysta: project.assignedEditorId,
+      kierownik_planu: project.assignedKierownikId,
+      operator: project.assignedOperatorId,
+      publikator: project.assignedPublikatorId,
+    };
+    const userId = idMap[role];
+    if (!userId) return null;
+    return users.find(u => u.id === userId)?.name || null;
+  };
 
-    // filming_confirmation (kierownik_planu "Potwierdź nagranie")
-    if (task.inputType === 'filming_confirmation' && task.status === 'done' && task.value) {
-      try {
-        const parsed = JSON.parse(task.value);
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-xs text-success cursor-help font-medium">
-                  #{parsed.recordingNumber || '—'} ✓
-                </span>
-              </TooltipTrigger>
-              {parsed.notes && (
-                <TooltipContent side="top" className="max-w-xs">
-                  <p className="text-xs">{parsed.notes}</p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        );
-      } catch { /* Not JSON */ }
+  // Returns JSX content for the detail popover, or null if nothing worth showing
+  const getValuePopoverContent = (task: typeof tasks[0]): React.ReactNode => {
+    if (!task.value) return null;
+
+    if (task.inputType === 'text') {
+      return <p className="text-sm whitespace-pre-wrap">{task.value}</p>;
     }
 
-    // raw_footage (operator "Wgraj surówkę na serwer")
-    if (task.inputType === 'raw_footage' && task.status === 'done' && task.value) {
-      try {
-        const parsed = JSON.parse(task.value);
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {parsed.url ? (
-                  <a href={parsed.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                    <ExternalLink className="h-3 w-3" />
-                    #{parsed.recordingNumber || '?'} Surówka
-                  </a>
-                ) : (
-                  <span className="text-xs text-success font-medium">#{parsed.recordingNumber || '—'} ✓</span>
-                )}
-              </TooltipTrigger>
-              {parsed.notes && (
-                <TooltipContent side="top" className="max-w-xs">
-                  <p className="text-xs">{parsed.notes}</p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        );
-      } catch { /* Not JSON */ }
+    if (task.inputType === 'url') {
+      return (
+        <a href={task.value} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-sm text-primary hover:underline break-all">
+          <ExternalLink className="h-3.5 w-3.5 shrink-0" />{task.value}
+        </a>
+      );
     }
 
-    if (task.assignedRoles.length > 1 && (task.status === 'todo' || task.status === 'done' || (isAdminTask && task.status === 'locked'))) {
-      const completionInfo = task.assignedRoles.map(r => ({
-        role: r,
-        done: !!task.roleCompletions[r],
-        value: task.roleCompletions[r],
-      }));
-
-      if (!readOnly && isAdminTask && !task.roleCompletions['admin']) {
+    if (task.inputType === 'actor_assignment') {
+      try {
+        const parsed = JSON.parse(task.value);
+        const actors: { name?: string; roleLabel?: string }[] = Array.isArray(parsed) ? parsed : [parsed];
+        if (!actors.length) return null;
         return (
-          <div className="space-y-1">
-            {renderAdminAction(task, true)}
-            <div className="flex gap-1 flex-wrap">
-              {completionInfo.map(c => (
-                <Badge key={c.role} variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
-                  {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
-                </Badge>
-              ))}
-            </div>
+          <div className="space-y-1.5">
+            {actors.map((a, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-sm font-medium">{a.name || '—'}</span>
+                {a.roleLabel && <span className="text-xs text-muted-foreground">{a.roleLabel}</span>}
+              </div>
+            ))}
           </div>
         );
-      }
+      } catch { return null; }
+    }
 
+    if (task.inputType === 'actor_approval') {
+      // value like "approved: Tylko niech s..." — extract comment
+      const sep = task.value.indexOf(': ');
+      const comment = sep >= 0 ? task.value.slice(sep + 2) : null;
+      if (!comment) return null;
+      return <p className="text-sm whitespace-pre-wrap">{comment}</p>;
+    }
+
+    if (task.inputType === 'filming_confirmation') {
+      try {
+        const parsed = JSON.parse(task.value);
+        return (
+          <div className="space-y-1 text-sm">
+            <div><span className="text-muted-foreground">Nr nagrania: </span><span className="font-medium">#{parsed.recordingNumber || '—'}</span></div>
+            {parsed.notes && <div><span className="text-muted-foreground">Notatka: </span>{parsed.notes}</div>}
+          </div>
+        );
+      } catch { return null; }
+    }
+
+    if (task.inputType === 'raw_footage') {
+      try {
+        const parsed = JSON.parse(task.value);
+        return (
+          <div className="space-y-1.5 text-sm">
+            <div><span className="text-muted-foreground">Nr nagrania: </span><span className="font-medium">#{parsed.recordingNumber || '—'}</span></div>
+            {parsed.url && (
+              <a href={parsed.url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-primary hover:underline break-all">
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />Surówka
+              </a>
+            )}
+            {parsed.notes && <div><span className="text-muted-foreground">Notatka: </span>{parsed.notes}</div>}
+          </div>
+        );
+      } catch { return null; }
+    }
+
+    if (task.inputType === 'multi_party_notes') {
+      const entries = Object.entries(task.roleCompletions || {});
+      if (!entries.length) return null;
       return (
-        <div className="flex gap-1 flex-wrap">
-          {completionInfo.map(c => (
-            <TooltipProvider key={c.role}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="secondary" className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0 cursor-help`}>
-                    {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
-                  </Badge>
-                </TooltipTrigger>
-                {c.value && (
-                  <TooltipContent side="top" className="max-w-xs">
-                    <p className="text-xs">{c.value}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
+        <div className="space-y-2">
+          {entries.map(([role, note]) => (
+            <div key={role}>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {NOTES_ROLE_LABELS[role as keyof typeof NOTES_ROLE_LABELS] || ROLE_LABELS[role as UserRole] || role}
+              </span>
+              <p className="text-sm mt-0.5 whitespace-pre-wrap">{note}</p>
+            </div>
           ))}
         </div>
       );
     }
 
-    if (!readOnly && isAdminTask && task.assignedRoles.length === 1) {
-      if (isAdminTaskActionable(task)) {
-        return renderAdminAction(task, true);
-      }
-      if (isAdminTaskDone(task)) {
-        return renderAdminAction(task, true);
+    if (task.inputType === 'publication_confirm') {
+      try {
+        const confirmedRaw: Record<string, string | boolean | null> = JSON.parse(task.value);
+        // Normalize: old data may store boolean `true` instead of ISO timestamp
+        const confirmed: Record<string, string | null> = Object.fromEntries(
+          Object.entries(confirmedRaw).map(([k, v]) => [k, typeof v === 'string' ? v : null])
+        );
+        // Try to get planned dates from the sibling task
+        const datesTask = tasks.find(t => t.projectId === task.projectId && t.title === 'Ustaw datę publikacji');
+        const dates = datesTask?.value ? (() => { try { return JSON.parse(datesTask.value); } catch { return null; } })() : null;
+        const PLAT_LABELS: Record<string, string> = { facebook: 'Facebook', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube' };
+        const DATE_KEYS: Record<string, string> = { facebook: 'facebookDate', tiktok: 'tiktokDate', instagram: 'instagramDate', youtube: 'youtubeDate' };
+        return (
+          <div className="space-y-2">
+            {Object.entries(confirmed).map(([platform, confirmedAt]) => {
+              const label = PLAT_LABELS[platform] || platform;
+              const plannedRaw = dates?.[DATE_KEYS[platform]];
+              const planned = plannedRaw ? format(new Date(plannedRaw), 'dd.MM.yyyy', { locale: pl }) : null;
+              const actual = confirmedAt ? format(new Date(confirmedAt), 'dd.MM.yyyy, HH:mm', { locale: pl }) : null;
+              const isLate = confirmedAt && plannedRaw ? new Date(confirmedAt) > new Date(plannedRaw) : false;
+              return (
+                <div key={platform} className="text-sm">
+                  <span className="font-medium">{label}</span>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {planned && <div>Zaplanowane: {planned}</div>}
+                    {actual
+                      ? <div className={isLate ? 'text-destructive font-medium' : 'text-success'}>
+                          Wykonane: {actual}{isLate ? ' (po terminie)' : ''}
+                        </div>
+                      : <div className="text-muted-foreground/60 italic">Nie wykonano</div>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      } catch {
+        return <p className="text-sm">{task.value}</p>;
       }
     }
 
+    if (tryParseSocialDescriptions(task.value)) {
+      return <SocialDescriptionsDisplay value={task.value} />;
+    }
+
+    if (tryParseSocialDates(task.value)) {
+      try {
+        const parsed = JSON.parse(task.value);
+        const labelMap: Record<string, string> = { facebookDate: 'Facebook', tiktokDate: 'TikTok', instagramDate: 'Instagram', youtubeDate: 'YouTube' };
+        return (
+          <div className="space-y-1 text-sm">
+            {Object.entries(parsed).filter(([, v]) => v).map(([k, v]) => (
+              <div key={k}><span className="text-muted-foreground">{labelMap[k] || k}: </span>{String(v)}</div>
+            ))}
+          </div>
+        );
+      } catch { return null; }
+    }
+
+    // Skip boolean/approval — nothing meaningful
+    if (['boolean', 'approval', 'script_review', 'frameio_review'].includes(task.inputType)) return null;
+
+    // Fallback plain text
+    if (task.value && task.value !== 'approved' && task.value !== 'true') {
+      return <p className="text-sm whitespace-pre-wrap">{task.value}</p>;
+    }
+
+    return null;
+  };
+
+  const renderValueColumn = (task: typeof tasks[0]) => {
+    const isActive = task.status === 'todo' || task.status === 'pending_client_approval' || task.status === 'needs_influencer_revision';
+    const canInteract = readOnly ? isNagrywkaTask(task.id) && isActive : false;
+    const isAdminTask = task.assignedRoles.includes('admin');
+
+    // Kierownik in read-only mode can confirm nagranie
     if (canInteract && task.status === 'todo' && task.inputType === 'boolean') {
       return (
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => completeTask(task.id, 'true')}>
@@ -921,24 +957,54 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       );
     }
 
-    if (tryParseSocialDescriptions(task.value)) {
-      return <SocialDescriptionsDisplay value={task.value} compact />;
+    // Admin single-role task: show action button
+    if (!readOnly && isAdminTask && task.assignedRoles.length === 1) {
+      if (isAdminTaskActionable(task) || isAdminTaskDone(task)) {
+        return renderAdminAction(task, true);
+      }
     }
 
-    if (task.inputType === 'actor_assignment' && task.value) {
-      try {
-        const parsed = JSON.parse(task.value);
-        if (parsed.type && parsed.name) {
-          return (
-            <span className="text-xs">
-              🎬 {parsed.name} <span className="text-muted-foreground">({parsed.type === 'client' ? 'Klient' : 'Aktor'})</span>
-            </span>
-          );
-        }
-      } catch {}
+    // Multi-role task with admin: show action + completion badges
+    if (!readOnly && isAdminTask && task.assignedRoles.length > 1 &&
+        (task.status === 'todo' || task.status === 'done' || task.status === 'locked')) {
+      const completionInfo = task.assignedRoles.map(r => ({
+        role: r, done: !!task.roleCompletions[r],
+      }));
+      if (!task.roleCompletions['admin'] && isAdminTaskActionable(task)) {
+        return (
+          <div className="space-y-1">
+            {renderAdminAction(task, true)}
+            <div className="flex gap-1 flex-wrap">
+              {completionInfo.map(c => (
+                <Badge key={c.role} variant="secondary"
+                  className={`text-[9px] ${c.done ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'} border-0`}>
+                  {ROLE_LABELS[c.role]} {c.done ? '✓' : '…'}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      // All done: fall through to eye popover for multi_party_notes
     }
 
-    return <span className="truncate">{task.value || '—'}</span>;
+    // Eye popover for completed tasks with meaningful content
+    const popoverContent = getValuePopoverContent(task);
+    if (!popoverContent) return <span className="text-xs text-muted-foreground">—</span>;
+
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground">
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 max-h-64 overflow-y-auto" align="end">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">{task.title}</p>
+          {popoverContent}
+        </PopoverContent>
+      </Popover>
+    );
   };
 
   const getAdminTasksForProject = (projectId: string) => {
@@ -1025,6 +1091,21 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     );
     const clientEntity = resolveProjectClient(project);
 
+    // ── Filming date indicator ──────────────────────────────────────────────
+    const filmingTask = projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego');
+    const filmingDateValue = filmingTask?.value ?? null;
+    const filmingDateParsed = filmingDateValue ? new Date(filmingDateValue) : null;
+    const activeOrder = activeTask?.order ?? -1;
+    // Urgency: stage 5-6 = approaching (yellow), stage 7+ = now (red), done = show date
+    const filmingUrgency = filmingDateParsed
+      ? 'set'
+      : !isComplete && activeOrder >= 7
+        ? 'required'       // filming task is active NOW
+        : !isComplete && activeOrder >= 5
+          ? 'soon'         // 1-2 stages away
+          : 'none';
+    const isFilmingDateOpen = filmingDateOpen[project.id] ?? false;
+
     return (
       <div
         key={project.id}
@@ -1072,6 +1153,66 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             <p className="text-xs text-muted-foreground mt-1">
               <span className="font-medium">Etap:</span> {activeTask.title}
             </p>
+          )}
+
+          {/* Filming date indicator */}
+          {filmingUrgency !== 'none' && !isComplete && (
+            <div className="mt-1.5" onClick={e => e.stopPropagation()}>
+              <Popover open={isFilmingDateOpen} onOpenChange={open => setFilmingDateOpen(prev => ({ ...prev, [project.id]: open }))}>
+                <PopoverTrigger asChild>
+                  <button
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                      filmingUrgency === 'set'
+                        ? "text-success hover:bg-success/10"
+                        : filmingUrgency === 'required'
+                          ? "text-destructive bg-destructive/10 hover:bg-destructive/15 animate-pulse"
+                          : "text-warning hover:bg-warning/10"
+                    )}
+                  >
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                    {filmingUrgency === 'set'
+                      ? <>Nagranie: {format(filmingDateParsed!, 'dd.MM.yyyy', { locale: pl })} <span className="text-muted-foreground font-normal">(zmień)</span></>
+                      : filmingUrgency === 'required'
+                        ? 'Ustaw termin nagrania!'
+                        : 'Warto zaplanować termin nagrania'
+                    }
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <div className="p-3 border-b">
+                    <p className="text-xs font-semibold text-foreground">Termin nagrania — {project.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Ustaw datę planu zdjęciowego</p>
+                  </div>
+                  <Calendar
+                    mode="single"
+                    selected={filmingDateParsed ?? undefined}
+                    onSelect={date => {
+                      if (date) {
+                        setFilmingDate(project.id, date.toISOString());
+                        setFilmingDateOpen(prev => ({ ...prev, [project.id]: false }));
+                      }
+                    }}
+                    disabled={(date) => { const t = new Date(); t.setHours(0,0,0,0); return date < t; }}
+                    locale={pl}
+                    initialFocus
+                  />
+                  {filmingDateParsed && (
+                    <div className="border-t px-3 pb-3 pt-2">
+                      <button
+                        onClick={() => {
+                          setFilmingDate(project.id, null);
+                          setFilmingDateOpen(prev => ({ ...prev, [project.id]: false }));
+                        }}
+                        className="w-full rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-center"
+                      >
+                        Wyczyść — do ustalenia
+                      </button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
           )}
 
           {project.publicationDate && (
@@ -1141,85 +1282,56 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
           {/* Assignment selects */}
           {!readOnly && (
-            <div className="border-t border-border px-4 py-2 md:px-6 flex items-center gap-2 flex-wrap bg-muted/20">
-              <span className="text-xs text-muted-foreground font-medium mr-1">Przypisani:</span>
-              <Select value={project.assignedInfluencerId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedInfluencerId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Influencer" /></SelectTrigger>
-                <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{influencers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={project.assignedEditorId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedEditorId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Montażysta" /></SelectTrigger>
-                <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{editors.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={project.assignedClientId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedClientId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Klient główny" /></SelectTrigger>
-                <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{clientUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-              </Select>
-              {/* Multi-client checkboxes for consensus */}
-              {clientUsers.length > 1 && (
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] text-muted-foreground font-medium">Decydenci:</span>
-                  {clientUsers.map(u => (
-                    <label key={u.id} className="flex items-center gap-1 text-[11px] cursor-pointer">
-                      <Checkbox
-                        checked={project.assignedClientIds.includes(u.id)}
-                        onCheckedChange={() => toggleClientInProject(project.id, u.id)}
-                        className="h-3.5 w-3.5"
-                      />
-                      <span className="text-foreground">{u.name}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <Select value={project.assignedKierownikId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedKierownikId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Kierownik" /></SelectTrigger>
-                <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{kierownicy.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={project.assignedOperatorId || 'none'} onValueChange={v => assignToProject(project.id, 'assignedOperatorId', v === 'none' ? null : v)}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Operator" /></SelectTrigger>
-                <SelectContent className="bg-popover z-50"><SelectItem value="none">— Brak —</SelectItem>{users.filter(u => u.role === 'operator').map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">SLA (h):</span>
-                <input type="number" min="1" max="240" placeholder="48"
-                  value={slaInputs[project.id] ?? (project.slaHours?.toString() || '48')}
-                  onChange={e => setSlaInputs(prev => ({ ...prev, [project.id]: e.target.value }))}
-                  onBlur={e => { const val = parseInt(e.target.value); if (!isNaN(val) && val > 0) setProjectSla(project.id, val); }}
-                  className="h-7 w-16 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
+            <div className="border-t border-border px-4 pt-2 pb-3 md:px-6 bg-muted/20 space-y-2">
+              {/* Role assignments */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {([
+                  { label: 'Klient',            field: 'assignedClientId',      options: clientUsers },
+                  { label: 'Influencer',        field: 'assignedInfluencerId',  options: influencers },
+                  { label: 'Kierownik Planu',   field: 'assignedKierownikId',   options: kierownicy },
+                  { label: 'Operator',          field: 'assignedOperatorId',    options: users.filter(u => u.role === 'operator') },
+                  { label: 'Montażysta',        field: 'assignedEditorId',      options: editors },
+                  { label: 'Publikator',        field: 'assignedPublikatorId',  options: users.filter(u => u.role === 'publikator') },
+                ] as const).map(({ label, field, options }) => (
+                  <div key={field} className="flex flex-col gap-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+                    <Select
+                      value={(project as Record<string, unknown>)[field] as string || 'none'}
+                      onValueChange={v => assignToProject(project.id, field, v === 'none' ? null : v)}
+                    >
+                      <SelectTrigger className="h-8 text-xs font-medium w-full">
+                        <SelectValue placeholder="— Brak —" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover z-50">
+                        <SelectItem value="none">— Brak —</SelectItem>
+                        {(options as { id: string; name: string }[]).map(u => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-1 ml-auto">
-                <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Publikacja:</span>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1">
-                      {project.publicationDate ? format(new Date(project.publicationDate), 'dd.MM.yyyy', { locale: pl }) : 'Ustaw datę'}
+
+              {/* Menu */}
+              <div className="flex justify-end">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical className="h-4 w-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={project.publicationDate ? new Date(project.publicationDate) : undefined}
-                      onSelect={(date) => setPublicationDate(project.id, date ? date.toISOString() : null)}
-                      initialFocus className={cn("p-3 pointer-events-auto")} />
-                  </PopoverContent>
-                </Popover>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-popover z-50">
+                    <DropdownMenuItem onClick={() => toggleFreezeProject(project.id)}>
+                      <Snowflake className="mr-2 h-4 w-4" />{isFrozen ? 'Odmroź' : 'Zamroź'}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setDeleteConfirm(project.id); }}>
+                      <Trash2 className="mr-2 h-4 w-4" />Usuń projekt
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-              {/* Freeze/Delete menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 ml-1">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-popover z-50">
-                  <DropdownMenuItem onClick={() => toggleFreezeProject(project.id)}>
-                    <Snowflake className="mr-2 h-4 w-4" />{isFrozen ? 'Odmroź' : 'Zamroź'}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setDeleteConfirm(project.id); }}>
-                    <Trash2 className="mr-2 h-4 w-4" />Usuń projekt
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           )}
         </div>
@@ -1239,22 +1351,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 const actionable = isAdminTaskActionable(task);
                 const done = isAdminTaskDone(task);
                 const blocking = isAdminTaskBlocking(task);
+                // Filming date is always accessible to admin, regardless of pipeline status
+                const isFilmingTask = task.title === 'Ustaw termin planu zdjęciowego';
+                const alwaysActionable = actionable || isFilmingTask;
                 return (
                   <div key={task.id} className={cn("flex items-center gap-3 rounded-lg border p-3 transition-colors",
                     blocking && "border-destructive/60 bg-destructive/10 shadow-md ring-1 ring-destructive/20",
-                    !blocking && actionable && "border-primary/40 bg-primary/10 shadow-sm",
+                    !blocking && alwaysActionable && !done && "border-primary/40 bg-primary/10 shadow-sm",
                     done && "border-success/40 bg-success/10",
-                    !actionable && !done && !blocking && "border-border bg-card opacity-60")}>
+                    !alwaysActionable && !done && !blocking && "border-border bg-card opacity-60")}>
                     {done ? <CheckCircle2 className="h-4 w-4 text-success shrink-0" /> :
                      blocking ? <AlertTriangle className="h-4 w-4 text-destructive shrink-0 animate-pulse" /> :
-                     actionable ? <Circle className="h-4 w-4 text-primary shrink-0 animate-pulse" /> :
+                     alwaysActionable ? <Circle className="h-4 w-4 text-primary shrink-0 animate-pulse" /> :
                      <Lock className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />}
                     <div className="flex-1 min-w-0">
                       <div className={cn("text-xs font-medium truncate", blocking ? "text-destructive" : "text-foreground")}>
                         {task.order + 1}. {task.title}
                         {blocking && <span className="ml-1 text-[10px] font-bold">(Proces czeka!)</span>}
                       </div>
-                      <div className="mt-1">{(actionable || done) && renderAdminAction(task)}</div>
+                      <div className="mt-1">{(alwaysActionable || done) && renderAdminAction(task)}</div>
                     </div>
                   </div>
                 );
@@ -1289,10 +1404,8 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Etap</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Rola</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Czas na zadanie</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Typ</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Wartość</th>
-                {!readOnly && <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Akcje</th>}
+                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Kiedy</th>
+                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Szczegóły</th>
               </tr>
             </thead>
             <tbody>
@@ -1313,25 +1426,23 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       <span className={cn("font-medium", adminBlocking && "text-destructive font-semibold", !adminBlocking && adminActionable && "text-primary", adminDone && "text-success", !isAdminTask && "text-foreground")}>{task.title}</span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="flex gap-1 flex-wrap">
-                        {task.assignedRoles.map(r => <Badge key={r} variant="secondary" className={`${ROLE_COLORS[r]} border-0 text-xs`}>{ROLE_LABELS[r]}</Badge>)}
+                      <div className="space-y-1">
+                        {task.assignedRoles.map(r => {
+                          const person = getPersonForRole(r, task.projectId);
+                          return (
+                            <div key={r} className="flex flex-col gap-0.5">
+                              <Badge variant="secondary" className={`${ROLE_COLORS[r]} border-0 text-xs w-fit`}>{ROLE_LABELS[r]}</Badge>
+                              {person && <span className="text-[11px] text-muted-foreground pl-0.5">{person}</span>}
+                            </div>
+                          );
+                        })}
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status, task)) : statusBadge(task.status, task)}
+                      {isAdminTask ? (adminDone ? <Badge variant="secondary" className="bg-success/10 text-success border-0 text-xs">Gotowe</Badge> : adminBlocking ? <Badge variant="destructive" className="border-0 text-xs animate-pulse">Proces czeka!</Badge> : adminActionable ? <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Do zrobienia</Badge> : statusBadge(task.status)) : statusBadge(task.status)}
                     </td>
                     <td className="px-4 py-2.5">{renderSlaColumn(task)}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground capitalize">{task.inputType}</td>
-                    <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">{renderValueColumn(task)}</td>
-                    {!readOnly && (
-                      <td className="px-4 py-2.5 text-right">
-                        {task.status === 'done' && (
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-foreground" onClick={() => reopenTask(task.id)}>
-                            <RotateCcw className="mr-1 h-3 w-3" />Odblokuj
-                          </Button>
-                        )}
-                      </td>
-                    )}
+                    <td className="px-4 py-2.5">{renderValueColumn(task)}</td>
                   </tr>
                 );
               })}
@@ -1353,376 +1464,183 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const getCampaignClient = (campaign: typeof campaigns[0]) => clients.find(c => c.id === campaign.clientId);
     const getCampaignInfluencer = (campaign: typeof campaigns[0]) => users.find(u => u.id === campaign.assignedInfluencerId);
 
-    const activeCampaigns = campaigns.filter(c => !c.isDeleted && c.status !== 'draft');
-    const draftCampaigns = campaigns.filter(c => !c.isDeleted && c.status === 'draft');
-    const trashedCampaigns = campaigns.filter(c => c.isDeleted);
-
-    const handleRestore = async (id: string) => {
-      setIsRestoringCampaign(id);
-      try {
-        restoreCampaign(id);
-        await new Promise(r => setTimeout(r, 300));
-      } finally {
-        setIsRestoringCampaign(null);
-      }
-    };
-
-    const handleActivate = async (id: string) => {
-      setIsActivatingCampaign(id);
-      try {
-        activateCampaign(id);
-        await new Promise(r => setTimeout(r, 300));
-      } finally {
-        setIsActivatingCampaign(null);
-      }
-    };
-
-    const renderCampaignCard = (campaign: typeof campaigns[0], isTrashed: boolean) => {
-      const client = getCampaignClient(campaign);
-      const influencer = getCampaignInfluencer(campaign);
-      const campaignIdeas = getCampaignIdeas(campaign.id);
-      const pendingCount = campaignIdeas.filter(i => i.status === 'pending').length;
-      const acceptedCount = campaignIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
-      const msTilDeadline = getSlaRemaining(campaign);
-      const hoursLeft = Math.floor(Math.abs(msTilDeadline) / 3600000);
-      const minutesLeft = Math.floor((Math.abs(msTilDeadline) % 3600000) / 60000);
-      const isOverdue = msTilDeadline < 0;
-      const isExpanded = expandedCampaignId === campaign.id;
-
-      const isDraft = campaign.status === 'draft';
-
+    if (campaigns.length === 0) {
       return (
-        <div key={campaign.id} className={cn("rounded-xl border border-border bg-card shadow-sm overflow-hidden", isTrashed && "opacity-70", isDraft && "border-dashed border-muted-foreground/30")}>
-          {/* Campaign header */}
-          <div className="px-4 py-4 md:px-6">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {isTrashed && (
-                    <Checkbox
-                      checked={trashSelected.has(campaign.id)}
-                      disabled={isHardDeleting || isBulkRestoring}
-                      onCheckedChange={(checked) => {
-                        setTrashSelected(prev => {
-                          const next = new Set(prev);
-                          if (checked) next.add(campaign.id);
-                          else next.delete(campaign.id);
-                          return next;
-                        });
-                      }}
-                      className="mr-1"
-                    />
-                  )}
-                  <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
-                  {isTrashed ? (
-                    <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs">
-                      W koszu
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'draft' ? 'bg-muted text-muted-foreground' : campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                      {campaign.status === 'draft' ? 'Szkic' :
-                       campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
-                       campaign.status === 'in_review' ? 'Klient ocenia' :
-                       campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" />
-                    {influencer?.name || 'Brak influencera'}
-                  </span>
-                  {client?.phone && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3.5 w-3.5" />
-                      {client.phone}
-                    </span>
-                  )}
-                </div>
-                {campaign.briefNotes && (
-                  <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">Brief: {campaign.briefNotes}</p>
-                )}
-              </div>
+        <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+          <Lightbulb className="h-12 w-12 text-muted-foreground opacity-40" />
+          <p className="text-lg font-semibold text-foreground">Brak kampanii</p>
+          <p className="text-sm text-muted-foreground">Utwórz kampanię, aby zlecić influencerowi przygotowanie pomysłów.</p>
+        </div>
+      );
+    }
 
-              <div className="flex gap-3 items-start shrink-0">
-                {/* SLA countdown - hidden for trashed and drafts */}
-                {!isTrashed && !isDraft && (
-                  <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
-                    <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
-                      {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
+    return (
+      <div className="space-y-4">
+        {campaigns.map(campaign => {
+          const client = getCampaignClient(campaign);
+          const influencer = getCampaignInfluencer(campaign);
+          const campaignIdeas = getCampaignIdeas(campaign.id);
+          const pendingCount = campaignIdeas.filter(i => i.status === 'pending').length;
+          const acceptedCount = campaignIdeas.filter(i => i.status === 'accepted' || i.status === 'accepted_with_notes').length;
+          const msTilDeadline = getSlaRemaining(campaign);
+          const hoursLeft = Math.floor(Math.abs(msTilDeadline) / 3600000);
+          const minutesLeft = Math.floor((Math.abs(msTilDeadline) % 3600000) / 60000);
+          const isOverdue = msTilDeadline < 0;
+          const isExpanded = expandedCampaignId === campaign.id;
+          const clientUsersForCampaign = users.filter(u => u.role === 'klient' && u.clientId === campaign.clientId);
+          const currentReviewer = users.find(u => u.id === campaign.assignedClientUserId);
+
+          return (
+            <div key={campaign.id} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+              {/* Campaign header */}
+              <div className="px-4 py-4 md:px-6">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-foreground">{client?.companyName || 'Nieznany klient'}</h3>
+                      <Badge variant="secondary" className={`border-0 text-xs ${campaign.status === 'awaiting_ideas' ? 'bg-warning/10 text-warning' : campaign.status === 'in_review' ? 'bg-primary/10 text-primary' : campaign.status === 'completed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                        {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' :
+                         campaign.status === 'in_review' ? 'Klient ocenia' :
+                         campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
+                      </Badge>
                     </div>
-                    <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
+                    <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {influencer?.name || 'Brak influencera'}
+                      </span>
+                      {client?.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3.5 w-3.5" />
+                          {client.phone}
+                        </span>
+                      )}
+                    </div>
+                    {/* Reviewer selector */}
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground shrink-0">Oceniający:</span>
+                      {clientUsersForCampaign.length > 0 ? (
+                        <Select
+                          value={campaign.assignedClientUserId || 'none'}
+                          onValueChange={v => updateCampaign(campaign.id, { assignedClientUserId: v === 'none' ? null : v })}
+                        >
+                          <SelectTrigger className="h-6 text-xs border-0 bg-transparent px-1.5 py-0 shadow-none hover:bg-muted/50 focus:ring-0 w-auto gap-1 text-foreground font-medium">
+                            <SelectValue placeholder="— admin —" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-popover z-50">
+                            <SelectItem value="none" className="text-xs">— Ocenia admin —</SelectItem>
+                            {clientUsersForCampaign.map(u => (
+                              <SelectItem key={u.id} value={u.id} className="text-xs">{u.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">admin (brak kont klienta)</span>
+                      )}
+                    </div>
+                    {campaign.briefNotes && (
+                      <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">Brief: {campaign.briefNotes}</p>
+                    )}
                   </div>
-                )}
-                {isDraft && (
-                  <div className="text-center rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-1.5">
-                    <div className="text-sm font-bold tabular-nums text-muted-foreground">Pauza</div>
-                    <div className="text-[10px] text-muted-foreground">SLA nieaktywne</div>
-                  </div>
-                )}
 
-                {/* Idea count */}
-                <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
-                  <div className="text-sm font-bold tabular-nums text-foreground">
-                    {Math.min(acceptedCount, campaign.targetIdeaCount)}/{campaign.targetIdeaCount}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">zaakceptowanych</div>
-                </div>
+                  <div className="flex gap-3 items-start shrink-0">
+                    {/* SLA countdown */}
+                    <div className={`text-center rounded-lg border px-3 py-1.5 ${isOverdue ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/30'}`}>
+                      <div className={`text-sm font-bold tabular-nums ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
+                        {isOverdue ? '−' : ''}{String(hoursLeft).padStart(2, '0')}h {String(minutesLeft).padStart(2, '0')}m
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">{isOverdue ? 'po terminie' : 'pozostało'}</div>
+                    </div>
 
-                {/* Expand button */}
-                {!isTrashed && !isDraft && (
-                  <Button
-                    variant="ghost" size="sm" className="h-8 text-xs gap-1"
-                    onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
-                  >
-                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    {isExpanded ? 'Zwiń' : 'Pomysły'}
-                  </Button>
-                )}
+                    {/* Idea count */}
+                    <div className="text-center rounded-lg border border-border bg-muted/30 px-3 py-1.5">
+                      <div className="text-sm font-bold tabular-nums text-foreground">
+                        {campaignIdeas.length}/{campaign.targetIdeaCount}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">pomysłów</div>
+                    </div>
 
-                {/* Activate button for drafts */}
-                {isDraft && (
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs gap-1"
-                    onClick={() => setEditingDraft(campaign)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edytuj szkic
-                  </Button>
-                )}
-
-                {/* Dropdown menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreVertical className="h-4 w-4" />
+                    {/* Expand button */}
+                    <Button
+                      variant="ghost" size="sm" className="h-8 text-xs gap-1"
+                      onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
+                    >
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {isExpanded ? 'Zwiń' : 'Pomysły'}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-popover z-50">
-                    {isTrashed ? (
-                      <>
-                        <DropdownMenuItem
-                          disabled={isRestoringCampaign === campaign.id}
-                          onClick={() => handleRestore(campaign.id)}
-                        >
-                          <ArchiveRestore className="mr-2 h-4 w-4" />
-                          {isRestoringCampaign === campaign.id ? 'Przywracanie...' : 'Przywróć kampanię'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setHardDeleteConfirm([campaign.id])}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Usuń całkowicie z systemu
-                        </DropdownMenuItem>
-                      </>
-                    ) : isDraft ? (
-                      <>
-                        <DropdownMenuItem onClick={() => setEditingDraft(campaign)}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edytuj
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={!campaign.clientId || !campaign.assignedInfluencerId || isActivatingCampaign === campaign.id}
-                          onClick={() => handleActivate(campaign.id)}
-                        >
-                          <Lightbulb className="mr-2 h-4 w-4" />
-                          Uruchom kampanię
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
-                        </DropdownMenuItem>
-                      </>
-                    ) : (
-                      <>
+
+                    {/* Status change */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-popover z-50">
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'awaiting_ideas' })}>Oczekuje na pomysły</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'in_review' })}>Klient ocenia</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateCampaign(campaign.id, { status: 'completed' })}>Zakończona</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteCampaignConfirm(campaign.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />Przenieś do kosza
+                          <Trash2 className="mr-2 h-4 w-4" />Usuń kampanię
                         </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                {/* Progress bar for ideas */}
+                <div className="mt-3 space-y-1">
+                  <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, (campaignIdeas.length / campaign.targetIdeaCount) * 100)}%` }} />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stały się projektami` : 'Brak pomysłów'}</span>
+                    <span>{campaignIdeas.length} z {campaign.targetIdeaCount}</span>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Progress bar for ideas */}
-            <div className="mt-3 space-y-1">
-              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${Math.min(100, (acceptedCount / campaign.targetIdeaCount) * 100)}%` }} />
-              </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>{pendingCount > 0 ? `${pendingCount} w trakcie weryfikacji` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych` : 'Brak pomysłów'}</span>
-                <span>{Math.min(acceptedCount, campaign.targetIdeaCount)} z {campaign.targetIdeaCount} zaakceptowanych</span>
-              </div>
+              {/* Expanded ideas panel */}
+              {isExpanded && (
+                <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
+                  <IdeasPanel campaignId={campaign.id} role="admin" />
+                </div>
+              )}
             </div>
-          </div>
-
-          {/* Expanded ideas panel */}
-          {isExpanded && !isTrashed && !isDraft && (
-            <div className="border-t border-border px-4 py-4 md:px-6 bg-muted/10">
-              <IdeasPanel campaignId={campaign.id} role="admin" />
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    return (
-      <div className="space-y-4">
-        {/* Campaign filter tabs */}
-        <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-          <button
-            onClick={() => { setCampaignTabFilter('active'); setTrashSelected(new Set()); }}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              campaignTabFilter === 'active'
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Aktywne ({activeCampaigns.length})
-          </button>
-          <button
-            onClick={() => { setCampaignTabFilter('drafts'); setTrashSelected(new Set()); }}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
-              campaignTabFilter === 'drafts'
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Szkice ({draftCampaigns.length})
-          </button>
-          <button
-            onClick={() => setCampaignTabFilter('trash')}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
-              campaignTabFilter === 'trash'
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Kosz ({trashedCampaigns.length})
-          </button>
-        </div>
-
-        {campaignTabFilter === 'active' ? (
-          activeCampaigns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-              <Lightbulb className="h-12 w-12 text-muted-foreground opacity-40" />
-              <p className="text-lg font-semibold text-foreground">Brak aktywnych kampanii</p>
-              <p className="text-sm text-muted-foreground">Utwórz kampanię, aby zlecić influencerowi przygotowanie pomysłów.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {activeCampaigns.map(campaign => renderCampaignCard(campaign, false))}
-            </div>
-          )
-        ) : campaignTabFilter === 'drafts' ? (
-          draftCampaigns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground opacity-40" />
-              <p className="text-lg font-semibold text-foreground">Brak szkiców</p>
-              <p className="text-sm text-muted-foreground">Rozpocznij tworzenie kampanii — szkice zapisują się automatycznie.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {draftCampaigns.map(campaign => renderCampaignCard(campaign, false))}
-            </div>
-          )
-        ) : (
-          trashedCampaigns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-              <Trash2 className="h-12 w-12 text-muted-foreground opacity-40" />
-              <p className="text-lg font-semibold text-foreground">Kosz jest pusty</p>
-              <p className="text-sm text-muted-foreground">W koszu nie ma jeszcze żadnych usuniętych kampanii.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Select all */}
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={trashSelected.size === trashedCampaigns.length && trashedCampaigns.length > 0}
-                  disabled={isHardDeleting || isBulkRestoring}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setTrashSelected(new Set(trashedCampaigns.map(c => c.id)));
-                    } else {
-                      setTrashSelected(new Set());
-                    }
-                  }}
-                />
-                <span className="text-sm text-muted-foreground">Zaznacz wszystkie ({trashedCampaigns.length})</span>
-              </div>
-              {trashedCampaigns.map(campaign => renderCampaignCard(campaign, true))}
-            </div>
-          )
-        )}
-
-        {/* Floating Bulk Action Bar */}
-        {campaignTabFilter === 'trash' && trashSelected.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 shadow-2xl text-background animate-in slide-in-from-bottom-4 fade-in duration-200">
-            <span className="text-sm font-medium">Zaznaczono: {trashSelected.size}</span>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={isBulkRestoring || isHardDeleting}
-              className="h-8 text-xs gap-1"
-              onClick={async () => {
-                setIsBulkRestoring(true);
-                try {
-                  await bulkRestoreCampaigns(Array.from(trashSelected));
-                  setTrashSelected(new Set());
-                } finally {
-                  setIsBulkRestoring(false);
-                }
-              }}
-            >
-              <ArchiveRestore className="h-3.5 w-3.5" />
-              {isBulkRestoring ? 'Przywracanie...' : 'Przywróć zaznaczone'}
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={isHardDeleting || isBulkRestoring}
-              className="h-8 text-xs gap-1"
-              onClick={() => setHardDeleteConfirm(Array.from(trashSelected))}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Usuń trwale
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 text-background hover:text-background/80 hover:bg-background/10"
-              onClick={() => setTrashSelected(new Set())}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+          );
+        })}
       </div>
     );
   };
 
   // --- VIEW 1: Moje Zadania ---
   const renderTasksView = () => {
-    const projectsWithPendingTasks = projects.filter(project => {
+    // Helper: filming urgency for a given project
+    const getFilmingUrgency = (project: typeof projects[0]) => {
+      const projectTasks = getTasksForProject(project.id);
+      const isComplete = projectTasks.length > 0 && projectTasks.every(t => t.status === 'done');
+      const filmingTask = projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego');
+      if (!filmingTask) return 'none' as const;
+      if (filmingTask.value) return 'set' as const;
+      const activeTask = projectTasks.find(t =>
+        t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision'
+      );
+      const activeOrder = activeTask?.order ?? -1;
+      if (!isComplete && activeOrder >= 7) return 'required' as const;
+      if (!isComplete && activeOrder >= 5) return 'soon' as const;
+      return 'none' as const;
+    };
+
+    const projectsWithWork = projects.filter(project => {
       const adminTasks = getAdminTasksForProject(project.id);
-      return adminTasks.some(t => isAdminTaskActionable(t));
+      if (adminTasks.some(t => isAdminTaskActionable(t))) return true;
+      const urgency = getFilmingUrgency(project);
+      return urgency === 'required' || urgency === 'soon';
     });
 
-    if (projectsWithPendingTasks.length === 0) {
+    if (projectsWithWork.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
           <CheckCircle2 className="h-12 w-12 text-success opacity-60" />
@@ -1732,14 +1650,18 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       );
     }
 
-    const groups = getProjectGroups(projectsWithPendingTasks);
+    const groups = getProjectGroups(projectsWithWork);
 
     return (
       <div className="space-y-6">
         {groups.map(group => {
           const groupAdminTaskCount = group.projects.reduce((sum, project) => {
             const adminTasks = getAdminTasksForProject(project.id);
-            return sum + adminTasks.filter(t => isAdminTaskActionable(t)).length;
+            const regularCount = adminTasks.filter(t => isAdminTaskActionable(t)).length;
+            const urgency = getFilmingUrgency(project);
+            const hasFilmingCard = (urgency === 'required' || urgency === 'soon')
+              && !adminTasks.filter(t => isAdminTaskActionable(t)).some(t => t.title === 'Ustaw termin planu zdjęciowego');
+            return sum + regularCount + (hasFilmingCard ? 1 : 0);
           }, 0);
 
           return (
@@ -1766,7 +1688,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 {group.projects.map(project => {
                   const adminTasks = getAdminTasksForProject(project.id);
                   const pendingTasks = adminTasks.filter(t => isAdminTaskActionable(t));
-                  const hasBlocking = pendingTasks.some(t => isAdminTaskBlocking(t));
+                  const filmingUrgency = getFilmingUrgency(project);
+                  // Show filming card only if not already covered by a regular pending task
+                  const showFilmingCard = (filmingUrgency === 'required' || filmingUrgency === 'soon')
+                    && !pendingTasks.some(t => t.title === 'Ustaw termin planu zdjęciowego');
+                  const hasBlocking = pendingTasks.some(t => isAdminTaskBlocking(t)) || filmingUrgency === 'required';
+
+                  const projectTasks = getTasksForProject(project.id);
+                  const filmingTask = projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego');
+                  const filmingDateParsed = filmingTask?.value ? new Date(filmingTask.value) : null;
 
                   return (
                     <div key={project.id} className="px-4 py-3 md:px-6">
@@ -1819,6 +1749,180 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                             </div>
                           );
                         })}
+
+                        {/* Filming date card — controlled Popover to preserve open state across re-renders */}
+                        {showFilmingCard && filmingTask && (() => {
+                          const ftId = filmingTask.id;
+                          const setup = filmingSetup[ftId];
+                          const isPast = setup ? (() => { const t = new Date(); t.setHours(0,0,0,0); return setup.date < t; })() : false;
+                          const isOpen = filmingDateOpen[project.id] ?? false;
+                          return (
+                            <div className={cn(
+                              "flex items-center gap-3 rounded-lg border p-3 transition-colors",
+                              filmingUrgency === 'required'
+                                ? "border-destructive/60 bg-destructive/10 shadow-md ring-1 ring-destructive/20"
+                                : "border-warning/60 bg-warning/10 shadow-sm"
+                            )}>
+                              {filmingUrgency === 'required' ? (
+                                <AlertTriangle className="h-4 w-4 text-destructive shrink-0 animate-pulse" />
+                              ) : (
+                                <CalendarClock className="h-4 w-4 text-warning shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className={cn("text-xs font-medium truncate mb-1", filmingUrgency === 'required' ? "text-destructive" : "text-warning")}>
+                                  Ustaw termin nagrania
+                                  {filmingUrgency === 'required' && <span className="ml-1 text-[10px] font-bold">(Warto ustalić!)</span>}
+                                </div>
+                                <Popover
+                                  open={isOpen}
+                                  onOpenChange={open => {
+                                    setFilmingDateOpen(prev => ({ ...prev, [project.id]: open }));
+                                    if (!open) setFilmingSetup(prev => { const n = { ...prev }; delete n[ftId]; return n; });
+                                  }}
+                                >
+                                  <PopoverTrigger asChild>
+                                    <Button size="sm" variant="default" className="h-7 gap-1 text-xs">
+                                      <CalendarClock className="h-3 w-3" />
+                                      Wybierz datę
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    {!setup ? (
+                                      <Calendar
+                                        mode="single"
+                                        selected={undefined}
+                                        onSelect={date => {
+                                          if (date) {
+                                            const pendingIds = tasks
+                                              .filter(t => {
+                                                if (t.title !== 'Ustaw termin planu zdjęciowego' || t.value) return false;
+                                                const relatedProject = projects.find(p => p.id === t.projectId);
+                                                return relatedProject?.clientId === project.clientId;
+                                              })
+                                              .map(t => t.projectId);
+                                            setFilmingSetup(prev => ({
+                                              ...prev,
+                                              [ftId]: {
+                                                date,
+                                                kierownikId: project.assignedKierownikId ?? '',
+                                                operatorId: project.assignedOperatorId ?? '',
+                                                selectedProjectIds: pendingIds,
+                                              },
+                                            }));
+                                          }
+                                        }}
+                                        disabled={(date) => { const t = new Date(); t.setHours(0, 0, 0, 0); return date < t; }}
+                                        locale={pl}
+                                        initialFocus
+                                        className={cn('p-3 pointer-events-auto')}
+                                      />
+                                    ) : (
+                                      <div className="p-4 w-72 space-y-4 pointer-events-auto">
+                                        <div className="flex items-center gap-2">
+                                          <CalendarClock className="h-4 w-4 text-primary shrink-0" />
+                                          <span className="text-sm font-semibold text-foreground">
+                                            {format(setup.date, 'EEEE, dd.MM.yyyy', { locale: pl })}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="ml-auto text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
+                                            onClick={() => setFilmingSetup(prev => { const n = { ...prev }; delete n[ftId]; return n; })}
+                                          >
+                                            Zmień datę
+                                          </button>
+                                        </div>
+                                        {/* KP selector */}
+                                        <div className="space-y-1">
+                                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kierownik Planu</label>
+                                          <Select
+                                            value={setup.kierownikId || 'none'}
+                                            onValueChange={v => setFilmingSetup(prev => ({ ...prev, [ftId]: { ...prev[ftId], kierownikId: v === 'none' ? '' : v } }))}
+                                          >
+                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Wybierz..." /></SelectTrigger>
+                                            <SelectContent className="bg-popover z-50">
+                                              <SelectItem value="none">— Brak —</SelectItem>
+                                              {kierownicy.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        {/* Operator selector */}
+                                        <div className="space-y-1">
+                                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Operator</label>
+                                          <Select
+                                            value={setup.operatorId || 'none'}
+                                            onValueChange={v => setFilmingSetup(prev => ({ ...prev, [ftId]: { ...prev[ftId], operatorId: v === 'none' ? '' : v } }))}
+                                          >
+                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Wybierz..." /></SelectTrigger>
+                                            <SelectContent className="bg-popover z-50">
+                                              <SelectItem value="none">— Brak —</SelectItem>
+                                              {users.filter(u => u.role === 'operator').map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        {/* Project selection */}
+                                        {(() => {
+                                          const allClientFilmingIds = tasks
+                                            .filter(t => {
+                                              if (t.title !== 'Ustaw termin planu zdjęciowego') return false;
+                                              const relatedProject = projects.find(p => p.id === t.projectId);
+                                              return relatedProject?.clientId === project.clientId;
+                                            })
+                                            .map(t => t.projectId)
+                                            .filter((id, i, a) => a.indexOf(id) === i);
+                                          if (!allClientFilmingIds.length) return null;
+                                          return (
+                                            <div className="space-y-1.5">
+                                              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Projekty w tej sesji</label>
+                                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                {allClientFilmingIds.map(projId => {
+                                                  const proj = projects.find(p => p.id === projId);
+                                                  if (!proj) return null;
+                                                  const isChecked = setup.selectedProjectIds.includes(projId);
+                                                  return (
+                                                    <label key={projId} className="flex items-center gap-2 cursor-pointer">
+                                                      <input type="checkbox" className="rounded" checked={isChecked}
+                                                        onChange={e => setFilmingSetup(prev => ({
+                                                          ...prev,
+                                                          [ftId]: {
+                                                            ...prev[ftId],
+                                                            selectedProjectIds: e.target.checked
+                                                              ? [...prev[ftId].selectedProjectIds, projId]
+                                                              : prev[ftId].selectedProjectIds.filter(id => id !== projId),
+                                                          },
+                                                        }))}
+                                                      />
+                                                      <span className="text-xs truncate">{proj.name}</span>
+                                                    </label>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+                                        <div className="flex gap-2 pt-1">
+                                          <Button size="sm" className="flex-1" disabled={!setup.selectedProjectIds?.length}
+                                            onClick={() => {
+                                              setup.selectedProjectIds.forEach(projId => {
+                                                if (setup.kierownikId) assignToProject(projId, 'assignedKierownikId', setup.kierownikId);
+                                                if (setup.operatorId) assignToProject(projId, 'assignedOperatorId', setup.operatorId);
+                                                setFilmingDate(projId, setup.date.toISOString());
+                                              });
+                                              setFilmingSetup(prev => { const n = { ...prev }; delete n[ftId]; return n; });
+                                              setFilmingDateOpen(prev => ({ ...prev, [project.id]: false }));
+                                            }}
+                                          >
+                                            <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
+                                            Zatwierdź termin
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -1934,13 +2038,16 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   const adminTasks = getAdminTasksForProject(project.id);
                   const pendingAdminCount = adminTasks.filter(t => isAdminTaskActionable(t)).length;
 
-                  // Active stage: first task with active status
-                  const activeTask = projectTasks.find(t =>
+                  // Active stage: first task with active status (or blocked by final rejection)
+                  const rejectedFinalTask = projectTasks.find(t => t.status === 'rejected_final');
+                  const activeTask = rejectedFinalTask ?? projectTasks.find(t =>
                     t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision'
                   );
 
                   const cardBorder = isComplete
                     ? 'border-success bg-success/5'
+                    : !!rejectedFinalTask
+                    ? 'border-destructive/60 bg-destructive/5'
                     : pendingAdminCount > 0
                     ? 'border-destructive/50 bg-destructive/5'
                     : isFrozen
@@ -1967,7 +2074,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                             />
                           </div>
                           <div className="flex justify-between text-[10px] text-muted-foreground">
-                            <span>{activeTask ? activeTask.title : isComplete ? 'Ukończony' : 'Brak aktywnego etapu'}</span>
+                            <span className={rejectedFinalTask ? 'text-destructive font-medium' : ''}>
+                              {rejectedFinalTask ? `⛔ Odrzucono: ${rejectedFinalTask.title}` : activeTask ? activeTask.title : isComplete ? 'Ukończony' : 'Brak aktywnego etapu'}
+                            </span>
                             <span>{doneTasks}/{total}</span>
                           </div>
                         </div>
@@ -2193,15 +2302,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {!readOnly && <IdeasBankDialog />}
           {!readOnly && <ClientManagementDialog />}
           {!readOnly && <TeamManagementDialog />}
-          {!readOnly && <AddCampaignDialog />}
-          {/* Edit draft dialog — controlled externally */}
-          {!readOnly && (
-            <AddCampaignDialog
-              editDraft={editingDraft}
-              externalOpen={!!editingDraft}
-              onOpenChange={(open) => { if (!open) setEditingDraft(null); }}
-            />
-          )}
+          {!readOnly && <AddCampaignDialog onCreated={() => setActiveView('campaigns')} />}
           <span className="hidden text-sm text-muted-foreground sm:inline">{currentUser.name}</span>
           <Button variant="ghost" size="icon" onClick={() => setCurrentUser(null)} title="Zmień użytkownika">
             <LogOut className="h-4 w-4" />
@@ -2270,6 +2371,26 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         />
       )}
 
+      <AlertDialog open={!!deleteCampaignConfirm} onOpenChange={open => !open && setDeleteCampaignConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Czy na pewno chcesz usunąć kampanię?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Kampania „{campaigns.find(c => c.id === deleteCampaignConfirm)?.name || ''}" oraz wszystkie przypisane do niej pomysły zostaną trwale usunięte. Projektów stworzonych z tej kampanii to nie dotyczy. Tej akcji nie można cofnąć.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteCampaignConfirm) { deleteCampaign(deleteCampaignConfirm); setDeleteCampaignConfirm(null); } }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Usuń kampanię
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {!readOnly && (
         <AlertDialog open={!!deleteConfirm} onOpenChange={open => !open && setDeleteConfirm(null)}>
           <AlertDialogContent>
@@ -2283,79 +2404,6 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               <AlertDialogCancel>Anuluj</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Usuń projekt
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-
-      {!readOnly && (
-        <AlertDialog open={!!deleteCampaignConfirm} onOpenChange={open => { if (!open && !isDeletingCampaign) setDeleteCampaignConfirm(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Przenieść do Kosza?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Kampania „{getDeleteCampaignName()}" zostanie ukryta z głównego widoku, ale będzie można ją przywrócić z Kosza.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeletingCampaign}>Anuluj</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={isDeletingCampaign}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async (e) => {
-                  e.preventDefault();
-                  if (!deleteCampaignConfirm) return;
-                  setIsDeletingCampaign(true);
-                  try {
-                    softDeleteCampaign(deleteCampaignConfirm);
-                    await new Promise(r => setTimeout(r, 300));
-                  } finally {
-                    setIsDeletingCampaign(false);
-                    setDeleteCampaignConfirm(null);
-                  }
-                }}
-              >
-                {isDeletingCampaign ? 'Przenoszenie...' : 'Przenieś do Kosza'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-
-      {/* Hard Delete AlertDialog */}
-      {!readOnly && (
-        <AlertDialog open={!!hardDeleteConfirm} onOpenChange={open => { if (!open && !isHardDeleting) { setHardDeleteConfirm(null); } }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Trwałe usunięcie kampanii</AlertDialogTitle>
-              <AlertDialogDescription>
-                Ta operacja jest nieodwracalna. {hardDeleteConfirm && hardDeleteConfirm.length > 1 ? `${hardDeleteConfirm.length} kampanii` : 'Kampania'} oraz powiązane zadania zostaną wymazane z bazy danych, ale dane przypisanych Klientów i Zespołu pozostaną bezpieczne. Czy na pewno chcesz kontynuować?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isHardDeleting}>Anuluj</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={isHardDeleting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async (e) => {
-                  e.preventDefault();
-                  if (!hardDeleteConfirm) return;
-                  setIsHardDeleting(true);
-                  try {
-                    await hardDeleteCampaigns(hardDeleteConfirm);
-                    setTrashSelected(prev => {
-                      const next = new Set(prev);
-                      hardDeleteConfirm.forEach(id => next.delete(id));
-                      return next;
-                    });
-                  } finally {
-                    setIsHardDeleting(false);
-                    setHardDeleteConfirm(null);
-                  }
-                }}
-              >
-                {isHardDeleting ? 'Usuwanie...' : 'Usuń trwale'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -109,6 +109,82 @@ function renderTaskValue(value: string | null, inputType: Task['inputType']): Re
     );
   }
 
+  // Social descriptions
+  if (inputType === 'social_descriptions') {
+    try {
+      const desc: Record<string, string> = JSON.parse(value);
+      const PLAT_LABELS: Record<string, string> = { facebook: 'Facebook', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube' };
+      const entries = Object.entries(desc).filter(([, v]) => v);
+      if (entries.length) {
+        return (
+          <div className="mt-1.5 space-y-1.5">
+            {entries.map(([k, v]) => (
+              <div key={k}>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{PLAT_LABELS[k] || k}: </span>
+                <span className="text-xs text-foreground">{v.length > 80 ? v.slice(0, 80) + '…' : v}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+    } catch {}
+  }
+
+  // Social dates
+  if (inputType === 'social_dates') {
+    try {
+      const dates: Record<string, string> = JSON.parse(value);
+      const DATE_KEYS = ['facebookDate', 'tiktokDate', 'instagramDate', 'youtubeDate'];
+      const LABELS: Record<string, string> = { facebookDate: 'FB', tiktokDate: 'TT', instagramDate: 'IG', youtubeDate: 'YT' };
+      const parts = DATE_KEYS.filter(k => dates[k]).map(k => `${LABELS[k]} ${format(new Date(dates[k]), 'dd.MM', { locale: pl })}`);
+      if (parts.length) return <p className="mt-1.5 text-xs text-muted-foreground">{parts.join(' · ')}</p>;
+    } catch {}
+  }
+
+  // Multi-party notes
+  if (inputType === 'multi_party_notes') {
+    try {
+      const notes: Record<string, string> = JSON.parse(value);
+      const entries = Object.entries(notes).filter(([, v]) => v);
+      if (entries.length) {
+        return (
+          <div className="mt-1.5 space-y-1">
+            {entries.map(([role, note]) => (
+              <div key={role} className="text-xs text-muted-foreground">
+                <span className="font-medium">{ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role}: </span>
+                <span>{note.length > 80 ? note.slice(0, 80) + '…' : note}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+    } catch {}
+  }
+
+  // Publication confirm
+  if (inputType === 'publication_confirm') {
+    try {
+      const confirmed: Record<string, string | boolean | null> = JSON.parse(value);
+      const PLAT_LABELS: Record<string, string> = { facebook: 'Facebook', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube' };
+      const entries = Object.entries(confirmed);
+      if (entries.length) {
+        return (
+          <div className="mt-1.5 space-y-1">
+            {entries.map(([k, v]) => (
+              <div key={k} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">{PLAT_LABELS[k] || k}:</span>
+                {v
+                  ? <span className="text-success font-medium">{typeof v === 'string' ? format(new Date(v), 'dd.MM.yyyy, HH:mm', { locale: pl }) : 'Potwierdzono'}</span>
+                  : <span className="text-muted-foreground/60 italic">Nie wykonano</span>
+                }
+              </div>
+            ))}
+          </div>
+        );
+      }
+    } catch {}
+  }
+
   // Long text — truncate
   const truncated = value.length > 120 ? value.slice(0, 120) + '…' : value;
   return <p className="mt-1.5 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{truncated}</p>;
@@ -239,13 +315,16 @@ export default function ProjectReadOnlyView({
           const stageDef = PIPELINE_STAGES[task.order];
           const isMyStage = stageDef?.roles.includes(currentUserRole as any) ?? false;
           const isLocked = task.status === 'locked';
-          const isDone = task.status === 'done';
-          const isAutoSkipped = isDone && task.value === 'auto_skipped' && task.title === 'Zaakceptuj przypisanie osoby';
+          // Filming task with a pre-set value is effectively done even if pipeline status lags
+          const isDone = task.status === 'done' ||
+            (task.title === 'Ustaw termin planu zdjęciowego' && !!task.value);
           const isActive = !isLocked && !isDone;
           const isExpanded = expandedStages.has(task.order) || isActive;
           const canExpand = isDone && (task.value || task.clientFeedback || task.history.length > 0);
           const showPhaseLabel = PHASE_STARTS.has(task.order);
-          const statusInfo = stageStatusLabel(task.status);
+          const statusInfo = isDone && task.status !== 'done'
+            ? { text: 'Ukończono', className: 'bg-success/10 text-success border-0' }
+            : stageStatusLabel(task.status);
 
           return (
             <div key={task.id}>
@@ -274,9 +353,7 @@ export default function ProjectReadOnlyView({
               >
                 <div className="flex items-center gap-3 px-3 py-2.5">
                   {/* Status icon */}
-                  {isAutoSkipped
-                    ? <CheckCircle2 className="h-4 w-4 text-muted-foreground/60 shrink-0" />
-                    : stageStatusIcon(task.status, isMyStage)}
+                  {stageStatusIcon(task.status, isMyStage)}
 
                   {/* Stage number + title */}
                   <div className="flex-1 min-w-0">
@@ -292,7 +369,7 @@ export default function ProjectReadOnlyView({
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-muted-foreground">
-                        {isAutoSkipped ? 'System' : stageDef?.roles.map(r => ROLE_LABELS[r]).join(' + ')}
+                        {stageDef?.roles.map(r => ROLE_LABELS[r]).join(' + ')}
                       </span>
                       {task.completedAt && (
                         <span className="text-[10px] text-muted-foreground">
@@ -304,8 +381,8 @@ export default function ProjectReadOnlyView({
 
                   {/* Status badge */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge className={`text-[9px] h-4 ${isAutoSkipped ? 'bg-muted text-muted-foreground border-0' : statusInfo.className}`}>
-                      {isAutoSkipped ? 'Automatycznie' : statusInfo.text}
+                    <Badge className={`text-[9px] h-4 ${statusInfo.className}`}>
+                      {statusInfo.text}
                     </Badge>
                     {canExpand && (
                       isExpanded

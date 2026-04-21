@@ -43,11 +43,11 @@ function MultiPartyNotesPanel({
   );
 
   const handleSave = () => {
-    const noteValue = draft.trim() || '';
+    if (!draft.trim()) return;
     if (isSubmitted) {
-      onUpdate(noteValue || myNote);
+      onUpdate(draft.trim());
     } else {
-      onSubmit(noteValue || '(bez uwag)');
+      onSubmit(draft.trim());
     }
     setSaved(true);
     setEditing(false);
@@ -127,6 +127,7 @@ function MultiPartyNotesPanel({
             />
             <Button
               className="w-full"
+              disabled={!draft.trim()}
               onClick={handleSave}
             >
               {saved ? (
@@ -135,10 +136,8 @@ function MultiPartyNotesPanel({
                 <><Send className="mr-2 h-4 w-4" />Zapisz notatki</>
               ) : isSubmitted ? (
                 <><Send className="mr-2 h-4 w-4" />Zaktualizuj uwagi</>
-              ) : draft.trim() ? (
-                <><Send className="mr-2 h-4 w-4" />Wyślij uwagi</>
               ) : (
-                <><CheckCircle2 className="mr-2 h-4 w-4" />Zatwierdź bez uwag</>
+                <><Send className="mr-2 h-4 w-4" />Wyślij uwagi</>
               )}
             </Button>
             {isInfluencer && (

@@ -3,7 +3,12 @@
  * after the influencer has submitted social descriptions.
  */
 import { useState } from 'react';
-import { Facebook, Twitter, Instagram, Youtube, CheckCircle2, Check, AlertTriangle, Pencil } from 'lucide-react';
+import { Facebook, Instagram, Youtube, CheckCircle2, Check, AlertTriangle, Pencil, CopyCheck } from 'lucide-react';
+const TikTokIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.74a8.18 8.18 0 0 0 4.79 1.52V6.79a4.85 4.85 0 0 1-1.02-.1z"/>
+  </svg>
+);
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
@@ -19,14 +24,14 @@ interface PlatformConfig {
 
 const PLATFORMS: PlatformConfig[] = [
   { key: 'facebook', dateKey: 'facebookDate', label: 'Facebook', icon: <Facebook className="h-4 w-4 text-[#1877F2]" /> },
-  { key: 'twitter', dateKey: 'twitterDate', label: 'Twitter / X', icon: <Twitter className="h-4 w-4 text-foreground" /> },
+  { key: 'tiktok', dateKey: 'tiktokDate', label: 'TikTok', icon: <TikTokIcon className="h-4 w-4 text-foreground" /> },
   { key: 'instagram', dateKey: 'instagramDate', label: 'Instagram', icon: <Instagram className="h-4 w-4 text-[#E4405F]" /> },
   { key: 'youtube', dateKey: 'youtubeDate', label: 'YouTube', icon: <Youtube className="h-4 w-4 text-[#FF0000]" /> },
 ];
 
 export interface SocialDatesResult {
   facebookDate?: string;
-  twitterDate?: string;
+  tiktokDate?: string;
   instagramDate?: string;
   youtubeDate?: string;
 }
@@ -35,7 +40,7 @@ export function tryParseSocialDates(value: string | null): SocialDatesResult | n
   if (!value) return null;
   try {
     const p = JSON.parse(value);
-    if (p && typeof p === 'object' && ('facebookDate' in p || 'twitterDate' in p || 'instagramDate' in p || 'youtubeDate' in p)) {
+    if (p && typeof p === 'object' && ('facebookDate' in p || 'tiktokDate' in p || 'instagramDate' in p || 'youtubeDate' in p)) {
       return p as SocialDatesResult;
     }
   } catch {}
@@ -73,6 +78,29 @@ const SocialDatesWidget = ({ socialTextsJson, currentValue, onSubmit }: Props) =
     PLATFORMS.forEach(p => { init[p.dateKey] = !existingDates?.[p.dateKey]; });
     return init;
   });
+
+  // Bulk date state
+  const [bulkDate, setBulkDate] = useState('');
+  const [bulkSelected, setBulkSelected] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    PLATFORMS.forEach(p => { init[p.dateKey] = true; });
+    return init;
+  });
+
+  const applyBulk = () => {
+    if (!bulkDate) return;
+    const newDates = { ...dates };
+    const newEditing = { ...editing };
+    PLATFORMS.forEach(p => {
+      if (bulkSelected[p.dateKey]) {
+        newDates[p.dateKey] = bulkDate;
+        newEditing[p.dateKey] = false;
+      }
+    });
+    setDates(newDates);
+    setEditing(newEditing);
+    setBulkDate('');
+  };
 
   // Dates pending past-date confirmation: dateKey → candidate value
   const [pendingPast, setPendingPast] = useState<Record<string, string>>({});
@@ -120,6 +148,49 @@ const SocialDatesWidget = ({ socialTextsJson, currentValue, onSubmit }: Props) =
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Ustaw datę publikacji per platforma</span>
         <Badge variant="secondary" className="text-[10px]">{setCount}/4 ustawione</Badge>
+      </div>
+
+      {/* Bulk date picker */}
+      <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-2">
+        <div className="text-[11px] font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
+          <CopyCheck className="h-3.5 w-3.5" />
+          Jedna data dla wielu platform
+        </div>
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              className="rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 flex-1"
+              value={bulkDate}
+              min={new Date().toISOString().split('T')[0]}
+              onChange={e => setBulkDate(e.target.value)}
+            />
+            <button
+              onClick={applyBulk}
+              disabled={!bulkDate || !PLATFORMS.some(p => bulkSelected[p.dateKey])}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-colors shrink-0"
+            >
+              Zastosuj
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {PLATFORMS.map(p => (
+              <button
+                key={p.dateKey}
+                onClick={() => setBulkSelected(prev => ({ ...prev, [p.dateKey]: !prev[p.dateKey] }))}
+                className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  bulkSelected[p.dateKey]
+                    ? 'border-foreground/30 bg-background text-foreground shadow-sm'
+                    : 'border-border/50 bg-muted/30 text-muted-foreground hover:border-border hover:text-foreground'
+                }`}
+              >
+                <span className="shrink-0">{p.icon}</span>
+                <span className="flex-1 text-left">{p.label}</span>
+                {bulkSelected[p.dateKey] && <Check className="h-3 w-3 shrink-0 text-success" />}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {PLATFORMS.map(p => {

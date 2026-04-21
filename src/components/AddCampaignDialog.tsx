@@ -1,6 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Campaign } from '@/types';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -11,221 +10,403 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Lightbulb, X, Check, UserPlus, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
+import { Lightbulb, Plus, X, Check, UserPlus } from 'lucide-react';
 
-interface AddCampaignDialogProps {
-  /** If provided, opens in edit mode with this draft's data */
-  editDraft?: Campaign | null;
-  /** Controlled open state (for external trigger) */
-  externalOpen?: boolean;
-  /** Callback when dialog closes */
-  onOpenChange?: (open: boolean) => void;
+// --- Phone helpers (shared with ClientManagementDialog) ---
+
+const DIAL_CODES = [
+  { code: '+48',  flag: '🇵🇱', country: 'PL' },
+  { code: '+1',   flag: '🇺🇸', country: 'US/CA' },
+  { code: '+44',  flag: '🇬🇧', country: 'UK' },
+  { code: '+49',  flag: '🇩🇪', country: 'DE' },
+  { code: '+33',  flag: '🇫🇷', country: 'FR' },
+  { code: '+39',  flag: '🇮🇹', country: 'IT' },
+  { code: '+34',  flag: '🇪🇸', country: 'ES' },
+  { code: '+31',  flag: '🇳🇱', country: 'NL' },
+  { code: '+380', flag: '🇺🇦', country: 'UA' },
+  { code: '+420', flag: '🇨🇿', country: 'CZ' },
+];
+
+function formatLocalPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 9);
+  const parts: string[] = [];
+  if (digits.length > 0) parts.push(digits.slice(0, 3));
+  if (digits.length > 3) parts.push(digits.slice(3, 6));
+  if (digits.length > 6) parts.push(digits.slice(6, 9));
+  return parts.join(' ');
 }
 
-const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaignDialogProps) => {
-  const { clients, users, addCampaign, createDraftCampaign, updateCampaign, activateCampaign, addUser } = useApp();
-  const [internalOpen, setInternalOpen] = useState(false);
-
-  // Use external control if provided, otherwise internal
-  const open = externalOpen !== undefined ? externalOpen : internalOpen;
-  const setOpen = (v: boolean) => {
-    if (externalOpen !== undefined) {
-      onOpenChange?.(v);
-    } else {
-      setInternalOpen(v);
+function parsePhone(phone: string): { dialCode: string; local: string } {
+  if (!phone) return { dialCode: '+48', local: '' };
+  const withLocal = phone.match(/^(\+\d+)\s(.+)$/);
+  if (withLocal) return { dialCode: withLocal[1], local: withLocal[2] };
+  // compact format e.g. "+48123456789"
+  const sorted = [...DIAL_CODES].sort((a, b) => b.code.length - a.code.length);
+  for (const d of sorted) {
+    if (phone.startsWith(d.code) && phone.length > d.code.length) {
+      return { dialCode: d.code, local: phone.slice(d.code.length) };
     }
+  }
+  const justCode = phone.match(/^(\+\d+)$/);
+  if (justCode) return { dialCode: justCode[1], local: '' };
+  return { dialCode: '+48', local: phone };
+}
+
+const PhoneField = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+  const { dialCode, local } = parsePhone(value);
+  const selected = DIAL_CODES.find(d => d.code === dialCode) ?? DIAL_CODES[0];
+
+  const handleDialCode = (code: string) => onChange(local ? `${code} ${local}` : code);
+  const handleLocal = (raw: string) => {
+    const formatted = formatLocalPhone(raw);
+    onChange(formatted ? `${dialCode} ${formatted}` : dialCode);
   };
 
-  const isEditMode = !!editDraft;
+  return (
+    <div className="flex gap-1.5">
+      <Select value={dialCode} onValueChange={handleDialCode}>
+        <SelectTrigger className="h-8 w-[90px] text-xs shrink-0 px-2 gap-1">
+          <span className="flex items-center gap-1 truncate">
+            <span>{selected.flag}</span>
+            <span className="font-mono">{selected.code}</span>
+          </span>
+        </SelectTrigger>
+        <SelectContent className="bg-popover z-50">
+          {DIAL_CODES.map(d => (
+            <SelectItem key={d.code} value={d.code} className="text-xs font-mono">
+              {d.flag} {d.code} <span className="text-muted-foreground ml-1 font-sans">{d.country}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Input
+        className="h-8 text-sm flex-1 tabular-nums"
+        type="tel"
+        inputMode="numeric"
+        value={local}
+        onChange={e => handleLocal(e.target.value)}
+        placeholder="600 100 200"
+        maxLength={11}
+      />
+    </div>
+  );
+};
 
+// ---
+
+const EMPTY_CLIENT_FORM = { companyName: '', contactName: '', email: '', phone: '+48', notes: '' };
+
+const AddCampaignDialog = ({ onCreated }: { onCreated?: () => void } = {}) => {
+  const { clients, users, addCampaign, addUser, addClient } = useApp();
+  const [open, setOpen] = useState(false);
   const [clientId, setClientId] = useState('');
   const [influencerId, setInfluencerId] = useState('');
-  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
+  const [clientUserId, setClientUserId] = useState('');
   const [targetCount, setTargetCount] = useState('12');
   const [slaHours, setSlaHours] = useState('48');
   const [briefNotes, setBriefNotes] = useState('');
-  const [reviewerError, setReviewerError] = useState(false);
-  const [requireCastApproval, setRequireCastApproval] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Draft tracking
-  const draftIdRef = useRef<string | null>(null);
+  // Inline new client — full form
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [clientForm, setClientForm] = useState(EMPTY_CLIENT_FORM);
+  // additional people beyond the main contact (each with their own phone for Telegram)
+  const [pendingContacts, setPendingContacts] = useState<{ name: string; phone: string }[]>([]);
+  const [pendingContactName, setPendingContactName] = useState('');
+  const [pendingContactPhone, setPendingContactPhone] = useState('+48');
 
   // Inline new influencer form
   const [showNewInfluencer, setShowNewInfluencer] = useState(false);
   const [newInfluencerName, setNewInfluencerName] = useState('');
 
-  // Pre-fill form when editing a draft
-  useEffect(() => {
-    if (editDraft && open) {
-      setClientId(editDraft.clientId || '');
-      setInfluencerId(editDraft.assignedInfluencerId || '');
-      setReviewerIds(editDraft.reviewerIds || []);
-      setTargetCount(String(editDraft.targetIdeaCount || 12));
-      setSlaHours(String(editDraft.slaHours || 48));
-      setBriefNotes(editDraft.briefNotes || '');
-      draftIdRef.current = editDraft.id;
-      setReviewerError(false);
-      setRequireCastApproval(editDraft.requireCastApproval ?? false);
-      setShowAdvanced(editDraft.requireCastApproval ?? false);
-      setShowNewInfluencer(false);
-      setNewInfluencerName('');
-    }
-  }, [editDraft, open]);
+  // Inline add reviewer
+  const [showAddReviewer, setShowAddReviewer] = useState(false);
+  const [newReviewerName, setNewReviewerName] = useState('');
+  const [newReviewerPhone, setNewReviewerPhone] = useState('+48');
+  // tracks if admin explicitly chose "no reviewer" to prevent auto-reselect
+  const [reviewerCleared, setReviewerCleared] = useState(false);
 
   const influencers = users.filter(u => u.role === 'influencer');
-  const clientUsers = clientId
-    ? users.filter(u => u.role === 'klient' && u.clientId === clientId)
-    : [];
-
+  const clientUsers = clientId ? users.filter(u => u.role === 'klient' && u.clientId === clientId) : [];
+  // auto-select only when exactly one klient user AND none manually chosen AND not explicitly cleared
+  const autoSelectedClientUser = clientUsers.length === 1 && !clientUserId && !reviewerCleared ? clientUsers[0] : null;
+  const effectiveClientUserId = clientUserId || (autoSelectedClientUser?.id ?? '');
   const isValid = !!clientId && !!influencerId;
 
-  // Auto-save draft to DB
-  const saveDraft = useCallback((overrides?: Record<string, any>) => {
-    const data = {
-      clientId: overrides?.clientId ?? clientId,
-      assignedInfluencerId: overrides?.influencerId ?? influencerId,
-      assignedClientUserId: null as string | null,
-      reviewerIds: overrides?.reviewerIds ?? reviewerIds,
-      targetIdeaCount: Math.max(1, parseInt(overrides?.targetCount ?? targetCount) || 12),
-      slaHours: Math.max(1, parseInt(overrides?.slaHours ?? slaHours) || 48),
-      briefNotes: (overrides?.briefNotes ?? briefNotes).trim(),
-      requireCastApproval: overrides?.requireCastApproval ?? requireCastApproval,
-    };
+  const [clientEmailError, setClientEmailError] = useState('');
 
-    if (!draftIdRef.current) {
-      const id = createDraftCampaign(data);
-      draftIdRef.current = id;
-    } else {
-      updateCampaign(draftIdRef.current, data);
+  const isValidEmail = (email: string) =>
+    email === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const updateClientForm = (key: string, value: string) => {
+    setClientForm(prev => ({ ...prev, [key]: value }));
+    if (key === 'email') setClientEmailError('');
+  };
+
+  const addPendingContact = () => {
+    const name = pendingContactName.trim();
+    if (!name) return;
+    const { dialCode, local } = parsePhone(pendingContactPhone);
+    const localNoSpaces = local.replace(/\s/g, '');
+    const phone = localNoSpaces.length > 0 ? `${dialCode}${localNoSpaces}` : '';
+    setPendingContacts(prev => [...prev, { name, phone }]);
+    setPendingContactName('');
+    setPendingContactPhone('+48');
+  };
+
+  const cancelNewClient = () => {
+    setShowNewClient(false);
+    setClientForm(EMPTY_CLIENT_FORM);
+    setPendingContacts([]);
+    setPendingContactName('');
+    setPendingContactPhone('+48');
+    setClientEmailError('');
+  };
+
+  const handleAddNewClient = () => {
+    if (!clientForm.companyName.trim()) return;
+    if (clientForm.email && !isValidEmail(clientForm.email)) {
+      setClientEmailError('Podaj poprawny adres email');
+      return;
     }
-  }, [clientId, influencerId, reviewerIds, targetCount, slaHours, briefNotes, requireCastApproval, createDraftCampaign, updateCampaign]);
+    const { dialCode, local } = parsePhone(clientForm.phone);
+    const localNoSpaces = local.replace(/\s/g, '');
+    const cleanPhone = localNoSpaces.length > 0 ? `${dialCode}${localNoSpaces}` : '';
+    const newId = addClient({ ...clientForm, phone: cleanPhone });
+    // Auto-create klient user from main contact (with company phone)
+    if (clientForm.contactName.trim()) {
+      addUser({ name: clientForm.contactName.trim(), role: 'klient', clientId: newId, phone: cleanPhone });
+    }
+    // Create additional people with their individual phones
+    pendingContacts.forEach(p => addUser({ name: p.name, role: 'klient', clientId: newId, phone: p.phone || undefined }));
+    setClientId(newId);
+    cancelNewClient();
+  };
 
   const handleAddNewInfluencer = () => {
     if (!newInfluencerName.trim()) return;
     const newId = addUser({ name: newInfluencerName.trim(), role: 'influencer' });
     setInfluencerId(newId);
-    setNewInfluencerName(''); setShowNewInfluencer(false);
-    setTimeout(() => saveDraft({ influencerId: newId }), 0);
+    setNewInfluencerName('');
+    setShowNewInfluencer(false);
   };
 
-  const toggleReviewer = (id: string) => {
-    setReviewerError(false);
-    setReviewerIds(prev => {
-      const next = prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id];
-      setTimeout(() => saveDraft({ reviewerIds: next }), 0);
-      return next;
-    });
-  };
-
-  const handleClientChange = (v: string) => {
-    setClientId(v);
-    setReviewerIds([]);
-    setReviewerError(false);
-    setTimeout(() => saveDraft({ clientId: v, reviewerIds: [] }), 0);
-  };
-
-  const handleInfluencerChange = (v: string) => {
-    setInfluencerId(v);
-    setTimeout(() => saveDraft({ influencerId: v }), 0);
+  const handleAddReviewer = () => {
+    if (!newReviewerName.trim() || !clientId) return;
+    const { dialCode, local } = parsePhone(newReviewerPhone);
+    const localNoSpaces = local.replace(/\s/g, '');
+    const phone = localNoSpaces.length > 0 ? `${dialCode}${localNoSpaces}` : undefined;
+    const newId = addUser({ name: newReviewerName.trim(), role: 'klient', clientId, phone });
+    setClientUserId(newId);
+    setShowAddReviewer(false);
+    setNewReviewerName('');
+    setNewReviewerPhone('+48');
   };
 
   const handleSubmit = () => {
     if (!isValid) return;
-    if (reviewerIds.length === 0) {
-      setReviewerError(true);
-      return;
-    }
-    const firstClientReviewer = reviewerIds.find(id => id !== 'admin') || null;
-
-    if (draftIdRef.current) {
-      // Update existing draft and activate it
-      updateCampaign(draftIdRef.current, {
-        clientId,
-        assignedInfluencerId: influencerId,
-        assignedClientUserId: firstClientReviewer,
-        reviewerIds,
-        targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
-        slaHours: Math.max(1, parseInt(slaHours) || 48),
-        briefNotes: briefNotes.trim(),
-        status: 'awaiting_ideas',
-        requireCastApproval,
-      });
-      // If editing a draft, also activate it (resets createdAt for SLA)
-      if (isEditMode) {
-        activateCampaign(draftIdRef.current);
-      }
-    } else {
-      addCampaign({
-        clientId,
-        assignedInfluencerId: influencerId,
-        assignedClientUserId: firstClientReviewer,
-        reviewerIds,
-        targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
-        slaHours: Math.max(1, parseInt(slaHours) || 48),
-        briefNotes: briefNotes.trim(),
-        requireCastApproval,
-      });
-    }
-    resetAndClose();
-  };
-
-  const resetForm = () => {
-    setClientId(''); setInfluencerId(''); setReviewerIds([]);
+    addCampaign({
+      clientId,
+      assignedInfluencerId: influencerId,
+      assignedClientUserId: effectiveClientUserId || null,
+      targetIdeaCount: Math.max(1, parseInt(targetCount) || 12),
+      slaHours: Math.max(1, parseInt(slaHours) || 48),
+      briefNotes: briefNotes.trim(),
+    });
+    setClientId(''); setInfluencerId(''); setClientUserId(''); setReviewerCleared(false);
     setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
+    cancelNewClient();
     setShowNewInfluencer(false); setNewInfluencerName('');
-    setReviewerError(false);
-    setRequireCastApproval(false);
-    setShowAdvanced(false);
-    draftIdRef.current = null;
-  };
-
-  const resetAndClose = () => {
-    resetForm();
     setOpen(false);
+    onCreated?.();
   };
 
-  const handleOpenChange = (isOpen: boolean) => {
-    setOpen(isOpen);
-    if (!isOpen) {
-      // If closing without submitting, draft stays in DB as "Szkic"
-      resetForm();
-    }
+  const resetDialog = () => {
+    setClientId(''); setInfluencerId(''); setClientUserId(''); setReviewerCleared(false);
+    setTargetCount('12'); setSlaHours('48'); setBriefNotes('');
+    cancelNewClient();
+    setShowNewInfluencer(false); setNewInfluencerName('');
+    setShowAddReviewer(false); setNewReviewerName(''); setNewReviewerPhone('+48');
   };
-
-  // Trigger button only shown when no external control
-  const triggerButton = externalOpen === undefined ? (
-    <DialogTrigger asChild>
-      <Button size="sm" className="gap-2">
-        <Lightbulb className="h-4 w-4" />
-        Nowa kampania
-      </Button>
-    </DialogTrigger>
-  ) : null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      {triggerButton}
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetDialog(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="gap-2">
+          <Lightbulb className="h-4 w-4" />
+          Nowa kampania
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditMode ? 'Edytuj szkic kampanii' : 'Utwórz kampanię pomysłów'}</DialogTitle>
+          <DialogTitle>Utwórz kampanię pomysłów</DialogTitle>
           <DialogDescription>
-            {isEditMode
-              ? 'Uzupełnij dane szkicu i uruchom kampanię. Zamknięcie okna zachowa zmiany w szkicu.'
-              : 'Wybierz klienta i influencera — dane zapisują się automatycznie jako szkic. Możesz zamknąć okno i wrócić później.'}
+            Wybierz klienta i influencera — influencer otrzyma brief i ma podany czas na złożenie pomysłów.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Client */}
           <div className="space-y-1.5">
-            <Label>Klient *</Label>
-            {clients.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Dodaj najpierw klienta w panelu „Klienci".</p>
+            <div className="flex items-center justify-between">
+              <Label>Klient *</Label>
+              {!showNewClient && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewClient(true)}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <UserPlus className="h-3 w-3" />Dodaj nowego
+                </button>
+              )}
+            </div>
+
+            {showNewClient ? (
+              <div className="rounded-lg border border-primary bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-primary">Nowy klient</span>
+                  <button onClick={cancelNewClient} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Nazwa firmy *</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={clientForm.companyName}
+                      onChange={e => updateClientForm('companyName', e.target.value)}
+                      placeholder="Nazwa firmy"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Osoba kontaktowa</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={clientForm.contactName}
+                      onChange={e => updateClientForm('contactName', e.target.value)}
+                      placeholder="Imię i nazwisko"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Email firmy</Label>
+                  <Input
+                    className={`h-8 text-sm ${clientEmailError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                    type="text"
+                    value={clientForm.email}
+                    onChange={e => updateClientForm('email', e.target.value)}
+                    onBlur={() => {
+                      if (clientForm.email && !isValidEmail(clientForm.email))
+                        setClientEmailError('Podaj poprawny adres email');
+                    }}
+                    placeholder="email@firma.pl"
+                  />
+                  {clientEmailError && (
+                    <p className="text-[11px] text-destructive">{clientEmailError}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Telefon</Label>
+                  <PhoneField value={clientForm.phone} onChange={v => updateClientForm('phone', v)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Notatki</Label>
+                  <Textarea
+                    className="text-sm min-h-[48px] resize-none"
+                    value={clientForm.notes}
+                    onChange={e => updateClientForm('notes', e.target.value)}
+                    placeholder="Dodatkowe informacje..."
+                  />
+                </div>
+
+                {/* Pending contacts */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">
+                      Dostęp do systemu
+                    </span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+
+                  {/* Auto entry: main contact person */}
+                  {clientForm.contactName.trim() ? (
+                    <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-semibold text-primary">
+                        {clientForm.contactName.trim().charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-medium">{clientForm.contactName.trim()}</span>
+                        <span className="ml-1.5 text-[10px] text-primary/70">— osoba kontaktowa</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{parsePhone(clientForm.phone).local || '—'}</span>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground italic">
+                      Wpisz osobę kontaktową powyżej — automatycznie otrzyma dostęp do systemu.
+                    </p>
+                  )}
+
+                  {/* Additional people */}
+                  {pendingContacts.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="flex-1 text-xs font-medium">{p.name}</span>
+                      {p.phone && <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{parsePhone(p.phone).local}</span>}
+                      <button onClick={() => setPendingContacts(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Add another person */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-muted-foreground">
+                      Jeśli inna osoba będzie oceniać lub prowadzić projekty, dodaj ją z numerem telefonu (Telegram):
+                    </p>
+                    <div className="flex gap-1.5">
+                      <Input
+                        className="h-8 text-sm flex-1"
+                        placeholder="Imię i nazwisko..."
+                        value={pendingContactName}
+                        onChange={e => setPendingContactName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addPendingContact())}
+                      />
+                    </div>
+                    <div className="flex gap-1.5">
+                      <PhoneField value={pendingContactPhone} onChange={setPendingContactPhone} />
+                      <Button size="sm" variant="outline" className="h-8 px-2 shrink-0" onClick={addPendingContact} disabled={!pendingContactName.trim()}>
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={!clientForm.companyName.trim()}
+                    onClick={handleAddNewClient}
+                  >
+                    <Check className="h-3 w-3" />Dodaj i wybierz
+                  </Button>
+                </div>
+              </div>
+            ) : clients.length === 0 ? (
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <p className="text-sm text-muted-foreground">Brak klientów — użyj "Dodaj nowego" powyżej.</p>
+              </div>
             ) : (
-              <Select value={clientId} onValueChange={handleClientChange}>
+              <Select value={clientId} onValueChange={v => { setClientId(v); setClientUserId(''); setReviewerCleared(false); }}>
                 <SelectTrigger><SelectValue placeholder="Wybierz klienta..." /></SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   {clients.map(c => (
@@ -286,7 +467,7 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
                 <p className="text-sm text-muted-foreground">Brak influencerów — użyj "Dodaj nowego" powyżej.</p>
               </div>
             ) : (
-              <Select value={influencerId} onValueChange={handleInfluencerChange}>
+              <Select value={influencerId} onValueChange={setInfluencerId}>
                 <SelectTrigger><SelectValue placeholder="Wybierz influencera..." /></SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   {influencers.map(u => (
@@ -297,84 +478,93 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
             )}
           </div>
 
-          {/* Reviewers — multi-select checklist */}
+          {/* Client reviewer */}
           <div className="space-y-1.5">
-            <Label>Kto ocenia pomysły? *</Label>
+            <Label>Kto ocenia pomysły?</Label>
             {!clientId ? (
               <p className="text-xs text-muted-foreground italic py-1">Wybierz najpierw klienta.</p>
             ) : (
               <>
-                <div className="rounded-md border border-border p-2 max-h-[200px] overflow-y-auto space-y-1">
-                  {/* Admin option — always first */}
-                  <label className="flex items-center gap-2.5 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors">
-                    <Checkbox
-                      checked={reviewerIds.includes('admin')}
-                      onCheckedChange={() => toggleReviewer('admin')}
+                <Select
+                  value={effectiveClientUserId || 'none'}
+                  onValueChange={v => {
+                    if (v === '__add_new__') {
+                      setShowAddReviewer(true);
+                    } else if (v === 'none') {
+                      setClientUserId('');
+                      setReviewerCleared(true);
+                      setShowAddReviewer(false);
+                    } else {
+                      setClientUserId(v);
+                      setReviewerCleared(false);
+                      setShowAddReviewer(false);
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Wybierz osobę oceniającą..." /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="none">— Ocenia admin —</SelectItem>
+                    {clientUsers.map(u => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
+                    <SelectItem value="__add_new__" className="text-primary font-medium">
+                      + Dodaj nową osobę...
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {showAddReviewer && (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                    <span className="text-xs font-semibold text-primary">Nowa osoba oceniająca</span>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder="Imię i nazwisko *"
+                      value={newReviewerName}
+                      onChange={e => setNewReviewerName(e.target.value)}
+                      autoFocus
                     />
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-medium text-primary shrink-0">
-                      A
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Telefon (Telegram)</label>
+                      <PhoneField value={newReviewerPhone} onChange={setNewReviewerPhone} />
                     </div>
-                    <span className="text-sm font-medium text-foreground">Ocenia admin</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] border-0 bg-primary/10 text-primary">Admin</Badge>
-                  </label>
-
-                  {/* Client users */}
-                  {clientUsers.map(u => (
-                    <label key={u.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors">
-                      <Checkbox
-                        checked={reviewerIds.includes(u.id)}
-                        onCheckedChange={() => toggleReviewer(u.id)}
-                      />
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-success/15 text-xs font-medium text-success shrink-0">
-                        {u.name.charAt(0)}
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{u.name}</span>
-                      <Badge variant="secondary" className="ml-auto text-[10px] border-0 bg-success/10 text-success">Klient</Badge>
-                    </label>
-                  ))}
-
-                  {clientUsers.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic px-2 py-1">
-                      Brak kont klienta przypisanych do tej firmy.
+                    <p className="text-[10px] text-muted-foreground">
+                      Osoba zostanie zapisana do klienta i będzie dostępna w przyszłych kampaniach.
                     </p>
-                  )}
-                </div>
-                {reviewerError && (
-                  <p className="text-xs text-destructive font-medium">
-                    Wybierz co najmniej jedną osobę oceniającą
-                  </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button size="sm" className="h-7 text-xs gap-1 flex-1" disabled={!newReviewerName.trim()} onClick={handleAddReviewer}>
+                        <Check className="h-3 w-3" />Dodaj i wybierz
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowAddReviewer(false); setNewReviewerName(''); setNewReviewerPhone('+48'); }}>
+                        Anuluj
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </>
             )}
-            <p className="text-[11px] text-muted-foreground">
-              Konto do logowania ustawiasz w panelu <strong>Zespół → Klienci</strong>.
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 items-end">
-            {/* Target idea count */}
             <div className="space-y-1.5">
               <Label>Liczba pomysłów</Label>
               <Input
                 type="number" min="1" max="50"
                 value={targetCount}
-                onChange={e => { setTargetCount(e.target.value); setTimeout(() => saveDraft({ targetCount: e.target.value }), 0); }}
+                onChange={e => setTargetCount(e.target.value)}
                 className="h-9"
               />
             </div>
-            {/* SLA hours */}
             <div className="space-y-1.5">
               <Label>Deadline influencera (h)</Label>
               <Input
                 type="number" min="1" max="168"
                 value={slaHours}
-                onChange={e => { setSlaHours(e.target.value); setTimeout(() => saveDraft({ slaHours: e.target.value }), 0); }}
+                onChange={e => setSlaHours(e.target.value)}
                 className="h-9"
               />
             </div>
           </div>
 
-          {/* Brief notes */}
           <div className="space-y-1.5">
             <Label>Brief / wskazówki dla influencera</Label>
             <Textarea
@@ -382,57 +572,13 @@ const AddCampaignDialog = ({ editDraft, externalOpen, onOpenChange }: AddCampaig
               placeholder="np. Szukamy pomysłów na serię filmów o higienie jamy ustnej..."
               value={briefNotes}
               onChange={e => setBriefNotes(e.target.value)}
-              onBlur={() => saveDraft()}
             />
-          </div>
-
-          {/* Draft indicator */}
-          {draftIdRef.current && (
-            <p className="text-[10px] text-muted-foreground text-center">
-              💾 Szkic zapisany automatycznie — możesz zamknąć i wrócić później
-            </p>
-          )}
-
-          {/* Advanced settings */}
-          <div className="border border-border rounded-lg">
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(prev => !prev)}
-              className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-              Ustawienia zaawansowane
-              {showAdvanced ? <ChevronDown className="h-3.5 w-3.5 ml-auto" /> : <ChevronRight className="h-3.5 w-3.5 ml-auto" />}
-            </button>
-            {showAdvanced && (
-              <div className="px-3 pb-3 pt-1 border-t border-border">
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <Checkbox
-                    checked={requireCastApproval}
-                    onCheckedChange={(checked) => {
-                      const val = !!checked;
-                      setRequireCastApproval(val);
-                      setTimeout(() => saveDraft({ requireCastApproval: val }), 0);
-                    }}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-foreground">Wymagaj akceptacji obsady przez klienta</span>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Domyślnie obsada jest zatwierdzana automatycznie. Zaznacz, jeśli klient ma ręcznie akceptować przypisane osoby.
-                    </p>
-                  </div>
-                </label>
-              </div>
-            )}
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>Anuluj</Button>
-          <Button onClick={handleSubmit} disabled={!isValid}>
-            {isEditMode ? 'Uruchom kampanię' : 'Utwórz kampanię'}
-          </Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>Anuluj</Button>
+          <Button onClick={handleSubmit} disabled={!isValid}>Utwórz kampanię</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

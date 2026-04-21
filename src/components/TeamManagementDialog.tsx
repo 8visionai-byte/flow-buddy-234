@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Settings, Plus, Pencil, Trash2, Building2 } from 'lucide-react';
+import { Settings, Plus, Pencil, Trash2, Building2, Send } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -32,10 +32,18 @@ const TeamManagementDialog = () => {
   const [addingRole, setAddingRole] = useState<UserRole | null>(null);
   const [newName, setNewName] = useState('');
   const [newClientId, setNewClientId] = useState('');
+  const [newTelegram, setNewTelegram] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editClientId, setEditClientId] = useState('');
+  const [editTelegram, setEditTelegram] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const normalizeTelegram = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return undefined;
+    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+  };
 
   const handleAdd = (role: UserRole) => {
     if (!newName.trim()) return;
@@ -43,9 +51,11 @@ const TeamManagementDialog = () => {
       name: newName.trim(),
       role,
       clientId: role === 'klient' ? (newClientId || null) : undefined,
+      telegramContact: role !== 'klient' ? normalizeTelegram(newTelegram) : undefined,
     });
     setNewName('');
     setNewClientId('');
+    setNewTelegram('');
     setAddingRole(null);
   };
 
@@ -54,16 +64,19 @@ const TeamManagementDialog = () => {
     updateUser(id, {
       name: editName.trim(),
       clientId: role === 'klient' ? (editClientId || null) : undefined,
+      telegramContact: role !== 'klient' ? normalizeTelegram(editTelegram) : undefined,
     });
     setEditingId(null);
     setEditName('');
     setEditClientId('');
+    setEditTelegram('');
   };
 
   const startEdit = (user: typeof users[0]) => {
     setEditingId(user.id);
     setEditName(user.name);
     setEditClientId(user.clientId || '');
+    setEditTelegram(user.telegramContact?.replace(/^@/, '') || '');
   };
 
   const handleDelete = () => {
@@ -89,16 +102,16 @@ const TeamManagementDialog = () => {
             Zespół
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg overflow-hidden">
           <DialogHeader>
             <DialogTitle>Zarządzanie zespołem</DialogTitle>
             <DialogDescription>Dodawaj, edytuj i usuwaj członków zespołu</DialogDescription>
           </DialogHeader>
 
           <Tabs defaultValue="klient" className="mt-2">
-            <TabsList className="w-full">
+            <TabsList className="w-full h-auto flex flex-wrap gap-1 bg-muted p-1">
               {MANAGED_ROLES.map(r => (
-                <TabsTrigger key={r.role} value={r.role} className="flex-1 text-xs">
+                <TabsTrigger key={r.role} value={r.role} className="flex-1 text-xs min-w-[calc(33%-4px)]">
                   {r.label}
                 </TabsTrigger>
               ))}
@@ -110,17 +123,15 @@ const TeamManagementDialog = () => {
                   <div key={user.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
                     {editingId === user.id ? (
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Input
-                            value={editName}
-                            onChange={e => setEditName(e.target.value)}
-                            className="h-8 flex-1"
-                            autoFocus
-                            onKeyDown={e => e.key === 'Enter' && handleUpdate(user.id, r.role)}
-                            placeholder="Imię i nazwisko"
-                          />
-                        </div>
-                        {r.role === 'klient' && (
+                        <Input
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          className="h-8"
+                          autoFocus
+                          onKeyDown={e => e.key === 'Enter' && handleUpdate(user.id, r.role)}
+                          placeholder="Imię i nazwisko"
+                        />
+                        {r.role === 'klient' ? (
                           <div className="space-y-1">
                             <Label className="text-xs text-muted-foreground">Firma klienta</Label>
                             <Select value={editClientId || 'none'} onValueChange={v => setEditClientId(v === 'none' ? '' : v)}>
@@ -137,6 +148,17 @@ const TeamManagementDialog = () => {
                               </SelectContent>
                             </Select>
                           </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 h-8">
+                            <Send className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <span className="text-muted-foreground text-xs">@</span>
+                            <input
+                              className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
+                              placeholder="kontakt_telegram"
+                              value={editTelegram}
+                              onChange={e => setEditTelegram(e.target.value.replace(/^@/, ''))}
+                            />
+                          </div>
                         )}
                         <div className="flex gap-2">
                           <Button size="sm" className="h-7 text-xs" onClick={() => handleUpdate(user.id, r.role)}>Zapisz</Button>
@@ -150,11 +172,18 @@ const TeamManagementDialog = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-foreground">{user.name}</div>
-                          {r.role === 'klient' && (
+                          {r.role === 'klient' ? (
                             <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                               <Building2 className="h-3 w-3" />
                               {getClientName(user.clientId) || <span className="italic">Brak przypisania do firmy</span>}
                             </div>
+                          ) : user.telegramContact ? (
+                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <Send className="h-3 w-3" />
+                              {user.telegramContact}
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-muted-foreground/50 italic">Brak kontaktu Telegram</div>
                           )}
                         </div>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(user)}>
@@ -178,7 +207,7 @@ const TeamManagementDialog = () => {
                       autoFocus
                       onKeyDown={e => e.key === 'Enter' && handleAdd(r.role)}
                     />
-                    {r.role === 'klient' && (
+                    {r.role === 'klient' ? (
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Firma klienta (opcjonalnie)</Label>
                         <Select value={newClientId || 'none'} onValueChange={v => setNewClientId(v === 'none' ? '' : v)}>
@@ -195,10 +224,21 @@ const TeamManagementDialog = () => {
                           </SelectContent>
                         </Select>
                       </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 h-8">
+                        <Send className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground text-xs">@</span>
+                        <input
+                          className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
+                          placeholder="kontakt_telegram (opcjonalnie)"
+                          value={newTelegram}
+                          onChange={e => setNewTelegram(e.target.value.replace(/^@/, ''))}
+                        />
+                      </div>
                     )}
                     <div className="flex gap-2">
                       <Button size="sm" className="h-7 text-xs" onClick={() => handleAdd(r.role)}>Dodaj</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingRole(null); setNewName(''); setNewClientId(''); }}>Anuluj</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingRole(null); setNewName(''); setNewClientId(''); setNewTelegram(''); }}>Anuluj</Button>
                     </div>
                   </div>
                 ) : (

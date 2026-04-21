@@ -15,25 +15,20 @@ export interface User {
   name: string;
   role: UserRole;
   clientId?: string | null; // for klient role: links this login account to a Client (company)
+  phone?: string; // compact format e.g. "+48600100200", used for Telegram notifications
+  telegramContact?: string; // Telegram handle e.g. "@jankowalski" or phone number, for Make.com webhook notifications
 }
 
 export type TaskStatus = 'locked' | 'todo' | 'done' | 'pending_client_approval' | 'needs_influencer_revision' | 'deferred' | 'rejected_final';
-export type InputType = 'boolean' | 'text' | 'url' | 'approval' | 'social_descriptions' | 'social_dates' | 'publication_confirm' | 'actor_assignment' | 'filming_confirmation' | 'raw_footage' | 'multi_party_notes' | 'frameio_review' | 'script_review';
+export type InputType = 'boolean' | 'text' | 'url' | 'approval' | 'actor_approval' | 'social_descriptions' | 'social_dates' | 'publication_confirm' | 'actor_assignment' | 'filming_confirmation' | 'raw_footage' | 'multi_party_notes' | 'frameio_review' | 'script_review';
 export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStatus = 'active' | 'frozen';
 
 export interface TaskHistoryEntry {
-  action: 'submitted' | 'approved' | 'rejected' | 'resubmitted' | 'deferred' | 'rejected_final';
+  action: 'submitted' | 'approved' | 'rejected' | 'file_notes' | 'resubmitted' | 'deferred' | 'rejected_final';
   by: UserRole;
-  userId?: string;
   value?: string | null;
   feedback?: string | null;
-  timestamp: string;
-}
-
-export interface ClientVote {
-  decision: 'approved' | 'rejected';
-  comment: string;
   timestamp: string;
 }
 
@@ -56,7 +51,6 @@ export interface Task {
   deadlineDate: string | null;
   history: TaskHistoryEntry[];
   roleCompletions: Record<string, string>;
-  clientVotes: Record<string, ClientVote>;
 }
 
 export interface Recording {
@@ -88,9 +82,9 @@ export interface Project {
   assignedInfluencerId: string | null;
   assignedEditorId: string | null;
   assignedClientId: string | null;
-  assignedClientIds: string[];
   assignedKierownikId: string | null;
   assignedOperatorId: string | null;
+  assignedPublikatorId: string | null;
   publicationDate: string | null;
   priority: ProjectPriority;
   slaHours: number | null;
@@ -144,13 +138,7 @@ export interface ActorEntry {
   telegramHandle: string;        // @username or +48... — used by Make.com webhook
 }
 
-export type IdeaStatus = 'pending' | 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected' | 'needs_revision';
-
-export interface IdeaEvaluation {
-  decision: 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected';
-  comment: string | null;
-  timestamp: string;
-}
+export type IdeaStatus = 'pending' | 'accepted' | 'accepted_with_notes' | 'saved_for_later' | 'rejected';
 
 export interface Idea {
   id: string;
@@ -164,22 +152,18 @@ export interface Idea {
   clientNotes: string | null;   // for 'accepted_with_notes' or 'rejected' reasons
   reviewedAt: string | null;
   reviewedByUserId: string | null;
-  evaluations: Record<string, IdeaEvaluation>; // userId → vote
 }
 
-export type CampaignStatus = 'draft' | 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';
+export type CampaignStatus = 'awaiting_ideas' | 'in_review' | 'completed' | 'cancelled';
 
 export interface Campaign {
   id: string;
   clientId: string;
   assignedInfluencerId: string;
-  assignedClientUserId: string | null;  // legacy single reviewer (kept for backward compat)
-  reviewerIds: string[];                // multi-reviewer array
+  assignedClientUserId: string | null;  // which klient user sees this campaign
   targetIdeaCount: number;              // default 12
   status: CampaignStatus;
   createdAt: string;
   slaHours: number;                     // 48 default — influencer deadline
   briefNotes: string;                   // DZ notes/brief for influencer
-  isDeleted: boolean;                   // soft delete flag
-  requireCastApproval: boolean;         // if true, client must manually approve cast; default false (auto-approve)
 }

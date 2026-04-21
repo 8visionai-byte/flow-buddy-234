@@ -46,6 +46,13 @@ function parsePhone(phone: string): { dialCode: string; local: string } {
   if (!phone) return { dialCode: '+48', local: '' };
   const withLocal = phone.match(/^(\+\d+)\s(.+)$/);
   if (withLocal) return { dialCode: withLocal[1], local: withLocal[2] };
+  // compact format e.g. "+48123456789"
+  const sorted = [...DIAL_CODES].sort((a, b) => b.code.length - a.code.length);
+  for (const d of sorted) {
+    if (phone.startsWith(d.code) && phone.length > d.code.length) {
+      return { dialCode: d.code, local: phone.slice(d.code.length) };
+    }
+  }
   const justCode = phone.match(/^(\+\d+)$/);
   if (justCode) return { dialCode: justCode[1], local: '' };
   return { dialCode: '+48', local: phone };
@@ -89,7 +96,7 @@ const PhoneField = ({ value, onChange, size = 'sm' }: PhoneFieldProps) => {
         </SelectContent>
       </Select>
       <Input
-        className={`${h} text-sm flex-1 tabular-nums tracking-widest`}
+        className={`${h} text-sm flex-1 tabular-nums`}
         type="tel"
         inputMode="numeric"
         value={local}
@@ -104,10 +111,6 @@ const PhoneField = ({ value, onChange, size = 'sm' }: PhoneFieldProps) => {
 // --- Main component ---
 
 const EMPTY_FORM = { companyName: '', contactName: '', email: '', phone: '+48', notes: '' };
-
-// Check if a user matches the client's contact_name (primary contact)
-const isPrimaryContact = (user: { name: string }, client: Client) =>
-  client.contactName?.trim() && user.name.trim().toLowerCase() === client.contactName.trim().toLowerCase();
 
 const ClientManagementDialog = () => {
   const { clients, addClient, updateClient, deleteClient, users, addUser, deleteUser } = useApp();
@@ -186,8 +189,9 @@ const ClientManagementDialog = () => {
 
   const save = () => {
     if (!isValid) return;
-    const { local } = parsePhone(form.phone);
-    const cleanPhone = local.replace(/\s/g, '').length > 0 ? form.phone : '';
+    const { dialCode, local } = parsePhone(form.phone);
+    const localNoSpaces = local.replace(/\s/g, '');
+    const cleanPhone = localNoSpaces.length > 0 ? `${dialCode}${localNoSpaces}` : '';
     const data = { ...form, phone: cleanPhone };
 
     if (addingNew) {
@@ -238,7 +242,7 @@ const ClientManagementDialog = () => {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Główny kontakt {isNew && '(osoba z dostępem)'}</Label>
+          <Label className="text-xs">Osoba kontaktowa</Label>
           <Input
             className="h-8 text-sm"
             value={form.contactName}
@@ -325,16 +329,7 @@ const ClientManagementDialog = () => {
 
   // ── Contacts section for an existing company ──────────────────────────────
   const renderContactsSection = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
-    const allLinked = getLinkedUsers(clientId);
-    // Deduplicate by name (case-insensitive)
-    const seen = new Set<string>();
-    const linked = allLinked.filter(u => {
-      const key = u.name.trim().toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const linked = getLinkedUsers(clientId);
     const isAddingHere = addingContactForId === clientId;
 
     return (
@@ -362,37 +357,22 @@ const ClientManagementDialog = () => {
           </p>
         )}
 
-        {linked.map(user => {
-          const primary = client ? isPrimaryContact(user, client) : false;
-          const isLastUser = linked.length <= 1;
-          return (
-            <div key={user.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="flex-1 text-xs font-medium text-foreground">{user.name}</span>
-              {primary && (
-                <Badge variant="secondary" className="border-0 bg-primary/10 text-primary text-[10px] px-1.5">
-                  Główny kontakt
-                </Badge>
-              )}
-              <Badge variant="secondary" className="border-0 bg-success/10 text-success text-[10px] px-1.5">klient</Badge>
-              {!isLastUser ? (
-                <button
-                  onClick={() => setDeleteUserConfirm(user.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                  title="Usuń dostęp"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              ) : (
-                <span title="Firma musi mieć co najmniej jednego przedstawiciela" className="text-muted-foreground/30">
-                  <Trash2 className="h-3 w-3" />
-                </span>
-              )}
+        {linked.map(user => (
+          <div key={user.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+              {user.name.charAt(0).toUpperCase()}
             </div>
-          );
-        })}
+            <span className="flex-1 text-xs font-medium text-foreground">{user.name}</span>
+            <Badge variant="secondary" className="border-0 bg-success/10 text-success text-[10px] px-1.5">klient</Badge>
+            <button
+              onClick={() => setDeleteUserConfirm(user.id)}
+              className="text-muted-foreground hover:text-destructive"
+              title="Usuń dostęp"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
 
         {isAddingHere && (
           <div className="flex gap-1.5">

@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { Facebook, Twitter, Instagram, Youtube, Check, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Facebook, Instagram, Youtube, Check, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+const TikTokIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.74a8.18 8.18 0 0 0 4.79 1.52V6.79a4.85 4.85 0 0 1-1.02-.1z"/>
+  </svg>
+);
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +20,7 @@ interface PlatformConfig {
 
 const PLATFORMS: PlatformConfig[] = [
   { key: 'facebook', label: 'Facebook', placeholder: 'Opis posta na Facebooka...', icon: <Facebook className="h-4 w-4 text-[#1877F2]" /> },
-  { key: 'twitter', label: 'Twitter / X', placeholder: 'Treść tweeta...', icon: <Twitter className="h-4 w-4 text-foreground" /> },
+  { key: 'tiktok', label: 'TikTok', placeholder: 'Opis/tytuł na TikToku...', icon: <TikTokIcon className="h-4 w-4 text-foreground" /> },
   { key: 'instagram', label: 'Instagram', placeholder: 'Opis posta na Instagrama...', icon: <Instagram className="h-4 w-4 text-[#E4405F]" /> },
   { key: 'youtube', label: 'YouTube', placeholder: 'Tytuł filmu na YouTube...', icon: <Youtube className="h-4 w-4 text-[#FF0000]" />, isInput: true },
 ];

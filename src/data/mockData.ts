@@ -13,13 +13,13 @@ export const INITIAL_CLIENTS: Client[] = [
 ];
 
 export const INITIAL_USERS: User[] = [
-  { id: 'u1', name: 'Marcin (Admin)', role: 'admin' },
-  { id: 'u2', name: 'Anna (Klient)', role: 'klient', clientId: 'c1' },
-  { id: 'u3', name: 'Tomek (Influencer)', role: 'influencer' },
-  { id: 'u4', name: 'Kuba (Montażysta)', role: 'montazysta' },
-  { id: 'u5', name: 'Ola (Kierownik Planu)', role: 'kierownik_planu' },
-  { id: 'u6', name: 'Paweł (Operator)', role: 'operator' },
-  { id: 'u7', name: 'Zofia (Publikator)', role: 'publikator' },
+  { id: 'u1', name: 'Marcin', role: 'admin', telegramContact: '@marcin_admin' },
+  { id: 'u2', name: 'Anna', role: 'klient', clientId: 'c1' },
+  { id: 'u3', name: 'Tomek', role: 'influencer', telegramContact: '@tomek_inf' },
+  { id: 'u4', name: 'Kuba', role: 'montazysta', telegramContact: '@kuba_edit' },
+  { id: 'u5', name: 'Ola', role: 'kierownik_planu', telegramContact: '@ola_kp' },
+  { id: 'u6', name: 'Paweł', role: 'operator', telegramContact: '@pawel_op' },
+  { id: 'u7', name: 'Zofia', role: 'publikator', telegramContact: '@zofia_pub' },
 ];
 
 export const INITIAL_CAMPAIGNS: Campaign[] = [
@@ -28,45 +28,60 @@ export const INITIAL_CAMPAIGNS: Campaign[] = [
     clientId: 'c1',
     assignedInfluencerId: 'u3',
     assignedClientUserId: 'u2',
-    reviewerIds: ['u2'],
     targetIdeaCount: 12,
     status: 'awaiting_ideas',
     createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), // 2 hours ago
     slaHours: 48,
     briefNotes: 'Chcemy serię filmów o higienie jamy ustnej. Pomysły powinny być ciekawe i angażujące dla pacjentów kliniki stomatologicznej.',
-    isDeleted: false,
-    requireCastApproval: false,
   },
 ];
 
 export const INITIAL_IDEAS: Idea[] = [
   {
-    id: 'idea1', campaignId: 'camp1', resultingProjectId: null,
+    id: 'idea1',
+    campaignId: 'camp1',
+    resultingProjectId: null,
     title: 'Ile razy dziennie myć zęby?',
     description: 'Film edukacyjny pokazujący prawidłową technikę mycia zębów i dlaczego 2x dziennie to absolutne minimum. Skupiamy się na ciekawostkach, które zaskakują pacjentów.',
-    createdByUserId: 'u3', createdAt: new Date(Date.now() - 90 * 60000).toISOString(),
-    status: 'pending', clientNotes: null, reviewedAt: null, reviewedByUserId: null, evaluations: {},
+    createdByUserId: 'u3',
+    createdAt: new Date(Date.now() - 90 * 60000).toISOString(),
+    status: 'pending',
+    clientNotes: null,
+    reviewedAt: null,
+    reviewedByUserId: null,
   },
   {
-    id: 'idea2', campaignId: 'camp1', resultingProjectId: null,
+    id: 'idea2',
+    campaignId: 'camp1',
+    resultingProjectId: null,
     title: 'Elektryczna vs szczoteczka ręczna — co wybrać?',
     description: 'Porównanie skuteczności obu metod poparte badaniami. Pokazujemy konkretne przypadki pacjentów i opinie dentysty.',
-    createdByUserId: 'u3', createdAt: new Date(Date.now() - 75 * 60000).toISOString(),
-    status: 'pending', clientNotes: null, reviewedAt: null, reviewedByUserId: null, evaluations: {},
+    createdByUserId: 'u3',
+    createdAt: new Date(Date.now() - 75 * 60000).toISOString(),
+    status: 'pending',
+    clientNotes: null,
+    reviewedAt: null,
+    reviewedByUserId: null,
   },
   {
-    id: 'idea3', campaignId: 'camp1', resultingProjectId: null,
+    id: 'idea3',
+    campaignId: 'camp1',
+    resultingProjectId: null,
     title: '5 produktów, które niszczą Twoje zęby bez wiedzy',
     description: 'Zaskakujące produkty codziennego użytku, o których szkodliwości mało kto wie — sok pomarańczowy, gumy do żucia, napoje energetyczne.',
-    createdByUserId: 'u3', createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
-    status: 'pending', clientNotes: null, reviewedAt: null, reviewedByUserId: null, evaluations: {},
+    createdByUserId: 'u3',
+    createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
+    status: 'pending',
+    clientNotes: null,
+    reviewedAt: null,
+    reviewedByUserId: null,
   },
 ];
 
 export const INITIAL_PROJECTS: Project[] = [
-  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', assignedClientIds: ['u2'], assignedKierownikId: 'u5', assignedOperatorId: 'u6', publicationDate: null, priority: 'medium', slaHours: 48 },
-  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedClientIds: [], assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
-  { id: 'p3', name: '5 trików na produktywność', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedClientIds: [], assignedKierownikId: null, assignedOperatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p1', name: 'Jak często trzeba robić higienę?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: 'u3', assignedEditorId: 'u4', assignedClientId: 'u2', assignedKierownikId: 'u5', assignedOperatorId: 'u6', assignedPublikatorId: 'u7', publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p2', name: 'Jakie słowo komuś ukradłeś?', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, assignedPublikatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
+  { id: 'p3', name: '5 trików na produktywność', clientId: 'c1', clientName: 'Anna', company: 'Dental Care Sp. z o.o.', clientEmail: 'anna@dentalcare.pl', clientPhone: '+48 600 100 200', currentStageIndex: 0, status: 'active', assignedInfluencerId: null, assignedEditorId: null, assignedClientId: null, assignedKierownikId: null, assignedOperatorId: null, assignedPublikatorId: null, publicationDate: null, priority: 'medium', slaHours: 48 },
 ];
 
 interface StageDefinition {
@@ -85,7 +100,7 @@ export const PIPELINE_STAGES: StageDefinition[] = [
   { roles: ['klient'], title: 'Zaakceptuj scenariusz', description: 'Otwórz link do scenariusza, nanieś uwagi bezpośrednio w pliku (Google Docs itp.), a następnie zaznacz decyzję tutaj.', inputType: 'script_review' },
   // ── Faza 3: Obsada (DOPIERO po akceptacji scenariusza) ──────────────────────
   { roles: ['influencer'], title: 'Przypisz osobę do filmu', description: 'Wybierz klienta lub dodaj inną osobę, która wystąpi w filmie.', inputType: 'actor_assignment' },
-  { roles: ['klient'], title: 'Zaakceptuj przypisanie osoby', description: 'Przejrzyj przypisaną osobę do filmu i zaakceptuj lub poproś o zmiany.', inputType: 'approval' },
+  { roles: ['klient'], title: 'Zaakceptuj przypisanie osoby', description: 'Przejrzyj przypisaną osobę do filmu i zaakceptuj lub poproś o zmiany.', inputType: 'actor_approval' },
   // ── Faza 4: Przygotowanie do nagrania ───────────────────────────────────────
   { roles: ['influencer'], title: 'Określ rekwizyty', description: 'Wymień potrzebne rekwizyty do nagrania.', inputType: 'text' },
   { roles: ['admin'], title: 'Ustaw termin planu zdjęciowego', description: 'Wybierz datę planu zdjęciowego w kalendarzu.', inputType: 'boolean' },
@@ -124,7 +139,6 @@ export function createTasksForProject(projectId: string, currentStage: number): 
     deadlineDate: null,
     history: [],
     roleCompletions: {},
-    clientVotes: {},
   }));
 }
 

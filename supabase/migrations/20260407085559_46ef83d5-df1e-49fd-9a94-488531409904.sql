@@ -1,1 +1,0 @@
-ALTER TYPE public.campaign_status ADD VALUE IF NOT EXISTS 'draft' BEFORE 'awaiting_ideas';
