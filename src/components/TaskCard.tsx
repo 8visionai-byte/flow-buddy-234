@@ -679,7 +679,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 variant="outline"
                 className="w-full"
               >
-                Poprawki naniesione — bez akceptacji klienta
+                Poprawki naniesione, nie wymagana kolejna akceptacja klienta
               </Button>
               <p className="text-xs text-muted-foreground text-center">
                 Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać.
@@ -721,7 +721,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 className="w-full"
                 disabled={isSubmitDisabled}
               >
-                Poprawki naniesione — bez akceptacji klienta
+                Poprawki naniesione, nie wymagana kolejna akceptacja klienta
               </Button>
               <p className="text-xs text-muted-foreground text-center">
                 Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać.
