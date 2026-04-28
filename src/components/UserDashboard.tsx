@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { ROLE_LABELS, Task, Project } from '@/types';
+import { ROLE_LABELS, Task, Project, getRoleDisplayLabel } from '@/types';
 import TaskCard from '@/components/TaskCard';
 import CompletedTaskCard from '@/components/CompletedTaskCard';
 import IdeasPanel from '@/components/IdeasPanel';
