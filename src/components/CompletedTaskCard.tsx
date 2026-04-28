@@ -389,7 +389,7 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 value={editTextValue}
                 onChange={e => setEditTextValue(e.target.value)}
                 className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y"
-                placeholder="Wpisz tutaj... (zostaw puste i kliknij „Nie wymagane")"
+                placeholder="Wpisz tutaj... (zostaw puste, aby oznaczyć jako Nie wymagane)"
                 autoFocus
               />
               <div className="flex gap-2">
