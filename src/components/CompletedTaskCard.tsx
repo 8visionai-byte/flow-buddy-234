@@ -368,8 +368,54 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 Popraw obsadę
               </Button>
             )}
+            {canEditText && !editingText && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => {
+                  setEditTextValue(task.value === 'Nie wymagane' ? '' : (task.value ?? ''));
+                  setEditingText(true);
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+                Popraw
+              </Button>
+            )}
           </div>
-          {editingActors ? (
+          {editingText ? (
+            <div className="space-y-2 mt-1">
+              <textarea
+                value={editTextValue}
+                onChange={e => setEditTextValue(e.target.value)}
+                className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y"
+                placeholder="Wpisz tutaj... (zostaw puste i kliknij „Nie wymagane")"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => {
+                    const trimmed = editTextValue.trim();
+                    updateTaskValue(task.id, trimmed || 'Nie wymagane');
+                    setEditingText(false);
+                    toast({ title: 'Zapisano', description: 'Treść została zaktualizowana.' });
+                  }}
+                >
+                  <Check className="h-3 w-3" />Zapisz
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setEditingText(false)}
+                >
+                  <X className="h-3 w-3" />Anuluj
+                </Button>
+              </div>
+            </div>
+          ) : editingActors ? (
             <div className="space-y-3 mt-2">
               <ActorAssignmentInput
                 client={taskClient}
