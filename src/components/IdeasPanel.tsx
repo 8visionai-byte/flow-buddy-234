@@ -460,7 +460,9 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
       <div className="space-y-2">
         {role === 'influencer' && projectIdeas.map(idea => renderInfluencerIdea(idea))}
         {role === 'klient' && projectIdeas.map(idea => renderClientIdea(idea))}
-        {role === 'admin' && projectIdeas.map(idea => renderAdminIdea(idea))}
+        {/* When admin is the reviewer (no client reviewer assigned), render the same review UI as klient */}
+        {role === 'admin' && campaign && !campaign.assignedClientUserId && projectIdeas.map(idea => renderClientIdea(idea))}
+        {role === 'admin' && campaign && campaign.assignedClientUserId && projectIdeas.map(idea => renderAdminIdea(idea))}
       </div>
 
       {/* Delete confirm */}
