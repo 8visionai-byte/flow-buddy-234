@@ -19,6 +19,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import ActorAssignmentInput from '@/components/ActorAssignmentInput';
+import { ActorEntry } from '@/types';
+import { toast } from '@/hooks/use-toast';
 
 interface CompletedTaskCardProps {
   task: Task;
