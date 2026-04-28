@@ -25,7 +25,7 @@ export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStatus = 'active' | 'frozen';
 
 export interface TaskHistoryEntry {
-  action: 'submitted' | 'approved' | 'rejected' | 'file_notes' | 'resubmitted' | 'deferred' | 'rejected_final';
+  action: 'submitted' | 'approved' | 'rejected' | 'file_notes' | 'resubmitted' | 'deferred' | 'rejected_final' | 'resubmitted_auto_approved' | 'auto_approved_by_influencer';
   by: UserRole;
   value?: string | null;
   feedback?: string | null;
