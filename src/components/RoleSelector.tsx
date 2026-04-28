@@ -66,34 +66,62 @@ const RoleSelector = () => {
           {ROLE_GROUPS.map(group => {
             const groupUsers = users.filter(u => u.role === group[0].role);
             if (groupUsers.length === 0) return null;
+
+            // For 'klient' role: split users into sub-groups per company
+            // so the section header shows the company name (personalization)
+            // instead of the generic word "Klient".
+            const subGroups: { label: string; users: typeof groupUsers }[] =
+              group[0].role === 'klient'
+                ? (() => {
+                    const byClient = new Map<string, typeof groupUsers>();
+                    for (const u of groupUsers) {
+                      const key = u.clientId || '__no_company__';
+                      const list = byClient.get(key) || [];
+                      list.push(u);
+                      byClient.set(key, list);
+                    }
+                    return Array.from(byClient.entries()).map(([key, us]) => {
+                      if (key === '__no_company__') {
+                        return { label: group[0].label, users: us };
+                      }
+                      const company = clients.find(c => c.id === key);
+                      return { label: company?.companyName || group[0].label, users: us };
+                    });
+                  })()
+                : [{ label: group[0].label, users: groupUsers }];
+
             return (
-              <div key={group[0].role}>
-                <div className="mb-2 px-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group[0].label}
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {groupUsers.map(user => {
-                    const count = getActiveTaskCount(user);
-                    return (
-                      <button
-                        key={user.id}
-                        onClick={() => setCurrentUser(user)}
-                        className="group relative flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 text-left transition-all hover:border-primary/30 hover:shadow-sm"
-                      >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-                          {user.name.charAt(0)}
-                        </div>
-                        <span className="flex-1 truncate text-sm font-medium text-foreground">{user.name}</span>
-                        {count > 0 && (
-                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
-                            {count}
-                          </span>
-                        )}
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                      </button>
-                    );
-                  })}
-                </div>
+              <div key={group[0].role} className="space-y-5">
+                {subGroups.map(sg => (
+                  <div key={`${group[0].role}-${sg.label}`}>
+                    <div className="mb-2 px-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {sg.label}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {sg.users.map(user => {
+                        const count = getActiveTaskCount(user);
+                        return (
+                          <button
+                            key={user.id}
+                            onClick={() => setCurrentUser(user)}
+                            className="group relative flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 text-left transition-all hover:border-primary/30 hover:shadow-sm"
+                          >
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+                              {user.name.charAt(0)}
+                            </div>
+                            <span className="flex-1 truncate text-sm font-medium text-foreground">{user.name}</span>
+                            {count > 0 && (
+                              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                                {count}
+                              </span>
+                            )}
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           })}
