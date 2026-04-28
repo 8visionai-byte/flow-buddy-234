@@ -715,6 +715,17 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 <Send className="mr-2 h-4 w-4" />
                 Wyślij ponownie
               </Button>
+              <Button
+                onClick={handleResubmitAutoApprove}
+                variant="outline"
+                className="w-full"
+                disabled={isSubmitDisabled}
+              >
+                Poprawki naniesione — bez akceptacji klienta
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać.
+              </p>
             </>
           )}
         </div>
