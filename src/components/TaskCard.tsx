@@ -714,7 +714,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   ) : usesDeadline ? (
     <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
       <CalendarClock className="h-4 w-4" />
-      Brak przypisanego terminu — skontaktuj się z Adminem
+      Termin nagrania zostanie ustalony przez Admina równolegle
     </div>
   ) : null;
 
