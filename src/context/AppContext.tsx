@@ -682,6 +682,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? projectTasks.find(t => t.order === approvalTask.order + 1 && t.status === 'locked')
         : null;
 
+      // PARALLEL UNLOCK (mirror of completeTask): when next task is "Określ rekwizyty" (influencer),
+      // also unlock "Ustaw termin planu zdjęciowego" (admin) so admin sees the task immediately.
+      const parallelMate = (afterApproval?.title === 'Określ rekwizyty')
+        ? projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'locked')
+        : null;
+
       return prev.map(t => {
         if (t.id === taskId) {
           return {
@@ -712,6 +718,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ? 'pending_client_approval' as const
             : 'todo' as const;
           return { ...t, status: ns, assignedAt: now };
+        }
+        if (parallelMate && t.id === parallelMate.id) {
+          return { ...t, status: 'todo' as const, assignedAt: now };
         }
         return t;
       });
