@@ -40,13 +40,13 @@ const AddProjectDialog = () => {
       <DialogTrigger asChild>
         <Button size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
-          Nowy projekt
+          Nowy pomysł
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Dodaj nowy projekt</DialogTitle>
-          <DialogDescription>Wybierz klienta i podaj nazwę projektu / temat filmu</DialogDescription>
+          <DialogTitle>Dodaj nowy pomysł</DialogTitle>
+          <DialogDescription>Wybierz klienta i podaj nazwę pomysłu / temat filmu</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -80,7 +80,7 @@ const AddProjectDialog = () => {
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="projectName">Nazwa projektu / temat filmu *</Label>
+            <Label htmlFor="projectName">Nazwa pomysłu / temat filmu *</Label>
             <Input
               id="projectName"
               placeholder="np. Jak dbać o zęby?"
@@ -93,7 +93,7 @@ const AddProjectDialog = () => {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Anuluj</Button>
-          <Button onClick={handleSubmit} disabled={!isValid}>Utwórz projekt</Button>
+          <Button onClick={handleSubmit} disabled={!isValid}>Utwórz pomysł</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
