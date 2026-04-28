@@ -48,7 +48,7 @@ function getTaskTimeInfo(task: Task, project: Project | undefined) {
 }
 
 const UserDashboard = () => {
-  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, completeTask, updatePartyNote } = useApp();
+  const { currentUser, setCurrentUser, tasks, projects, ideas, campaigns, clients, users, completeTask, updatePartyNote } = useApp();
   const [selectedItem, setSelectedItem] = useState<SidebarItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<DashView>('tasks');
