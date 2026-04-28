@@ -409,6 +409,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return updated;
       }
 
+      // PARALLEL GROUP GATE: "Określ rekwizyty" + "Ustaw termin planu zdjęciowego" run in parallel.
+      // Don't unlock the next task ("Potwierdź nagranie") until BOTH are done.
+      const PARALLEL_PAIR = ['Określ rekwizyty', 'Ustaw termin planu zdjęciowego'];
+      if (PARALLEL_PAIR.includes(completedTask.title)) {
+        const mate = projectTasks.find(t => PARALLEL_PAIR.includes(t.title) && t.id !== completedTask.id);
+        const mateInUpdated = updated.find(t => t.id === mate?.id);
+        const mateDone = mateInUpdated?.status === 'done' || (mateInUpdated?.title === 'Ustaw termin planu zdjęciowego' && !!mateInUpdated?.value);
+        if (mate && !mateDone) {
+          // Hold off: parallel mate is still active. Don't unlock anything downstream.
+          return updated;
+        }
+      }
+
       // Non-approval task: unlock all consecutive approval tasks together (but NOT non-approval tasks after them)
       const nextTasksToUnlock: { id: string; prevValue: string }[] = [];
       for (let o = completedTask.order + 1; ; o++) {
