@@ -356,8 +356,49 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 Popraw link
               </Button>
             )}
+            {canEditActors && !editingActors && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => setEditingActors(true)}
+              >
+                <Pencil className="h-3 w-3" />
+                Popraw obsadę
+              </Button>
+            )}
           </div>
-          {editingUrl ? (
+          {editingActors ? (
+            <div className="space-y-3 mt-2">
+              <ActorAssignmentInput
+                client={taskClient}
+                clientUsers={taskClientUsers}
+                initialActors={(() => {
+                  try {
+                    const parsed = JSON.parse(task.value ?? '');
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) return parsed as ActorEntry[];
+                  } catch {}
+                  return [];
+                })()}
+                onSubmit={(actors: ActorEntry[]) => {
+                  updateTaskValue(task.id, JSON.stringify(actors));
+                  setEditingActors(false);
+                  toast({
+                    title: 'Obsada poprawiona',
+                    description: 'Klient zobaczy zaktualizowaną propozycję.',
+                  });
+                }}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1"
+                onClick={() => setEditingActors(false)}
+              >
+                <X className="h-3 w-3" />Anuluj
+              </Button>
+            </div>
+          ) : editingUrl ? (
             <div className="space-y-2 mt-1">
               <div className="relative">
                 <LinkIcon className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
