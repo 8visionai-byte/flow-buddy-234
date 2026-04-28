@@ -1296,7 +1296,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   <div key={field} className="flex flex-col gap-0.5">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
                     <Select
-                      value={(project as Record<string, unknown>)[field] as string || 'none'}
+                      value={(project as unknown as Record<string, unknown>)[field] as string || 'none'}
                       onValueChange={v => assignToProject(project.id, field, v === 'none' ? null : v)}
                     >
                       <SelectTrigger className="h-8 text-xs font-medium w-full">

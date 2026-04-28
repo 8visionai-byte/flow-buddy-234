@@ -39,6 +39,7 @@ const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
   submitted: <Send className="h-3.5 w-3.5 text-primary" />,
   approved: <ThumbsUp className="h-3.5 w-3.5 text-success" />,
   rejected: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
+  file_notes: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   deferred: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
   rejected_final: <XCircle className="h-3.5 w-3.5 text-destructive" />,
