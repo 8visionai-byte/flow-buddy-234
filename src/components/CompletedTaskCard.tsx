@@ -342,6 +342,7 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
               {task.inputType === 'url' ? 'Przesłany link'
                 : task.inputType === 'raw_footage' ? 'Wgrana surówka'
                 : task.inputType === 'actor_approval' ? 'Komentarz do akceptacji'
+                : task.inputType === 'actor_assignment' ? 'Przesłana obsada'
                 : task.inputType === 'filming_confirmation' ? 'Potwierdzenie nagrania'
                 : 'Przesłana treść'}
             </span>
