@@ -226,7 +226,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const task = prev.find(t => t.id === preValued.id);
       if (!task || task.status !== 'todo' || !task.value) return prev;
       const projTasks = prev.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
-      const nextLocked = projTasks.find(t => t.order === task.order + 1 && t.status === 'locked');
+      // PARALLEL GATE: don't unlock next task until "Określ rekwizyty" is also done.
+      const rekwizyty = projTasks.find(t => t.title === 'Określ rekwizyty');
+      const rekwizytyDone = rekwizyty?.status === 'done';
+      const nextLocked = rekwizytyDone
+        ? projTasks.find(t => t.order === task.order + 1 && t.status === 'locked')
+        : null;
       return prev.map(t => {
         if (t.id === task.id) return { ...t, status: 'done' as const, completedAt: now, completedBy: 'admin' };
         if (nextLocked && t.id === nextLocked.id) {
@@ -387,12 +392,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const nextAfterGroup = projectTasks.find(t => t.order === groupEnd + 1);
           if (nextAfterGroup && nextAfterGroup.status === 'locked') {
             const newStatus = isApprovalType(nextAfterGroup.inputType) ? 'pending_client_approval' as const : 'todo' as const;
-            return updated.map(t =>
-              t.id === nextAfterGroup.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t
-            );
+
+            // PARALLEL UNLOCK: After "Zaakceptuj przypisanie osoby" → unlock both
+            // "Określ rekwizyty" (influencer) AND "Ustaw termin planu zdjęciowego" (admin) together,
+            // so admin sees the task in "Moje Zadania" immediately and influencer doesn't have to wait.
+            const parallelMate = (nextAfterGroup.title === 'Określ rekwizyty')
+              ? projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'locked')
+              : null;
+
+            return updated.map(t => {
+              if (t.id === nextAfterGroup.id) {
+                return { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now };
+              }
+              if (parallelMate && t.id === parallelMate.id) {
+                return { ...t, status: 'todo' as const, previousValue: completedTask.value || value, assignedAt: now };
+              }
+              return t;
+            });
           }
         }
         return updated;
+      }
+
+      // PARALLEL GROUP GATE: "Określ rekwizyty" + "Ustaw termin planu zdjęciowego" run in parallel.
+      // Don't unlock the next task ("Potwierdź nagranie") until BOTH are done.
+      const PARALLEL_PAIR = ['Określ rekwizyty', 'Ustaw termin planu zdjęciowego'];
+      if (PARALLEL_PAIR.includes(completedTask.title)) {
+        const mate = projectTasks.find(t => PARALLEL_PAIR.includes(t.title) && t.id !== completedTask.id);
+        const mateInUpdated = updated.find(t => t.id === mate?.id);
+        const mateDone = mateInUpdated?.status === 'done' || (mateInUpdated?.title === 'Ustaw termin planu zdjęciowego' && !!mateInUpdated?.value);
+        if (mate && !mateDone) {
+          // Hold off: parallel mate is still active. Don't unlock anything downstream.
+          return updated;
+        }
       }
 
       // Non-approval task: unlock all consecutive approval tasks together (but NOT non-approval tasks after them)

@@ -1086,9 +1086,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     const adminTasks = getAdminTasksForProject(project.id);
     const pendingAdminCount = adminTasks.filter(t => isAdminTaskActionable(t)).length;
     const blockingCount = adminTasks.filter(t => isAdminTaskBlocking(t)).length;
-    const activeTask = projectTasks.find(t =>
+    const activeTasks = projectTasks.filter(t =>
       t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision'
     );
+    const activeTask = activeTasks[0];
     const clientEntity = resolveProjectClient(project);
 
     // ── Filming date indicator ──────────────────────────────────────────────
@@ -1151,7 +1152,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {/* Active stage */}
           {activeTask && (
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="font-medium">Etap:</span> {activeTask.title}
+              <span className="font-medium">Etap:</span> {activeTasks.map(t => t.title).join(', ')}
             </p>
           )}
 
