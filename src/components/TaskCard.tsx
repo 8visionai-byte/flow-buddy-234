@@ -101,7 +101,7 @@ interface TaskCardProps {
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
 const TaskCard = ({ task, projectName }: TaskCardProps) => {
-  const { completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote } = useApp();
+  const { completeTask, rejectTask, resubmitTask, resubmitTaskAndAutoApprove, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
