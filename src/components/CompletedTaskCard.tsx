@@ -124,6 +124,57 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         Zakończono: {formatTimestamp(task.completedAt)}
       </div>
 
+      {/* === SCRIPT REVIEW — explicit confirmation + change-decision option === */}
+      {task.inputType === 'script_review' && task.value === 'approved' && (() => {
+        const scriptUrl = task.previousValue && /^https?:\/\/.+\..+/.test(task.previousValue) ? task.previousValue : null;
+        // Allow change-decision only if no later task in the same project has been completed yet
+        const laterDone = tasks.some(t => t.projectId === task.projectId && t.order > task.order && t.status === 'done');
+        const canChange = currentUser?.role === 'klient' && !laterDone;
+        return (
+          <div className="mb-4 space-y-3">
+            <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4">
+              <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-foreground">Scenariusz zaakceptowany</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Decyzja przekazana — zespół przechodzi do kolejnego etapu.</div>
+              </div>
+            </div>
+            {scriptUrl && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1.5">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Zaakceptowany scenariusz
+                </div>
+                <a
+                  href={scriptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary underline-offset-2 hover:underline font-medium break-all"
+                >
+                  {scriptUrl}
+                </a>
+              </div>
+            )}
+            {canChange && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2 h-10"
+                onClick={() => reopenTask(task.id)}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Zmień decyzję
+              </Button>
+            )}
+            {!canChange && currentUser?.role === 'klient' && laterDone && (
+              <p className="text-xs text-muted-foreground text-center px-2">
+                Nie można już zmienić decyzji — zespół rozpoczął kolejne etapy pomysłu.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Accepted value */}
       {task.value === 'approved' && task.previousValue && (() => {
         try {
