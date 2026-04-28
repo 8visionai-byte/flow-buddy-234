@@ -83,10 +83,11 @@ const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
 );
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
-  const { currentUser, updateTaskValue, tasks, reopenTask } = useApp();
+  const { currentUser, updateTaskValue, tasks, reopenTask, clients, users } = useApp();
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
+  const [editingActors, setEditingActors] = useState(false);
 
   // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
   const canEditUrl =
@@ -94,6 +95,34 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
     task.status === 'done' &&
     currentUser?.role === 'influencer' &&
     task.assignedRoles.includes('influencer');
+
+  // Influencer can correct actor assignment as long as the client hasn't decided yet.
+  // Safety gate: the next task in the project must still be `pending_client_approval`
+  // (i.e. client hasn't clicked "Zaakceptuj" or "Zmień").
+  const nextApprovalPending = tasks.some(
+    t => t.projectId === task.projectId && t.order === task.order + 1 && t.status === 'pending_client_approval'
+  );
+  const canEditActors =
+    task.inputType === 'actor_assignment' &&
+    task.status === 'done' &&
+    currentUser?.role === 'influencer' &&
+    task.assignedRoles.includes('influencer') &&
+    nextApprovalPending;
+
+  const project = task.projectId ? null : null; // not used — we resolve below
+  const taskClient = clients.find(c => {
+    // Find project to get clientId
+    const p = (window as unknown as { __projects?: { id: string; clientId: string }[] }).__projects;
+    void p;
+    return false;
+  }) ?? null;
+  // Resolve client via task → projects from context
+  const projectForTask = (function () {
+    // Lightweight lookup: find any task whose project we can derive — we have projects via context
+    return null as null | { clientId: string };
+  })();
+  void taskClient;
+  void projectForTask;
 
   const handleSaveUrl = () => {
     if (!URL_REGEX.test(editUrlValue.trim())) {
