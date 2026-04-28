@@ -36,6 +36,8 @@ const actionLabels: Record<TaskHistoryEntry['action'], string> = {
   resubmitted: 'Poprawiono i wysłano ponownie',
   deferred: 'Odłożono na później',
   rejected_final: 'Odrzucono ostatecznie',
+  resubmitted_auto_approved: 'Poprawki naniesione (bez akceptacji klienta)',
+  auto_approved_by_influencer: 'Auto-zatwierdzono przez Influencera',
 };
 
 const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
@@ -46,6 +48,8 @@ const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
   resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   deferred: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
   rejected_final: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
+  resubmitted_auto_approved: <Send className="h-3.5 w-3.5 text-primary" />,
+  auto_approved_by_influencer: <ThumbsUp className="h-3.5 w-3.5 text-muted-foreground" />,
 };
 
 function formatTimestamp(iso: string | null): string {
