@@ -175,8 +175,8 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         );
       })()}
 
-      {/* Accepted value */}
-      {task.value === 'approved' && task.previousValue && (() => {
+      {/* Accepted value (skipped for script_review — handled in dedicated block above) */}
+      {task.value === 'approved' && task.previousValue && task.inputType !== 'script_review' && (() => {
         try {
           const parsed = JSON.parse(task.previousValue);
           // New format: ActorEntry[] array
