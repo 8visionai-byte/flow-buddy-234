@@ -3,7 +3,7 @@
  * All errors are silently swallowed so the app never breaks due to webhook failures.
  */
 
-import { Task, Project, User, UserRole, ROLE_LABELS } from '@/types';
+import { Task, Project, User, UserRole, ROLE_LABELS, Idea, Campaign, Client } from '@/types';
 
 const WEBHOOK_URL = 'https://hook.eu2.make.com/8aati68ojjmdbgu3ef5bvj1xl8jx33il';
 
@@ -49,12 +49,14 @@ const ROLE_TO_PROJECT_FIELD: Partial<Record<UserRole, keyof Project>> = {
   publikator:     'assignedPublikatorId',
 };
 
+type WebhookPerson = { name: string; role: string; role_label: string; telegram?: string };
+
 function getAssignees(
   roles: UserRole[],
   project: Project,
   users: User[],
-): { name: string; role: string; role_label: string; telegram?: string }[] {
-  return roles.flatMap(role => {
+): WebhookPerson[] {
+  return roles.flatMap<WebhookPerson>(role => {
     if (role === 'admin') {
       const admins = users.filter(u => u.role === 'admin');
       return admins.map(u => ({ name: u.name, role, role_label: ROLE_LABELS[role], telegram: u.telegramContact }));
@@ -209,8 +211,6 @@ export function sendWebhook(payload: WebhookPayload): void {
 }
 
 // ── Idea payload ─────────────────────────────────────────────────────────────
-import { Idea, Campaign, Client } from '@/types';
-
 export interface IdeaWebhookPayload {
   event: WebhookEvent;
   timestamp: string;
@@ -265,7 +265,7 @@ export function buildIdeaWebhookPayload(
     app: 'CreativeFlow YADS',
     campaign: {
       id: campaign.id,
-      client_name: client?.name || clientUser?.name || '—',
+      client_name: client?.companyName || clientUser?.name || '—',
       influencer_name: influencer?.name || '—',
       target_idea_count: campaign.targetIdeaCount,
     },
