@@ -665,11 +665,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         timestamp: now,
       };
 
-      // Find the corresponding client approval task (next order, approval-type)
+      // Find the corresponding client approval task — must be the IMMEDIATELY next task
+      // and one of the approval-style input types. We check only order+1 to avoid
+      // accidentally auto-approving a far-away approval (e.g. material approval in phase 5)
+      // when the immediate next task is something else.
       const projectTasks = prev.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
-      const approvalTask = projectTasks.find(
-        t => t.order > task.order && (t.inputType === 'approval' || t.inputType === 'script_review')
-      );
+      const nextTask = projectTasks.find(t => t.order === task.order + 1);
+      const approvalTask = nextTask && (
+        nextTask.inputType === 'approval' ||
+        nextTask.inputType === 'script_review' ||
+        nextTask.inputType === 'actor_approval'
+      ) ? nextTask : null;
 
       // Determine the task to unlock next (after the auto-approved approval)
       const afterApproval = approvalTask
