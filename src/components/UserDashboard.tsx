@@ -112,15 +112,17 @@ const UserDashboard = () => {
       )
     : [];
 
-  // ── Done URL/actor tasks the influencer can review or correct ──────────────
-  const myDoneUrlTasks = currentUser.role === 'influencer'
-    ? tasks.filter(t =>
-        activeProjectIds.includes(t.projectId) &&
-        t.assignedRoles.includes('influencer') &&
-        (t.inputType === 'url' || t.inputType === 'actor_assignment') &&
-        t.status === 'done'
-      )
-    : [];
+  // ── Done tasks the current user can review or correct ──────────────────────
+  const myDoneUrlTasks = tasks.filter(t => {
+    if (!activeProjectIds.includes(t.projectId) || t.status !== 'done') return false;
+    if (currentUser.role === 'influencer') {
+      return t.assignedRoles.includes('influencer') && (t.inputType === 'url' || t.inputType === 'actor_assignment');
+    }
+    if (currentUser.role === 'klient') {
+      return t.assignedRoles.includes('klient') && t.inputType === 'script_review';
+    }
+    return false;
+  });
 
   // Projects blocked by a terminal (rejected_final / deferred) task — locked tasks after them will never unlock
   const stuckProjectIds = new Set(
