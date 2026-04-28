@@ -1,55 +1,50 @@
-# Pomysły utykają, gdy nie ma oceniającego
+# Influencer: dwie ścieżki po naniesieniu poprawek
 
-## Diagnoza
+## Problem
 
-Pomysł utknął, bo kampania miała `assignedClientUserId = null`. W tym stanie:
+Gdy klient odeśle zadanie do poprawy (np. "Dodaj link do scenariusza" z `approved_with_file_notes` lub odrzuceniem), Influencer w stanie `needs_influencer_revision` ma dziś tylko **jedną** opcję: **„Poprawki wprowadzone — proszę o weryfikację"**. To zawsze cofa pętlę z powrotem do klienta na nowy cykl akceptacji.
 
-- **Klient nie widzi pomysłów** — w `UserDashboard.tsx:181` filtr `c.assignedClientUserId !== currentUser.id` odrzuca kampanię dla każdego użytkownika klienta.
-- **Admin też nic nie widzi** — w panelu admina nie ma żadnej zakładki/sekcji „pomysły do oceny przeze mnie", mimo że opcja `— Ocenia admin —` istnieje w selectach.
-- Auto-przypisanie w `AddCampaignDialog` działa tylko gdy klient ma **dokładnie jedną** osobę kontaktową (linia 131). Gdy jest 2+ kontaktów i admin nie wybierze ręcznie → zapisuje się `null`.
+W praktyce nie każda poprawka wymaga ponownej akceptacji klienta — czasem są to drobne, jednoznaczne uwagi, które Influencer nanosi i pipeline powinien iść dalej bez pingowania klienta.
 
-Z założenia (Twoje słowa) oceniającym powinna być **osoba przypisana do kontaktu** ze strony klienta — czyli osoba oznaczona jako primary contact (mamy taką flagę zgodnie z memory `client-user-unification`).
+## Rozwiązanie
 
-## Zakres zmian
+W widoku `needs_influencer_revision` (TaskCard.tsx, linie ~647–660 dla scenariusza i ~679–692 dla pozostałych typów) dodajemy **drugi przycisk**:
 
-### 1. Domyślny oceniający = primary contact klienta
-Plik: `src/components/AddCampaignDialog.tsx` (linie ~126–132).
+- **Główny (jak dziś):** „Poprawki wprowadzone — proszę o weryfikację" → `resubmitTask(...)` → wraca do klienta jak teraz.
+- **Wtórny (nowy):** „Poprawki naniesione — bez akceptacji klienta" → traktuje zadanie jak zaakceptowane przez klienta i pipeline przechodzi do następnego etapu **z pominięciem** kroku akceptacji.
 
-Zmiana logiki `autoSelectedClientUser`:
-- jeśli wśród `clientUsers` jest osoba z flagą primary contact → wybierz ją,
-- w przeciwnym razie, jeśli jest dokładnie jedna osoba → wybierz ją (obecne zachowanie),
-- w przeciwnym razie → bez auto-wyboru (admin musi świadomie wybrać).
+Wtórny przycisk stylowany jako `variant="outline"` (mniej dominujący), pod głównym, z krótkim helperem: *„Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać."*.
 
-Dodatkowo: walidacja `isValid` — jeśli admin świadomie nie zaznaczył „Ocenia admin" i nie wybrał nikogo z listy, blokujemy „Utwórz" i pokazujemy hint pod selectem („Wybierz osobę oceniającą lub wybierz «Ocenia admin»"). Cel: nie da się zapisać kampanii w stanie „nikt nie ocenia, bez świadomej decyzji".
+## Mechanika (AppContext.tsx)
 
-### 2. Backfill istniejących kampanii
-Plik: `src/context/AppContext.tsx`.
+Nowa akcja w kontekście: `resubmitTaskAndAutoApprove(taskId, value)`. Działa tak:
 
-W momencie ładowania kampanii (lub przy pierwszym renderze) — dla kampanii ze statusem `awaiting_ideas`/`in_review` i `assignedClientUserId === null`, jeśli istnieje primary contact klienta, ustawiamy go jako oceniającego (jednorazowy soft-fix). Dzięki temu Twój utknięty pomysł rozwiąże się sam po wejściu, bez konieczności ręcznego klikania.
+1. Znajduje task w `needs_influencer_revision`.
+2. Ustawia go `status: 'done'`, `value` = nowy/aktualny URL/tekst, `completedBy: 'influencer'`, dorzuca wpis historii `{ action: 'resubmitted_auto_approved', by: 'influencer', timestamp: now }` (nowy typ akcji w `TaskHistoryEntry`).
+3. Znajduje powiązany task akceptacji klienta (kolejny `order` z `inputType === 'approval'` lub `script_review` w tym samym `projectId`), jeśli istnieje i jest w `pending_client_approval` / `todo` / `locked`:
+   - Ustawia go `status: 'done'`, `value: 'auto_approved'`, `completedBy: 'influencer'`, `completedAt: now`, dorzuca wpis historii `{ action: 'auto_approved_by_influencer', by: 'influencer', feedback: 'Influencer oznaczył poprawki jako niewymagające ponownej akceptacji klienta', timestamp: now }`.
+4. Odblokowuje kolejny task w pipeline (taki sam mechanizm jak normalne `completeTask` na approval) — wykorzystujemy istniejącą funkcję pomocniczą do rozpropagowania `unlocked` (te same reguły co w `completeTask` po approval).
 
-### 3. Widok admina: „Pomysły do oceny"
-Plik: `src/components/AdminDashboard.tsx`.
+Dzięki temu w historii i w widoku admina/klienta jasno widać, że akceptacja była „auto" przez Influencera (a nie sfałszowana jako klikniętą przez klienta).
 
-W zakładce **Moje Zadania** (i na badge'u zakładki) admin powinien widzieć również pomysły, dla których jest oceniającym — czyli te, gdzie `campaign.assignedClientUserId === null` **oraz** `idea.status === 'pending'`. Dodajemy:
-- sekcję „Pomysły do oceny" w „Moje Zadania" admina, listującą każdy pending idea + kampanię + przyciski „Akceptuj / Tak, ale… / Odrzuć / Zachowaj na później" (te same akcje co u klienta, wywołujące `reviewIdea(..., currentUser.id)`),
-- licznik tych pomysłów dolicza się do badge'a „Moje Zadania" admina (spójne z regułą `unified-badges`).
+## UI dla klienta (defensywnie)
 
-### 4. Komunikat „nie ma oceniającego" (defensywny UX)
-Plik: `src/components/AdminDashboard.tsx` (lista kampanii, linia ~1492).
+Gdy zadanie akceptacji ma `value === 'auto_approved'`, w `CompletedTaskCard` / panelu klienta wyświetlamy badge: **„Pominięto akceptację — Influencer uznał poprawki za drobne"** (kolor `muted`, nie alarmowy). To utrzymuje przejrzystość i nie wprowadza klienta w błąd, że to on kliknął.
 
-Gdy `assignedClientUserId === null` i są pending pomysły → przy nazwie kampanii mała czerwona plakietka „Brak oceniającego — ustaw" (klikalna, otwiera istniejący select). Żeby na przyszłość admin od razu widział anomalię.
+## Webhooki
+
+`resubmitTaskAndAutoApprove` wywołuje ten sam webhook co normalne completion — z polem `auto_approved: true` w payloadzie, żeby Make.com mógł rozróżnić oba scenariusze (zgodne z `mem://technical/webhook-readiness`).
+
+## Pliki do edycji
+
+- `src/types/index.ts` — dodać `'resubmitted_auto_approved' | 'auto_approved_by_influencer'` do `TaskHistoryEntry.action`; dopuścić `'auto_approved'` jako wartość `value` w taskach approval.
+- `src/context/AppContext.tsx` — nowa akcja `resubmitTaskAndAutoApprove`, eksport w wartości kontekstu.
+- `src/components/TaskCard.tsx` — drugi przycisk w obu gałęziach widoku `needs_influencer_revision` (scenariusz i pozostałe inputy URL/tekst/aktorzy).
+- `src/components/CompletedTaskCard.tsx` — badge „Pominięto akceptację" dla `value === 'auto_approved'`.
+- `mem://logic/feedback-loop` — rozszerzyć regułę o drugą ścieżkę („auto-zatwierdzenie przez Influencera").
 
 ## Czego nie zmieniamy
 
-- Mechaniki głosowania klienta (`client_votes`, multi-reviewer) — zostają bez zmian.
-- Webhooków — `reviewIdea` już dziś przekazuje aktora, więc działa poprawnie też dla admina jako oceniającego.
-- Filtra widoczności klienta (`c.assignedClientUserId !== currentUser.id`) — nadal poprawny, bo backfill + walidacja zapewnią, że dla kampanii „klient ocenia" zawsze jest ID.
-
-## Pamięć
-Dopisać memory `mem://logic/idea-reviewer-defaults`: domyślnym oceniającym pomysły jest primary contact klienta; jeśli admin świadomie wybrał „Ocenia admin", pomysły pojawiają się w jego „Moje Zadania" jako sekcja „Pomysły do oceny". Brak oceniającego = blokada zapisu kampanii i czerwona plakietka na istniejących kampaniach.
-
-## Pliki do edycji
-- `src/components/AddCampaignDialog.tsx` (auto-wybór primary + walidacja)
-- `src/context/AppContext.tsx` (backfill kampanii bez oceniającego)
-- `src/components/AdminDashboard.tsx` (sekcja „Pomysły do oceny" w Moich Zadaniach + badge + plakietka „Brak oceniającego")
-- `mem://logic/idea-reviewer-defaults` (+ wpis w `mem://index.md`)
+- Ścieżki klienta (Akceptuj / Zmień / Uwagi w pliku) — bez zmian.
+- Logiki SLA, ping-ponga przy normalnym `resubmitTask` — bez zmian.
+- Mechaniki multi-reviewer i `client_votes` — nie dotyczy (to jest tylko pojedyncza akceptacja po poprawkach).

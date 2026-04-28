@@ -46,6 +46,7 @@ interface AppContextType {
   completeTask: (taskId: string, value: string, byRole?: UserRole) => void;
   rejectTask: (taskId: string, feedback: string) => void;
   resubmitTask: (taskId: string, newValue: string) => void;
+  resubmitTaskAndAutoApprove: (taskId: string, newValue: string) => void;
   updateTaskValue: (taskId: string, newValue: string) => void;
   saveDraftValue: (taskId: string, value: string) => void;
   deferTask: (taskId: string) => void;
@@ -644,7 +645,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (taskSnap) fireWebhook('task_resubmitted', taskSnap, newValue);
   }, [fireWebhook]);
 
-  // Influencer corrects a done URL/text task without resetting downstream approval
+  // Influencer resubmits AND marks the next client approval as auto-approved (skips client review).
+  const resubmitTaskAndAutoApprove = useCallback((taskId: string, newValue: string) => {
+    setTasks(prev => {
+      const now = new Date().toISOString();
+      const task = prev.find(t => t.id === taskId);
+      if (!task) return prev;
+
+      const resubmitEntry: TaskHistoryEntry = {
+        action: 'resubmitted_auto_approved',
+        by: task.assignedRole,
+        value: newValue,
+        timestamp: now,
+      };
+      const autoApproveEntry: TaskHistoryEntry = {
+        action: 'auto_approved_by_influencer',
+        by: task.assignedRole,
+        feedback: 'Influencer oznaczył poprawki jako niewymagające ponownej akceptacji klienta',
+        timestamp: now,
+      };
+
+      // Find the corresponding client approval task (next order, approval-type)
+      const projectTasks = prev.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
+      const approvalTask = projectTasks.find(
+        t => t.order > task.order && (t.inputType === 'approval' || t.inputType === 'script_review')
+      );
+
+      // Determine the task to unlock next (after the auto-approved approval)
+      const afterApproval = approvalTask
+        ? projectTasks.find(t => t.order === approvalTask.order + 1 && t.status === 'locked')
+        : null;
+
+      return prev.map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            status: 'done' as const,
+            value: newValue,
+            completedAt: now,
+            completedBy: t.assignedRole,
+            clientFeedback: null,
+            history: [...t.history, resubmitEntry],
+          };
+        }
+        if (approvalTask && t.id === approvalTask.id) {
+          return {
+            ...t,
+            status: 'done' as const,
+            value: 'auto_approved',
+            previousValue: newValue,
+            completedAt: now,
+            completedBy: task.assignedRole,
+            assignedAt: t.assignedAt ?? now,
+            clientFeedback: null,
+            history: [...t.history, autoApproveEntry],
+          };
+        }
+        if (afterApproval && t.id === afterApproval.id) {
+          const ns = (t.inputType === 'approval' || t.inputType === 'script_review')
+            ? 'pending_client_approval' as const
+            : 'todo' as const;
+          return { ...t, status: ns, assignedAt: now };
+        }
+        return t;
+      });
+    });
+
+    const taskSnap = ctxRef.current.tasks.find(t => t.id === taskId);
+    if (taskSnap) fireWebhook('task_resubmitted', taskSnap, newValue);
+  }, [fireWebhook]);
   const updateTaskValue = useCallback((taskId: string, newValue: string) => {
     setTasks(prev => {
       const task = prev.find(t => t.id === taskId);
@@ -998,7 +1067,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, clients, projects, tasks, recordings, projectNotes,
-      completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask,
+      completeTask, rejectTask, resubmitTask, resubmitTaskAndAutoApprove, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline, setFilmingDate,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,

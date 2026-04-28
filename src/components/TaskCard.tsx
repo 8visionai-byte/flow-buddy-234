@@ -33,6 +33,8 @@ const actionLabels: Record<TaskHistoryEntry['action'], string> = {
   resubmitted: 'Poprawiono i wysłano ponownie',
   deferred: 'Odłożono na później',
   rejected_final: 'Odrzucono ostatecznie',
+  resubmitted_auto_approved: 'Poprawki naniesione (bez akceptacji klienta)',
+  auto_approved_by_influencer: 'Auto-zatwierdzono przez Influencera',
 };
 
 const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
@@ -43,6 +45,8 @@ const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
   resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   deferred: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
   rejected_final: <XCircle className="h-3.5 w-3.5 text-destructive" />,
+  resubmitted_auto_approved: <Send className="h-3.5 w-3.5 text-primary" />,
+  auto_approved_by_influencer: <ThumbsUp className="h-3.5 w-3.5 text-muted-foreground" />,
 };
 
 function formatTimestamp(iso: string | null): string {
@@ -97,7 +101,7 @@ interface TaskCardProps {
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
 const TaskCard = ({ task, projectName }: TaskCardProps) => {
-  const { completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote } = useApp();
+  const { completeTask, rejectTask, resubmitTask, resubmitTaskAndAutoApprove, updateTaskValue, saveDraftValue, rejectFinalTask, currentUser, projects, clients, users, tasks, updatePartyNote } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -203,6 +207,19 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     }
     setError('');
     resubmitTask(task.id, inputValue);
+  };
+
+  const handleResubmitAutoApprove = () => {
+    if (task.inputType === 'text' && inputValue.trim().length === 0) {
+      setError('To pole nie może być puste');
+      return;
+    }
+    if (task.inputType === 'url' && !URL_REGEX.test(inputValue)) {
+      setError('Podaj poprawny adres URL (https://...)');
+      return;
+    }
+    setError('');
+    resubmitTaskAndAutoApprove(task.id, inputValue);
   };
 
   const isSubmitDisabled =
@@ -657,6 +674,16 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 <Send className="mr-2 h-4 w-4" />
                 Poprawki wprowadzone — proszę o weryfikację
               </Button>
+              <Button
+                onClick={() => resubmitTaskAndAutoApprove(task.id, task.value!)}
+                variant="outline"
+                className="w-full"
+              >
+                Poprawki naniesione — bez akceptacji klienta
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać.
+              </p>
             </div>
           ) : task.inputType === 'url' ? (
             <div className="relative">
@@ -688,6 +715,17 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 <Send className="mr-2 h-4 w-4" />
                 Wyślij ponownie
               </Button>
+              <Button
+                onClick={handleResubmitAutoApprove}
+                variant="outline"
+                className="w-full"
+                disabled={isSubmitDisabled}
+              >
+                Poprawki naniesione — bez akceptacji klienta
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać.
+              </p>
             </>
           )}
         </div>

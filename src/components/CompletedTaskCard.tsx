@@ -36,6 +36,8 @@ const actionLabels: Record<TaskHistoryEntry['action'], string> = {
   resubmitted: 'Poprawiono i wysłano ponownie',
   deferred: 'Odłożono na później',
   rejected_final: 'Odrzucono ostatecznie',
+  resubmitted_auto_approved: 'Poprawki naniesione (bez akceptacji klienta)',
+  auto_approved_by_influencer: 'Auto-zatwierdzono przez Influencera',
 };
 
 const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
@@ -46,6 +48,8 @@ const actionIcons: Record<TaskHistoryEntry['action'], React.ReactNode> = {
   resubmitted: <MessageSquare className="h-3.5 w-3.5 text-warning" />,
   deferred: <Clock className="h-3.5 w-3.5 text-muted-foreground" />,
   rejected_final: <ThumbsDown className="h-3.5 w-3.5 text-destructive" />,
+  resubmitted_auto_approved: <Send className="h-3.5 w-3.5 text-primary" />,
+  auto_approved_by_influencer: <ThumbsUp className="h-3.5 w-3.5 text-muted-foreground" />,
 };
 
 function formatTimestamp(iso: string | null): string {
@@ -146,6 +150,16 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         <Clock className="h-3.5 w-3.5" />
         Zakończono: {formatTimestamp(task.completedAt)}
       </div>
+
+      {/* Auto-approved by influencer (skipped client re-review) */}
+      {task.value === 'auto_approved' && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3 flex items-start gap-2">
+          <CheckCircle2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+          <div className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Pominięto akceptację klienta</span> — Influencer uznał poprawki za drobne i niewymagające ponownej weryfikacji.
+          </div>
+        </div>
+      )}
 
       {/* === SCRIPT REVIEW — explicit confirmation + change-decision option === */}
       {task.inputType === 'script_review' && (task.value === 'approved' || task.value === 'approved_with_file_notes') && (() => {
