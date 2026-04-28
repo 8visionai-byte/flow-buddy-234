@@ -83,7 +83,7 @@ const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
 );
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
-  const { currentUser, updateTaskValue, tasks } = useApp();
+  const { currentUser, updateTaskValue, tasks, reopenTask } = useApp();
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
