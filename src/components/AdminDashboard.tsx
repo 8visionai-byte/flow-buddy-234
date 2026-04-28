@@ -1504,6 +1504,11 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                          campaign.status === 'in_review' ? 'Klient ocenia' :
                          campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
                       </Badge>
+                      {!campaign.assignedClientUserId && pendingCount > 0 && (
+                        <Badge variant="secondary" className="border-0 text-xs bg-destructive/10 text-destructive animate-pulse">
+                          Brak oceniającego — ustaw poniżej
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
                       <span className="flex items-center gap-1">
