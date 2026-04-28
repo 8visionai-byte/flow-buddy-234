@@ -109,8 +109,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   // socialFields state removed — handled by SocialDescriptionsInput component
   const [actorType, setActorType] = useState<'client' | 'custom'>('client');
   const [actorCustomName, setActorCustomName] = useState('');
-  const [showAcceptWithNotesForm, setShowAcceptWithNotesForm] = useState(false);
-  const [acceptNotes, setAcceptNotes] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [fileNotesSubmitted, setFileNotesSubmitted] = useState(false);
   const [editingUrl, setEditingUrl] = useState(false);
