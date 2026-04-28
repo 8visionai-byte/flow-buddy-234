@@ -91,25 +91,25 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
   const [editingActors, setEditingActors] = useState(false);
+  const [editingText, setEditingText] = useState(false);
+  const [editTextValue, setEditTextValue] = useState('');
 
-  // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
-  const canEditUrl =
-    task.inputType === 'url' &&
-    task.status === 'done' &&
-    currentUser?.role === 'influencer' &&
-    task.assignedRoles.includes('influencer');
-
-  // Influencer can correct actor assignment as long as the client hasn't decided yet.
-  // Safety gate: the next task in the project must still be `pending_client_approval`.
-  const nextApprovalPending = tasks.some(
-    t => t.projectId === task.projectId && t.order === task.order + 1 && t.status === 'pending_client_approval'
+  // GENERAL RULE: a user can edit their submission as long as no downstream task
+  // (any task with order > this one) has been completed yet. The moment the next
+  // actor moves the work forward, the submission becomes immutable to keep
+  // history consistent.
+  const noDownstreamWorkDone = !tasks.some(
+    t => t.projectId === task.projectId && t.order > task.order && t.status === 'done'
   );
-  const canEditActors =
-    task.inputType === 'actor_assignment' &&
-    task.status === 'done' &&
+  const isOwnerInfluencer =
     currentUser?.role === 'influencer' &&
     task.assignedRoles.includes('influencer') &&
-    nextApprovalPending;
+    task.status === 'done';
+
+  const canEditUrl = task.inputType === 'url' && isOwnerInfluencer && noDownstreamWorkDone;
+  const canEditActors = task.inputType === 'actor_assignment' && isOwnerInfluencer && noDownstreamWorkDone;
+  const canEditText = task.inputType === 'text' && isOwnerInfluencer && noDownstreamWorkDone;
+
 
   // Resolve project + client for ActorAssignmentInput (only needed when editing actors)
   const taskProject = projects.find(p => p.id === task.projectId) ?? null;
@@ -368,8 +368,54 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 Popraw obsadę
               </Button>
             )}
+            {canEditText && !editingText && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => {
+                  setEditTextValue(task.value === 'Nie wymagane' ? '' : (task.value ?? ''));
+                  setEditingText(true);
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+                Popraw
+              </Button>
+            )}
           </div>
-          {editingActors ? (
+          {editingText ? (
+            <div className="space-y-2 mt-1">
+              <textarea
+                value={editTextValue}
+                onChange={e => setEditTextValue(e.target.value)}
+                className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y"
+                placeholder="Wpisz tutaj... (zostaw puste, aby oznaczyć jako Nie wymagane)"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => {
+                    const trimmed = editTextValue.trim();
+                    updateTaskValue(task.id, trimmed || 'Nie wymagane');
+                    setEditingText(false);
+                    toast({ title: 'Zapisano', description: 'Treść została zaktualizowana.' });
+                  }}
+                >
+                  <Check className="h-3 w-3" />Zapisz
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setEditingText(false)}
+                >
+                  <X className="h-3 w-3" />Anuluj
+                </Button>
+              </div>
+            </div>
+          ) : editingActors ? (
             <div className="space-y-3 mt-2">
               <ActorAssignmentInput
                 client={taskClient}
