@@ -70,8 +70,17 @@ const UserDashboard = () => {
     switch (currentUser.role) {
       case 'influencer':    return p.assignedInfluencerId === currentUser.id;
       case 'montazysta':    return p.assignedEditorId === currentUser.id;
-      case 'klient':        return p.assignedClientId === currentUser.id ||
-                                 (p.assignedClientId == null && !!currentUser.clientId && p.clientId === currentUser.clientId);
+      case 'klient': {
+        if (!currentUser.clientId || p.clientId !== currentUser.clientId) return false;
+        // Project explicitly assigned to me
+        if (p.assignedClientId === currentUser.id) return true;
+        // No reviewer assigned → any klient from this company sees it
+        if (p.assignedClientId == null) return true;
+        // Assigned reviewer no longer exists → fall back to any klient from this company
+        const assignee = users.find(u => u.id === p.assignedClientId);
+        if (!assignee) return true;
+        return false;
+      }
       case 'kierownik_planu': return p.assignedKierownikId === currentUser.id;
       case 'operator':      return p.assignedOperatorId === currentUser.id;
       case 'publikator':    return p.assignedPublikatorId === currentUser.id;
