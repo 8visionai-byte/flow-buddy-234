@@ -13,7 +13,7 @@ const ROLE_GROUPS: { role: UserRole; label: string }[][] = [
 ];
 
 const RoleSelector = () => {
-  const { setCurrentUser, users, tasks, projects, campaigns, ideas } = useApp();
+  const { setCurrentUser, users, tasks, projects, campaigns, ideas, clients } = useApp();
 
   const getAssignedProjectIds = (user: typeof users[0]) => {
     return projects.filter(p => {
