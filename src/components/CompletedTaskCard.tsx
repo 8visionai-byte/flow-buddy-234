@@ -258,6 +258,35 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         );
       })()}
 
+      {/* ACTOR APPROVAL — allow client to change decision before later tasks start */}
+      {task.inputType === 'actor_approval' && (task.value === 'approved' || task.value?.startsWith('approved: ') || task.value === 'rejected' || task.value?.startsWith('rejected: ')) && (() => {
+        const laterDone = tasks.some(t => t.projectId === task.projectId && t.order > task.order && t.status === 'done');
+        const canChange = currentUser?.role === 'klient' && !laterDone;
+        if (!canChange) {
+          if (currentUser?.role === 'klient' && laterDone) {
+            return (
+              <p className="mb-4 text-xs text-muted-foreground text-center px-2">
+                Nie można już zmienić decyzji — zespół rozpoczął kolejne etapy pomysłu.
+              </p>
+            );
+          }
+          return null;
+        }
+        return (
+          <div className="mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 h-10"
+              onClick={() => reopenTask(task.id)}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Zmień decyzję
+            </Button>
+          </div>
+        );
+      })()}
+
       {/* Social dates display (admin "Ustaw datę publikacji" task) */}
       {task.inputType === 'social_dates' && task.value && (() => {
         const dates = tryParseSocialDates(task.value);
