@@ -226,7 +226,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const task = prev.find(t => t.id === preValued.id);
       if (!task || task.status !== 'todo' || !task.value) return prev;
       const projTasks = prev.filter(t => t.projectId === task.projectId).sort((a, b) => a.order - b.order);
-      const nextLocked = projTasks.find(t => t.order === task.order + 1 && t.status === 'locked');
+      // PARALLEL GATE: don't unlock next task until "Określ rekwizyty" is also done.
+      const rekwizyty = projTasks.find(t => t.title === 'Określ rekwizyty');
+      const rekwizytyDone = rekwizyty?.status === 'done';
+      const nextLocked = rekwizytyDone
+        ? projTasks.find(t => t.order === task.order + 1 && t.status === 'locked')
+        : null;
       return prev.map(t => {
         if (t.id === task.id) return { ...t, status: 'done' as const, completedAt: now, completedBy: 'admin' };
         if (nextLocked && t.id === nextLocked.id) {
