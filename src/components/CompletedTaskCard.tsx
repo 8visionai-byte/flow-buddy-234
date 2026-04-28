@@ -19,6 +19,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import ActorAssignmentInput from '@/components/ActorAssignmentInput';
+import { ActorEntry } from '@/types';
+import { toast } from '@/hooks/use-toast';
 
 interface CompletedTaskCardProps {
   task: Task;
@@ -83,10 +86,11 @@ const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
 );
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
-  const { currentUser, updateTaskValue, tasks, reopenTask } = useApp();
+  const { currentUser, updateTaskValue, tasks, reopenTask, clients, users, projects } = useApp();
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
+  const [editingActors, setEditingActors] = useState(false);
 
   // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
   const canEditUrl =
@@ -94,6 +98,25 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
     task.status === 'done' &&
     currentUser?.role === 'influencer' &&
     task.assignedRoles.includes('influencer');
+
+  // Influencer can correct actor assignment as long as the client hasn't decided yet.
+  // Safety gate: the next task in the project must still be `pending_client_approval`.
+  const nextApprovalPending = tasks.some(
+    t => t.projectId === task.projectId && t.order === task.order + 1 && t.status === 'pending_client_approval'
+  );
+  const canEditActors =
+    task.inputType === 'actor_assignment' &&
+    task.status === 'done' &&
+    currentUser?.role === 'influencer' &&
+    task.assignedRoles.includes('influencer') &&
+    nextApprovalPending;
+
+  // Resolve project + client for ActorAssignmentInput (only needed when editing actors)
+  const taskProject = projects.find(p => p.id === task.projectId) ?? null;
+  const taskClient = taskProject ? (clients.find(c => c.id === taskProject.clientId) ?? null) : null;
+  const taskClientUsers = taskProject
+    ? users.filter(u => u.role === 'klient' && u.clientId === taskProject.clientId)
+    : [];
 
   const handleSaveUrl = () => {
     if (!URL_REGEX.test(editUrlValue.trim())) {
@@ -319,6 +342,7 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
               {task.inputType === 'url' ? 'Przesłany link'
                 : task.inputType === 'raw_footage' ? 'Wgrana surówka'
                 : task.inputType === 'actor_approval' ? 'Komentarz do akceptacji'
+                : task.inputType === 'actor_assignment' ? 'Przesłana obsada'
                 : task.inputType === 'filming_confirmation' ? 'Potwierdzenie nagrania'
                 : 'Przesłana treść'}
             </span>
@@ -333,8 +357,49 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
                 Popraw link
               </Button>
             )}
+            {canEditActors && !editingActors && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => setEditingActors(true)}
+              >
+                <Pencil className="h-3 w-3" />
+                Popraw obsadę
+              </Button>
+            )}
           </div>
-          {editingUrl ? (
+          {editingActors ? (
+            <div className="space-y-3 mt-2">
+              <ActorAssignmentInput
+                client={taskClient}
+                clientUsers={taskClientUsers}
+                initialActors={(() => {
+                  try {
+                    const parsed = JSON.parse(task.value ?? '');
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].sourceType) return parsed as ActorEntry[];
+                  } catch {}
+                  return [];
+                })()}
+                onSubmit={(actors: ActorEntry[]) => {
+                  updateTaskValue(task.id, JSON.stringify(actors));
+                  setEditingActors(false);
+                  toast({
+                    title: 'Obsada poprawiona',
+                    description: 'Klient zobaczy zaktualizowaną propozycję.',
+                  });
+                }}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1"
+                onClick={() => setEditingActors(false)}
+              >
+                <X className="h-3 w-3" />Anuluj
+              </Button>
+            </div>
+          ) : editingUrl ? (
             <div className="space-y-2 mt-1">
               <div className="relative">
                 <LinkIcon className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
