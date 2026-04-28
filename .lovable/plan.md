@@ -1,68 +1,69 @@
-# Rebrand UI: "Projekt" → "Pomysł" (tylko warstwa wizualna)
+# Plan: Ujednolicenie osoby kontaktowej klienta i osoby z dostępem
 
-## Założenia (potwierdzone z użytkownikiem)
+## Problem (z podanych zrzutów)
 
-- **Co zmieniamy:** wyłącznie teksty widoczne dla użytkownika (etykiety, nagłówki, toasty, opisy, placeholdery, tytuły dialogów).
-- **Czego NIE ruszamy:** nazwy tabel (`projects`), typów (`Project`), pól (`projectId`, `assignedInfluencerId`), nazwy plików (`AddProjectDialog.tsx`, `ProjectReadOnlyView.tsx`), kluczy w localStorage, kontekstu, queryKeys.
-- **Reguła:** "Kampania" zostaje "Kampanią". "Pomysł" przed akceptacją zostaje "Pomysłem". Encja `Project` (czyli zaakceptowany pomysł w realizacji) — w UI zaczyna nazywać się "Pomysł".
+1. **Brak telefonu przy osobie z dostępem.** W `Zarządzaj klientami` przy dodawaniu osoby z dostępem jest tylko pole "Imię i nazwisko". Telefon będzie potrzebny do powiadomień (Telegram/Make.com).
+2. **Duplikacja osób.** Gdy zakładamy klienta `Dental Care Sp. z o.o.` z osobą kontaktową **Anna Kowalska**, a dodatkowo dodajemy osobę z dostępem **Anna** — w widoku „Przypisz osobę do filmu" pojawiają się obie pozycje: „Anna Kowalska — Kontakt" oraz „Anna — Konto klienta w systemie". Klient nie wie, którą wybrać. To jest ta sama osoba.
 
-## Mapowanie tłumaczeń
+## Założenie (zgodne z `mem://logic/client-user-unification`)
+Każdy kontakt klienta to **app_user**. „Osoba kontaktowa" wpisywana w formularzu firmy jest pierwszą osobą z dostępem (primary contact) — nie powinna istnieć obok osobnego usera o tym samym imieniu.
 
-| Było | Będzie |
-|---|---|
-| Projekt | Pomysł |
-| projekt | pomysł |
-| Projekty | Pomysły |
-| projekty | pomysły |
-| projektu | pomysłu |
-| projektów | pomysłów |
-| projektem | pomysłem |
-| projektami | pomysłami |
-| Nowy projekt | Nowy pomysł |
-| Dodaj nowy projekt | Dodaj nowy pomysł |
-| Nazwa projektu / temat filmu | Nazwa pomysłu / temat filmu |
-| Utwórz projekt | Utwórz pomysł |
-| Usuń projekt | Usuń pomysł |
-| Wszystkie projekty | Wszystkie pomysły |
-| Moje projekty | Moje pomysły |
-| Brak projektów | Brak pomysłów |
-| Projekt zakończony | Pomysł zakończony |
-| Projekt stworzony | Pomysł utworzony |
-| Projekt nie znaleziony | Pomysł nie znaleziony |
-| „...stały się projektami" | „...stało się pomysłami" |
+## Zmiany — TYLKO warstwa wizualna/UX (bez zmian schematu)
 
-**Świadome wyjątki — NIE zmieniamy:**
-- W `ClientManagementDialog.tsx:289` zdanie "oceniać pomysły / projekty" → zmienia się na po prostu „oceniać pomysły" (usuwamy redundancję).
-- W `AdminDashboard.tsx:2379` „Projektów stworzonych z tej kampanii to nie dotyczy" → „Pomysłów utworzonych z tej kampanii to nie dotyczy".
-- W `mockData.ts:112` opis zadania pipeline'u „priorytet tego projektu" → „priorytet tego pomysłu".
+### A) `ClientManagementDialog.tsx`
 
-## Pliki do edycji (tylko stringi, ~50 linii łącznie)
+1. **Sekcja „Nowy klient" — usuń osobne pole „Osoba kontaktowa"** (`form.contactName`) i osobne pole „Telefon firmy"/„Email firmy" w obecnej formie. Zamiast tego:
+   - Pola firmy: **Nazwa firmy** (wymagane), **Email firmy** (opcjonalny — kontaktowy do firmy), **Notatki**.
+   - Sekcja „Osoby z dostępem do systemu" pokazuje **listę osób**, gdzie **pierwsza pozycja jest oznaczona jako „Główny kontakt"** (badge `Główny`). Każda pozycja ma: imię i nazwisko + **PhoneField (telefon)** + przycisk usuń.
+   - Walidacja: musi być co najmniej **1 osoba z dostępem** (główny kontakt).
+   - Przy zapisie:
+     - `addClient({ companyName, contactName: <imię pierwszej osoby>, email, phone: <telefon pierwszej osoby>, notes })` — `contactName`/`phone` na encji `Client` wypełniamy z głównego kontaktu (zachowanie kompatybilności wstecznej z istniejącym typem `Client`).
+     - Dla **każdej** osoby z listy: `addUser({ name, role: 'klient', clientId, phone })`. Pierwsza = główny kontakt.
 
-1. **src/components/AddProjectDialog.tsx** — 4 stringi (przycisk, tytuł, opis, label, CTA).
-2. **src/components/AdminDashboard.tsx** — ~13 stringów (zakładka „Wszystkie projekty", nagłówki, toasty usuwania, badge „Projekt zakończony", komunikaty pustych stanów, dialog potwierdzenia usunięcia).
-3. **src/components/UserDashboard.tsx** — ~15 stringów (nagłówki list, kolumny tabeli, puste stany, zakładka „Projekty" → „Pomysły", komunikaty operatora/montażysty/KP).
-4. **src/components/PriorityAssignmentDialog.tsx** — ~6 stringów (nagłówki tabeli, opisy, liczniki).
-5. **src/components/IdeasPanel.tsx** — 1 string („Projekt stworzony" → „Pomysł utworzony").
-6. **src/components/KierownikDashboard.tsx** — 1 string („Brak aktywnych projektów" → „Brak aktywnych pomysłów").
-7. **src/components/ProjectReadOnlyView.tsx** — 1 string („Brak etapów dla tego projektu" → „...dla tego pomysłu").
-8. **src/components/ClientManagementDialog.tsx** — 2 stringi.
-9. **src/components/AddCampaignDialog.tsx** — 1 string („prowadzić projekty" → „prowadzić pomysły").
-10. **src/data/mockData.ts** — 1 string (opis zadania pipeline'u).
+2. **Sekcja istniejącego klienta** (rozwinięta lista „Osoby z dostępem"):
+   - Każdy `addUser` z formularza inline przyjmuje **imię + telefon** (PhoneField), nie tylko imię. Aktualnie jest tylko jeden `Input` na imię — dodajemy obok PhoneField.
+   - Wiersz osoby pokazuje też telefon (`user.phone`) obok badge `klient`.
+   - Pierwsza utworzona osoba (lub osoba o imieniu === `client.contactName`) dostaje badge **„Główny"**.
 
-## Czego nie zmieniamy (świadomie)
+3. **Edycja istniejącego klienta** (`startEdit` / `renderFormFields(false)`):
+   - Usuń pola „Osoba kontaktowa" i „Telefon" z formularza firmy. Te dane edytuje się w wierszach „Osoby z dostępem" (każda osoba ma swój telefon).
+   - Zostają: Nazwa firmy, Email firmy, Notatki.
 
-- Nazwa pliku `AddProjectDialog.tsx`, `ProjectReadOnlyView.tsx` — bez zmian (tylko UI).
-- Typ `Project`, pola `projectId`, `assignedInfluencerId` itd. w `src/types/index.ts` — bez zmian.
-- Tabela `projects` w bazie — bez zmian.
-- Komentarze w kodzie — bez zmian (nie są widoczne dla użytkownika).
-- `console.log`-i, klucze queryKey — bez zmian.
+### B) `ActorAssignmentInput.tsx`
 
-## Walidacja po wdrożeniu
+W widoku „Przypisz osobę do filmu" usuwamy duplikat:
 
-- Przejść po widokach: Admin → Wszystkie pomysły, Klient → lista pomysłów po akceptacji, Influencer/Montażysta/KP → „Moje pomysły", dialog dodawania pomysłu, dialog priorytetów, dialog usuwania.
-- Sprawdzić, że odmiana gramatyczna jest poprawna („1 pomysł", „2 pomysły", „5 pomysłów").
-- Upewnić się, że logika (tworzenie z idei, generowanie pipeline'u) działa identycznie — to czysto kosmetyczna zmiana.
+```tsx
+// linia 274 — KASUJEMY cały SuggestionCard dla client.contactName
+{client && !clientUsers.some(u => u.name === client.contactName) && ( … )}
+```
 
-## Po akceptacji
+Zostawiamy **tylko** listę `clientUsers` (osoby z dostępem do systemu). Dzięki ujednoliceniu w (A) główny kontakt jest już w `clientUsers` jako pierwsza osoba z badge „Główny", więc nic nie znika.
 
-Zaktualizuję pamięć projektu wzmianką: „W UI encja Project nazywa się 'Pomysł'; w kodzie/bazie pozostaje `Project`/`projects`."
+Etykieta sugestii: zamiast „Konto klienta w systemie" pokazujemy bardziej naturalne **„Klient"** + telefon, jeśli jest (`u.phone`).
+
+### C) Zgodność wsteczna
+
+- `Client.contactName` i `Client.phone` zostają w typie (używane w wielu miejscach, np. `AdminDashboard`, `ProjectReadOnlyView`, `UserDashboard`). Wypełniamy je automatycznie z głównego kontaktu — nic w innych komponentach nie pęka.
+- `mockData.ts` — bez zmian struktury, ale jeśli istniejący mock ma `contactName: 'Anna Kowalska'` bez odpowiadającego mu `klient`-usera, dodamy w nim brakującego usera o tym samym imieniu i telefonie, żeby nie było „duchów" w istniejących danych.
+
+### D) Migracja istniejących danych w localStorage (jednorazowo, przy starcie)
+
+W `AppContext.tsx`, po wczytaniu `clients` i `users`, dla każdego klienta:
+- jeśli `client.contactName` jest niepuste i **nie ma** żadnego usera `klient` z `clientId === client.id` o nazwie === `contactName` (case-insensitive trim) → dodaj go automatycznie z telefonem `client.phone`.
+
+Dzięki temu istniejący użytkownicy nie zobaczą nagle pustej listy osób.
+
+## Co NIE jest zmieniane
+
+- Schemat bazy / typów (`Client`, `User`) — zero zmian.
+- Logika webhooków / Make.com — bez zmian (nadal czyta `user.phone`).
+- `AddCampaignDialog` — sekcja „Nowy klient" tam już ma `pendingContacts` z telefonami, więc tylko wyrównujemy etykiety i również dodajemy logikę „pierwsza osoba = główny kontakt" (analogicznie do A).
+
+## Pliki do edycji
+
+- `src/components/ClientManagementDialog.tsx` — przebudowa formularza (A).
+- `src/components/ActorAssignmentInput.tsx` — usunięcie duplikatu sugestii (B).
+- `src/components/AddCampaignDialog.tsx` — drobne wyrównanie etykiet (analogicznie do A).
+- `src/context/AppContext.tsx` — migracja jednorazowa istniejących danych (D).
+- `src/data/mockData.ts` — uzupełnienie brakujących userów-klientów dla mocka (C).
