@@ -139,6 +139,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { saveToStorage(STORAGE_KEYS.ideas, ideas); }, [ideas]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.campaigns, campaigns); }, [campaigns]);
 
+  // ── One-time migration: ensure every client with a contactName has a matching klient user ───
+  // This unifies "Client.contactName" and "klient app_user" so that the actor-assignment
+  // dropdown does not show duplicates for the same person.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return;
+    migratedRef.current = true;
+    const missing: User[] = [];
+    clients.forEach(c => {
+      const name = (c.contactName || '').trim();
+      if (!name) return;
+      const exists = users.some(u =>
+        u.role === 'klient' &&
+        u.clientId === c.id &&
+        u.name.trim().toLowerCase() === name.toLowerCase()
+      );
+      if (!exists) {
+        missing.push({
+          id: `u-mig-${c.id}-${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          role: 'klient',
+          clientId: c.id,
+          phone: c.phone || undefined,
+        });
+      }
+    });
+    if (missing.length > 0) {
+      setUsers(prev => [...prev, ...missing]);
+    }
+  }, [clients, users]);
+
   const isApprovalType = (inputType: string) => inputType === 'approval' || inputType === 'actor_approval';
 
   // When a pre-valued filming task gets unlocked by the pipeline (locked → todo), auto-complete it

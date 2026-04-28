@@ -271,28 +271,20 @@ export default function ActorAssignmentInput({
             {client?.companyName ?? 'Z bazy klientów'}
           </div>
 
-          {client && !clientUsers.some(u => u.name.trim().toLowerCase() === client.contactName.trim().toLowerCase()) && (
-            <SuggestionCard
-              name={client.contactName}
-              label={`Kontakt — ${client.email || client.phone || 'brak danych kontaktowych'}`}
-              sourceType="client_contact"
-              sourceId={`contact-${client.id}`}
-              alreadyAdded={isAdded(`contact-${client.id}`)}
-              onAdd={() => addFromDB(`contact-${client.id}`, client.contactName, 'client_contact', 'Klient', client.phone)}
-            />
-          )}
-
-          {clientUsers.map(u => (
-            <SuggestionCard
-              key={u.id}
-              name={u.name}
-              label="Konto klienta w systemie"
-              sourceType="client_user"
-              sourceId={u.id}
-              alreadyAdded={isAdded(u.id)}
-              onAdd={() => addFromDB(u.id, u.name, 'client_user', 'Klient', (u as User & { phone?: string }).phone)}
-            />
-          ))}
+          {clientUsers.map(u => {
+            const phone = (u as User & { phone?: string }).phone;
+            return (
+              <SuggestionCard
+                key={u.id}
+                name={u.name}
+                label={phone ? `Klient — ${phone}` : 'Klient'}
+                sourceType="client_user"
+                sourceId={u.id}
+                alreadyAdded={isAdded(u.id)}
+                onAdd={() => addFromDB(u.id, u.name, 'client_user', 'Klient', phone)}
+              />
+            );
+          })}
         </div>
       )}
 

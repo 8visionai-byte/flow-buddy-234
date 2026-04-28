@@ -14,7 +14,7 @@ export const INITIAL_CLIENTS: Client[] = [
 
 export const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Marcin', role: 'admin', telegramContact: '@marcin_admin' },
-  { id: 'u2', name: 'Anna', role: 'klient', clientId: 'c1' },
+  { id: 'u2', name: 'Anna Kowalska', role: 'klient', clientId: 'c1', phone: '+48600100200' },
   { id: 'u3', name: 'Tomek', role: 'influencer', telegramContact: '@tomek_inf' },
   { id: 'u4', name: 'Kuba', role: 'montazysta', telegramContact: '@kuba_edit' },
   { id: 'u5', name: 'Ola', role: 'kierownik_planu', telegramContact: '@ola_kp' },

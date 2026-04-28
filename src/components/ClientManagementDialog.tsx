@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Plus, Pencil, Trash2, X, Check, UserPlus } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, X, Check, UserPlus, Star } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -46,7 +46,6 @@ function parsePhone(phone: string): { dialCode: string; local: string } {
   if (!phone) return { dialCode: '+48', local: '' };
   const withLocal = phone.match(/^(\+\d+)\s(.+)$/);
   if (withLocal) return { dialCode: withLocal[1], local: withLocal[2] };
-  // compact format e.g. "+48123456789"
   const sorted = [...DIAL_CODES].sort((a, b) => b.code.length - a.code.length);
   for (const d of sorted) {
     if (phone.startsWith(d.code) && phone.length > d.code.length) {
@@ -56,6 +55,12 @@ function parsePhone(phone: string): { dialCode: string; local: string } {
   const justCode = phone.match(/^(\+\d+)$/);
   if (justCode) return { dialCode: justCode[1], local: '' };
   return { dialCode: '+48', local: phone };
+}
+
+function compactPhone(value: string): string {
+  const { dialCode, local } = parsePhone(value);
+  const localNoSpaces = local.replace(/\s/g, '');
+  return localNoSpaces ? `${dialCode}${localNoSpaces}` : '';
 }
 
 interface PhoneFieldProps {
@@ -110,51 +115,63 @@ const PhoneField = ({ value, onChange, size = 'sm' }: PhoneFieldProps) => {
 
 // --- Main component ---
 
-const EMPTY_FORM = { companyName: '', contactName: '', email: '', phone: '+48', notes: '' };
+const EMPTY_FORM = { companyName: '', email: '', notes: '' };
+
+interface PendingPerson { name: string; phone: string }
 
 const ClientManagementDialog = () => {
-  const { clients, addClient, updateClient, deleteClient, users, addUser, deleteUser } = useApp();
+  const { clients, addClient, updateClient, deleteClient, users, addUser, updateUser, deleteUser } = useApp();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  // Pending contacts for new-company form (before company is saved)
-  const [pendingContacts, setPendingContacts] = useState<string[]>([]);
-  const [pendingContactInput, setPendingContactInput] = useState('');
+  // Pending people for new-company form (before company is saved). First = primary contact.
+  const [pendingPeople, setPendingPeople] = useState<PendingPerson[]>([{ name: '', phone: '+48' }]);
 
   // Adding contact to an existing company
   const [addingContactForId, setAddingContactForId] = useState<string | null>(null);
-  const [contactInput, setContactInput] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('+48');
 
   // Delete confirmations
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteUserConfirm, setDeleteUserConfirm] = useState<string | null>(null);
 
   const update = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
-  const isValid = form.companyName.trim().length > 0;
+  const isValid = form.companyName.trim().length > 0
+    && (!addingNew || pendingPeople.some(p => p.name.trim().length > 0));
 
   // Users linked to a specific company
   const getLinkedUsers = (clientId: string) =>
     users.filter(u => u.role === 'klient' && u.clientId === clientId);
 
-  // ── New-company pending contacts ──────────────────────────────────────────
-  const addPendingContact = () => {
-    const name = pendingContactInput.trim();
-    if (!name) return;
-    setPendingContacts(prev => [...prev, name]);
-    setPendingContactInput('');
+  // Identify primary contact for an existing client (by matching client.contactName)
+  const isPrimary = (clientId: string, userName: string) => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return false;
+    const cn = (client.contactName || '').trim().toLowerCase();
+    return cn.length > 0 && cn === userName.trim().toLowerCase();
   };
 
-  const removePendingContact = (index: number) =>
-    setPendingContacts(prev => prev.filter((_, i) => i !== index));
+  // ── New-company pending people ────────────────────────────────────────────
+  const updatePending = (index: number, key: keyof PendingPerson, value: string) =>
+    setPendingPeople(prev => prev.map((p, i) => i === index ? { ...p, [key]: value } : p));
+
+  const addPendingPerson = () =>
+    setPendingPeople(prev => [...prev, { name: '', phone: '+48' }]);
+
+  const removePendingPerson = (index: number) =>
+    setPendingPeople(prev => prev.filter((_, i) => i !== index));
 
   // ── Add contact to existing company ──────────────────────────────────────
   const confirmAddContact = (clientId: string) => {
-    const name = contactInput.trim();
+    const name = contactName.trim();
     if (!name) return;
-    addUser({ name, role: 'klient', clientId });
-    setContactInput('');
+    const phone = compactPhone(contactPhone);
+    addUser({ name, role: 'klient', clientId, phone: phone || undefined });
+    setContactName('');
+    setContactPhone('+48');
     setAddingContactForId(null);
   };
 
@@ -164,9 +181,7 @@ const ClientManagementDialog = () => {
     setAddingNew(false);
     setForm({
       companyName: client.companyName,
-      contactName: client.contactName,
       email: client.email,
-      phone: client.phone || '+48',
       notes: client.notes,
     });
   };
@@ -175,33 +190,51 @@ const ClientManagementDialog = () => {
     setEditingId(null);
     setAddingNew(true);
     setForm(EMPTY_FORM);
-    setPendingContacts([]);
-    setPendingContactInput('');
+    setPendingPeople([{ name: '', phone: '+48' }]);
   };
 
   const cancel = () => {
     setEditingId(null);
     setAddingNew(false);
     setForm(EMPTY_FORM);
-    setPendingContacts([]);
-    setPendingContactInput('');
+    setPendingPeople([{ name: '', phone: '+48' }]);
   };
 
   const save = () => {
     if (!isValid) return;
-    const { dialCode, local } = parsePhone(form.phone);
-    const localNoSpaces = local.replace(/\s/g, '');
-    const cleanPhone = localNoSpaces.length > 0 ? `${dialCode}${localNoSpaces}` : '';
-    const data = { ...form, phone: cleanPhone };
 
     if (addingNew) {
-      // addClient now returns the new ID so we can link users immediately
-      const newClientId = addClient(data);
-      pendingContacts.forEach(name => {
-        addUser({ name, role: 'klient', clientId: newClientId });
+      const validPeople = pendingPeople
+        .map(p => ({ name: p.name.trim(), phone: compactPhone(p.phone) }))
+        .filter(p => p.name.length > 0);
+      if (validPeople.length === 0) return;
+
+      const primary = validPeople[0];
+      const newClientId = addClient({
+        companyName: form.companyName,
+        contactName: primary.name,           // primary contact mirrored on Client for backward compat
+        email: form.email,
+        phone: primary.phone,                // primary phone mirrored on Client for backward compat
+        notes: form.notes,
+      });
+      validPeople.forEach(p => {
+        addUser({ name: p.name, role: 'klient', clientId: newClientId, phone: p.phone || undefined });
       });
     } else if (editingId) {
-      updateClient(editingId, data);
+      // Editing: only company-level fields. contactName/phone on Client stay
+      // synced to the primary user (if any).
+      const linked = getLinkedUsers(editingId);
+      const existing = clients.find(c => c.id === editingId);
+      const primaryUser =
+        linked.find(u => u.name.trim().toLowerCase() === (existing?.contactName || '').trim().toLowerCase())
+        ?? linked[0];
+      updateClient(editingId, {
+        companyName: form.companyName,
+        email: form.email,
+        notes: form.notes,
+        contactName: primaryUser?.name ?? '',
+        phone: (primaryUser as { phone?: string } | undefined)?.phone ?? '',
+      });
     }
     cancel();
   };
@@ -225,31 +258,19 @@ const ClientManagementDialog = () => {
   const deleteTarget = clients.find(c => c.id === deleteConfirm);
   const deleteUserTarget = users.find(u => u.id === deleteUserConfirm);
 
-  // ── Shared company form fields ────────────────────────────────────────────
+  // ── Form fields (company-level only) ──────────────────────────────────────
   const renderFormFields = (isNew = false) => (
     <div className="space-y-2">
       {isNew && <p className="text-xs font-semibold text-primary">Nowy klient</p>}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Nazwa firmy *</Label>
-          <Input
-            className="h-8 text-sm"
-            value={form.companyName}
-            onChange={e => update('companyName', e.target.value)}
-            placeholder="Nazwa firmy"
-            autoFocus={isNew}
-            onKeyDown={e => e.key === 'Enter' && save()}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Osoba kontaktowa</Label>
-          <Input
-            className="h-8 text-sm"
-            value={form.contactName}
-            onChange={e => update('contactName', e.target.value)}
-            placeholder="Imię i nazwisko"
-          />
-        </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Nazwa firmy *</Label>
+        <Input
+          className="h-8 text-sm"
+          value={form.companyName}
+          onChange={e => update('companyName', e.target.value)}
+          placeholder="Nazwa firmy"
+          autoFocus={isNew}
+        />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Email firmy</Label>
@@ -258,12 +279,8 @@ const ClientManagementDialog = () => {
           type="email"
           value={form.email}
           onChange={e => update('email', e.target.value)}
-          placeholder="email@firma.pl"
+          placeholder="kontakt@firma.pl"
         />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">Telefon</Label>
-        <PhoneField value={form.phone} onChange={v => update('phone', v)} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Notatki</Label>
@@ -275,7 +292,7 @@ const ClientManagementDialog = () => {
         />
       </div>
 
-      {/* Pending contacts (only for new company) */}
+      {/* Pending people (only for new company) */}
       {isNew && (
         <div className="space-y-1.5 pt-1">
           <div className="flex items-center gap-1.5">
@@ -286,33 +303,53 @@ const ClientManagementDialog = () => {
             <div className="h-px flex-1 bg-border" />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Dodaj osoby, które będą logować się jako klient i oceniać pomysły.
+            Pierwsza osoba to <strong>główny kontakt</strong>. Numer telefonu wykorzystamy do powiadomień (Telegram).
           </p>
 
-          {pendingContacts.map((name, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-md border border-success/30 bg-success/5 px-2.5 py-1.5">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/20 text-[10px] font-semibold text-success">
-                {name.charAt(0).toUpperCase()}
+          {pendingPeople.map((p, i) => (
+            <div
+              key={i}
+              className={`rounded-md border px-2.5 py-2 space-y-1.5 ${
+                i === 0 ? 'border-primary/30 bg-primary/5' : 'border-success/30 bg-success/5'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                  i === 0 ? 'bg-primary/20 text-primary' : 'bg-success/20 text-success'
+                }`}>
+                  {(p.name.trim() || '?').charAt(0).toUpperCase()}
+                </div>
+                <Input
+                  className="h-7 text-sm flex-1"
+                  placeholder="Imię i nazwisko"
+                  value={p.name}
+                  onChange={e => updatePending(i, 'name', e.target.value)}
+                />
+                {i === 0 ? (
+                  <Badge variant="secondary" className="text-[10px] border-0 bg-primary/15 text-primary gap-1">
+                    <Star className="h-2.5 w-2.5" />Główny
+                  </Badge>
+                ) : (
+                  <button
+                    onClick={() => removePendingPerson(i)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-              <span className="flex-1 text-xs font-medium text-foreground">{name}</span>
-              <button onClick={() => removePendingContact(i)} className="text-muted-foreground hover:text-destructive">
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <PhoneField value={p.phone} onChange={v => updatePending(i, 'phone', v)} />
             </div>
           ))}
 
-          <div className="flex gap-1.5">
-            <Input
-              className="h-8 text-sm flex-1"
-              placeholder="Imię i nazwisko osoby..."
-              value={pendingContactInput}
-              onChange={e => setPendingContactInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addPendingContact())}
-            />
-            <Button size="sm" variant="outline" className="h-8 px-2" onClick={addPendingContact} disabled={!pendingContactInput.trim()}>
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-full gap-1.5 text-xs"
+            onClick={addPendingPerson}
+          >
+            <Plus className="h-3.5 w-3.5" />Dodaj kolejną osobę
+          </Button>
         </div>
       )}
 
@@ -343,7 +380,7 @@ const ClientManagementDialog = () => {
               variant="ghost"
               size="sm"
               className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-              onClick={() => { setAddingContactForId(clientId); setContactInput(''); }}
+              onClick={() => { setAddingContactForId(clientId); setContactName(''); setContactPhone('+48'); }}
             >
               <UserPlus className="h-3 w-3" />
               Dodaj osobę
@@ -357,42 +394,61 @@ const ClientManagementDialog = () => {
           </p>
         )}
 
-        {linked.map(user => (
-          <div key={user.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-              {user.name.charAt(0).toUpperCase()}
+        {linked.map(user => {
+          const phone = (user as { phone?: string }).phone;
+          const primary = isPrimary(clientId, user.name);
+          return (
+            <div key={user.id} className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 ${primary ? 'bg-primary/5 border border-primary/20' : 'bg-muted/40'}`}>
+              <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${primary ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-medium text-foreground">{user.name}</span>
+                  {primary && (
+                    <Badge variant="secondary" className="text-[10px] border-0 bg-primary/15 text-primary gap-1 px-1.5">
+                      <Star className="h-2.5 w-2.5" />Główny
+                    </Badge>
+                  )}
+                </div>
+                {phone && (
+                  <p className="text-[10px] text-muted-foreground tabular-nums">{phone}</p>
+                )}
+              </div>
+              <Badge variant="secondary" className="border-0 bg-success/10 text-success text-[10px] px-1.5">klient</Badge>
+              <button
+                onClick={() => setDeleteUserConfirm(user.id)}
+                className="text-muted-foreground hover:text-destructive"
+                title="Usuń dostęp"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
-            <span className="flex-1 text-xs font-medium text-foreground">{user.name}</span>
-            <Badge variant="secondary" className="border-0 bg-success/10 text-success text-[10px] px-1.5">klient</Badge>
-            <button
-              onClick={() => setDeleteUserConfirm(user.id)}
-              className="text-muted-foreground hover:text-destructive"
-              title="Usuń dostęp"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
+          );
+        })}
 
         {isAddingHere && (
-          <div className="flex gap-1.5">
+          <div className="space-y-1.5 rounded-md border border-success/30 bg-success/5 px-2.5 py-2">
             <Input
-              className="h-8 text-sm flex-1"
+              className="h-8 text-sm"
               placeholder="Imię i nazwisko nowej osoby..."
-              value={contactInput}
-              onChange={e => setContactInput(e.target.value)}
+              value={contactName}
+              onChange={e => setContactName(e.target.value)}
               autoFocus
               onKeyDown={e => {
                 if (e.key === 'Enter') confirmAddContact(clientId);
                 if (e.key === 'Escape') setAddingContactForId(null);
               }}
             />
-            <Button size="sm" className="h-8 px-2" onClick={() => confirmAddContact(clientId)} disabled={!contactInput.trim()}>
-              <Check className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setAddingContactForId(null)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
+            <PhoneField value={contactPhone} onChange={setContactPhone} />
+            <div className="flex gap-1.5 justify-end">
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingContactForId(null)}>
+                <X className="mr-1 h-3 w-3" />Anuluj
+              </Button>
+              <Button size="sm" className="h-7 text-xs" onClick={() => confirmAddContact(clientId)} disabled={!contactName.trim()}>
+                <Check className="mr-1 h-3 w-3" />Dodaj
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -433,11 +489,9 @@ const ClientManagementDialog = () => {
                             <span className="font-medium text-sm">{client.companyName}</span>
                             <Badge variant="secondary" className="text-[10px] border-0 bg-muted text-muted-foreground">firma</Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {client.contactName && <span>{client.contactName}</span>}
-                            {client.email ? <span> · {client.email}</span> : null}
-                            {client.phone ? <span> · {client.phone}</span> : null}
-                          </p>
+                          {client.email && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{client.email}</p>
+                          )}
                           {client.notes && (
                             <p className="text-xs text-muted-foreground mt-0.5 italic truncate">{client.notes}</p>
                           )}
