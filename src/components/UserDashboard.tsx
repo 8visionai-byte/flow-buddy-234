@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { ROLE_LABELS, Task, Project } from '@/types';
+import { ROLE_LABELS, Task, Project, getRoleDisplayLabel } from '@/types';
 import TaskCard from '@/components/TaskCard';
 import CompletedTaskCard from '@/components/CompletedTaskCard';
 import IdeasPanel from '@/components/IdeasPanel';
@@ -761,7 +761,7 @@ const UserDashboard = () => {
             <img src="/images/yads-logo.png" alt="YADS" className="h-7 w-auto rounded" />
             <div>
               <div className="text-sm font-semibold text-foreground">{currentUser.name}</div>
-              <div className="text-xs text-muted-foreground">{ROLE_LABELS[currentUser.role]}</div>
+              <div className="text-xs text-muted-foreground">{getRoleDisplayLabel(currentUser, clients)}</div>
             </div>
           </div>
           <div className="flex items-center gap-1">

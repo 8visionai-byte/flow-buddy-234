@@ -1,67 +1,45 @@
-# Równoległe odblokowanie rekwizytów i terminu nagrania
+# Personalizacja: nazwa firmy zamiast "Klient"
 
-## Problem
+## Cel
+Gdy zalogowany użytkownik ma rolę `klient`, w jego UI nie pokazujemy generycznego słowa „Klient", tylko nazwę jego firmy (`Client.companyName`, dostępna przez `user.clientId`). Reszta widoków (Admin, Influencer, Montażysta, historia, ślady audytu) zostaje bez zmian — tam „Klient" jest opisem roli innej osoby i ma sens.
 
-Po akceptacji obsady przez klienta pipeline odblokowuje **tylko** zadanie influencera „Określ rekwizyty". Zadanie admina „Ustaw termin planu zdjęciowego" zostaje `locked` aż influencer skończy rekwizyty.
+## Zakres zmian
 
-Skutki widoczne w UI:
-- Influencer widzi banner „Brak przypisanego terminu — skontaktuj się z Adminem", ale nie może go ustawić, a admin nawet nie wie, że jego kolej.
-- Admin nie ma czerwonej cyferki przy swoim awatarze, nic nie pojawia się w zakładce **Moje Zadania**, a w karcie pomysłu w zakładce **Kampanie** etap pokazuje tylko „Określ rekwizyty".
-- Powstaje fałszywa zależność: rekwizyty wymagają terminu, a termin nie zostanie ustawiony, dopóki influencer nie wpisze rekwizytów.
+### 1. Helper roli (centralnie)
+W `src/types/index.ts` dodać czystą funkcję pomocniczą:
 
-Logicznie te dwa zadania są niezależne — admin może planować datę zdjęciową bez listy rekwizytów, a influencer dostarczy rekwizyty, gdy będzie miał termin (lub równolegle).
-
-## Rozwiązanie
-
-Po akceptacji obsady przez klienta pipeline ma odblokować **oba** kolejne zadania równolegle:
-
-```text
-[12] Zaakceptuj obsadę  (klient) ─── done ──┬─► [13] Określ rekwizyty           (influencer) ─ todo
-                                            └─► [14] Ustaw termin planu zdj.    (admin)      ─ todo
+```ts
+export const getRoleDisplayLabel = (
+  user: { role: UserRole; clientId?: string | null },
+  clients: { id: string; companyName: string }[]
+): string
 ```
 
-Następne zadanie po grupie („Potwierdź nagranie" — kierownik planu) odblokowuje się dopiero, gdy **oba** są `done`.
+Zwraca `companyName` gdy `user.role === 'klient'` i znaleziono firmę; w przeciwnym razie `ROLE_LABELS[user.role]`. Dzięki temu nie duplikujemy logiki.
 
-## Co użytkownik zobaczy
+### 2. Header użytkownika — `src/components/UserDashboard.tsx` (linia ~764)
+Zamiast `{ROLE_LABELS[currentUser.role]}` użyć `getRoleDisplayLabel(currentUser, clients)`. To jest miejsce widoczne na zrzucie ekranu („Anna Kowalska / Klient" → „Anna Kowalska / Nazwa Firmy Sp. z o.o.").
 
-### Admin (Marcin)
-- **Czerwona cyferka** przy awatarze „Marcin" w panelu wyboru użytkownika.
-- W **Panel Admina → Moje Zadania** pojawia się projekt „Pierwszy pomysł" z aktywnym zadaniem „Ustaw termin planu zdjęciowego" — z popoverem do wyboru daty.
-- W **Panel Admina → Kampanie** etap pomysłu pokazuje oba aktywne zadania (rekwizyty + termin) z osobnymi statusami.
+### 3. RoleSelector — `src/components/RoleSelector.tsx`
+Nagłówek grupy „Klient" (linia 72, `group[0].label`) — gdy grupa to klienci, zamiast jednego nagłówka „Klient" pogrupować przyciski klientów per firma (po `user.clientId`) i jako nagłówek wyświetlać nazwę firmy. Jeśli klient nie ma przypisanej firmy → fallback do „Klient".
 
-### Influencer (Tomek)
-- Banner „Brak przypisanego terminu" zostaje, ale jego treść zmieniamy na neutralną: **„Termin nagrania zostanie ustalony przez Admina równolegle"** (bez sugestii, że ma się z kimś kontaktować).
-- Pole „Określ rekwizyty" pozostaje aktywne — wpisanie rekwizytów nie wymaga znajomości terminu.
+### 4. Widoki własnych zadań/pomysłów klienta
+Sprawdzić i podmienić ewentualne sformułowania typu „Jako Klient…", „Twoja rola: Klient" w:
+- `src/components/UserDashboard.tsx` (sekcja powitalna i puste stany dla `currentUser.role === 'klient'`),
+- `src/components/IdeasPanel.tsx` i `src/components/CompletedTaskCard.tsx` — ale **tylko** komunikaty skierowane do samego klienta („Czekasz aż Klient…"). W audycie historii (`history.by`, badge'e ról) zostawiamy `ROLE_LABELS` bez zmian — to opis kto wykonał akcję, nie personalizacja.
 
-### Klient (Anna)
-Bez zmian — etap projektu w jego widoku pokazuje, że materiał jest w fazie przygotowań.
+### 5. Czego NIE zmieniamy
+- Wszystkie widoki Admina/Influencera/Montażysty/Kierownika — tam „Klient" oznacza inną stronę procesu i musi pozostać jako rola.
+- Webhooki (`src/lib/webhook.ts`) — `role_label` to dane techniczne dla Make.com.
+- Historia akcji, `roleCompletions`, badge'e ról w timeline — opisują rolę aktora, nie tożsamość zalogowanego.
+- Ogólne komunikaty systemowe widoczne dla innych ról („Klient ocenia film…", „Klient zaakceptował pomysł…") — to opis czyjejś akcji, nie personalizacja siebie.
 
-## Zakres zmian (technicznie)
+## Pamięć
+Dopisać memory `mem://logic/client-personalization`: w widokach własnych klienta etykieta roli renderowana jest jako `companyName`; w widokach innych ról oraz w historii zostaje „Klient".
 
-### `src/context/AppContext.tsx` — funkcja `completeTask`, gałąź „Non-approval task"
-
-Obecnie (linie 398–409) pętla unlock łapie tylko jedno zadanie nie-approval. Trzeba ją rozszerzyć, by przy domknięciu **approval task** (`actor_approval`) odblokować całą grupę kolejnych zadań do następnego punktu synchronizacji.
-
-Zamiast specjalnej obsługi tylko fazy „Przygotowanie do nagrania", wprowadzić ogólną zasadę: **konsekutywne zadania nie-approval przypisane do różnych ról odblokowujemy razem** (jako równoległą grupę). Synchronizacja na kolejnym zadaniu przypisanym do roli, której zadanie już jest w grupie, lub na kolejnym approval.
-
-Dla bezpieczeństwa początkowego ograniczamy się do konkretnej pary: po zakończeniu zadania o tytule **„Zaakceptuj przypisanie osoby"** odblokuj zarówno „Określ rekwizyty" jak i „Ustaw termin planu zdjęciowego" jednocześnie. (Reszta pipeline'u zachowuje się bez zmian.)
-
-Druga zmiana: gdy zamykane jest jedno z tych równoległych zadań, **nie odblokowuj** kolejnego (`Potwierdź nagranie`), dopóki **oba** nie są `done`. Dodać helper `areParallelGroupTasksDone(projectId, ['Określ rekwizyty', 'Ustaw termin planu zdjęciowego'])` i sprawdzać go przed odblokowaniem zadania `Potwierdź nagranie`.
-
-### `src/components/TaskCard.tsx` — banner deadline (linia 714–718)
-
-Zmienić tekst z `Brak przypisanego terminu — skontaktuj się z Adminem` na `Termin nagrania zostanie ustalony przez Admina równolegle` (delikatniejszy, neutralny ton — Admin już wie).
-
-### `src/components/AdminDashboard.tsx`
-
-- Logika `isAdminTaskActionable` (linia 119) już zadziała poprawnie, gdy zadanie „Ustaw termin..." będzie miało `status === 'todo'` zamiast `'locked'`. Bez zmian.
-- Sekcja „Moje Zadania" (linia 1618+) automatycznie wyświetli zadanie po zmianie statusu w kontekście. Bez zmian kodu.
-- Na karcie pomysłu w widoku „Kampanie" (linia 1152) `activeTask` pokazuje tylko jedno zadanie. Zmienić tę logikę tak, by gdy istnieje więcej niż jedno aktywne zadanie z tej samej fazy, pokazać je rozdzielone przecinkiem (np. „Etap: Określ rekwizyty, Ustaw termin planu zdjęciowego").
-
-### Pamięć projektu
-
-Zaktualizować `mem://logic/task-sequencing` — dopisać wyjątek od sekwencyjności: para *rekwizyty + termin nagrania* odblokowuje się równolegle, oba muszą być `done` zanim odblokuje się `Potwierdź nagranie`.
-
-## Efekt dla użytkownika
-
-Po akceptacji obsady przez klienta admin **natychmiast** zobaczy czerwoną cyferkę i zadanie „Ustaw termin planu zdjęciowego" w sekcji „Moje Zadania". Influencer może w tym samym czasie wpisywać rekwizyty bez czekania na termin. Pipeline ruszy do „Potwierdź nagranie" dopiero, gdy oba zadania będą wykonane.
+## Pliki do edycji
+- `src/types/index.ts` (helper)
+- `src/components/UserDashboard.tsx` (header + komunikaty do siebie)
+- `src/components/RoleSelector.tsx` (nagłówki grup klientów per firma)
+- `src/components/IdeasPanel.tsx`, `src/components/CompletedTaskCard.tsx` — przejrzeć i podmienić tylko komunikaty „do mnie jako klienta"
+- `mem://logic/client-personalization` (nowy plik + wpis w `mem://index.md`)

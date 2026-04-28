@@ -100,6 +100,24 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   publikator: 'Publikator',
 };
 
+/**
+ * Returns a personalized label for a user. For role 'klient' returns the
+ * linked company name (Client.companyName) when available; otherwise falls
+ * back to the generic role label. Used in the user's own UI surfaces so
+ * clients see their own brand instead of the generic word "Klient".
+ */
+export const getRoleDisplayLabel = (
+  user: { role: UserRole; clientId?: string | null } | null | undefined,
+  clients: { id: string; companyName: string }[]
+): string => {
+  if (!user) return '';
+  if (user.role === 'klient' && user.clientId) {
+    const company = clients.find(c => c.id === user.clientId);
+    if (company?.companyName) return company.companyName;
+  }
+  return ROLE_LABELS[user.role];
+};
+
 export const ROLE_COLORS: Record<UserRole, string> = {
   admin: 'bg-primary text-primary-foreground',
   klient: 'bg-success text-success-foreground',
