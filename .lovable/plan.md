@@ -1,47 +1,67 @@
-# Korekta przypisania osób przez influencera (przed akceptacją klienta)
+# Równoległe odblokowanie rekwizytów i terminu nagrania
 
 ## Problem
-Influencer wysłał zadanie „Przypisz osobę do filmu" z błędną obsadą (np. dał tylko Annę Kowalską, a miała być Dorota zamiast Janusza). Klient jeszcze nie zaakceptował, ale w zakładce „Wykonane" influencer widzi tylko podgląd przesłanej treści — bez żadnej opcji korekty. Nie ma jak naprawić pomyłki, dopóki klient nie kliknie „Zmień", a to wprowadza niepotrzebną pętlę i hałas w historii.
+
+Po akceptacji obsady przez klienta pipeline odblokowuje **tylko** zadanie influencera „Określ rekwizyty". Zadanie admina „Ustaw termin planu zdjęciowego" zostaje `locked` aż influencer skończy rekwizyty.
+
+Skutki widoczne w UI:
+- Influencer widzi banner „Brak przypisanego terminu — skontaktuj się z Adminem", ale nie może go ustawić, a admin nawet nie wie, że jego kolej.
+- Admin nie ma czerwonej cyferki przy swoim awatarze, nic nie pojawia się w zakładce **Moje Zadania**, a w karcie pomysłu w zakładce **Kampanie** etap pokazuje tylko „Określ rekwizyty".
+- Powstaje fałszywa zależność: rekwizyty wymagają terminu, a termin nie zostanie ustawiony, dopóki influencer nie wpisze rekwizytów.
+
+Logicznie te dwa zadania są niezależne — admin może planować datę zdjęciową bez listy rekwizytów, a influencer dostarczy rekwizyty, gdy będzie miał termin (lub równolegle).
 
 ## Rozwiązanie
-Dodać tę samą mechanikę „Popraw", która już działa dla URL-i (przycisk **„Popraw link"** widoczny w `CompletedTaskCard` dla influencera). Analogicznie pojawi się **„Popraw obsadę"** dla zadań typu `actor_assignment`, ale tylko dopóki klient ma jeszcze decyzję przed sobą.
 
-### Warunki dostępności (kiedy widać „Popraw obsadę")
-1. `task.inputType === 'actor_assignment'`
-2. `task.status === 'done'`
-3. `currentUser.role === 'influencer'` i task ma w `assignedRoles` rolę `influencer`
-4. **Bramka bezpieczeństwa:** powiązane zadanie akceptacji u klienta (`actor_approval` w tym samym `projectId`, najnowsze) ma `status === 'pending_client_approval'` — czyli klient jeszcze nie kliknął „Zaakceptuj" ani „Zmień". Po decyzji klienta przycisk znika i korekta odbywa się normalną ścieżką ping-pong (zadanie wraca do influencera ze statusem `needs_influencer_revision`, gdzie edycja obsady już istnieje).
+Po akceptacji obsady przez klienta pipeline ma odblokować **oba** kolejne zadania równolegle:
 
-### UI
-Po wejściu w ukończony task „Przypisz osobę do filmu":
-- W ramce „Przesłana treść" obok listy aktorów pojawia się mały przycisk **„Popraw obsadę"** (ikonka ołówka), spójny stylistycznie z istniejącym „Popraw link".
-- Klik otwiera ten sam komponent `ActorAssignmentInput` (z `initialActors` wczytanymi z aktualnej wartości), z dwoma akcjami: **„Zapisz"** (potwierdza nową obsadę) i **„Anuluj"** (powrót do podglądu, bez zmian).
-- Po zapisaniu: aktualizujemy `task.value` nową listą `ActorEntry[]` i równolegle aktualizujemy `previousValue` w powiązanym zadaniu akceptacji klienta, żeby klient widział poprawioną obsadę bez przeładowania kontekstu.
-- Komunikat toast: „Obsada poprawiona. Klient zobaczy zaktualizowaną propozycję."
+```text
+[12] Zaakceptuj obsadę  (klient) ─── done ──┬─► [13] Określ rekwizyty           (influencer) ─ todo
+                                            └─► [14] Ustaw termin planu zdj.    (admin)      ─ todo
+```
 
-### Wpis do historii
-Akcja zapisuje wpis w `task.history` typu `resubmitted` z opisem „Influencer skorygował obsadę przed decyzją klienta" — zgodnie z zasadą memory: historię tworzymy tylko przy świadomych akcjach użytkownika. SLA klienta nie jest resetowane (to nie jest pełen ping-pong, klient po prostu otrzymuje świeższą wersję tej samej propozycji).
+Następne zadanie po grupie („Potwierdź nagranie" — kierownik planu) odblokowuje się dopiero, gdy **oba** są `done`.
+
+## Co użytkownik zobaczy
+
+### Admin (Marcin)
+- **Czerwona cyferka** przy awatarze „Marcin" w panelu wyboru użytkownika.
+- W **Panel Admina → Moje Zadania** pojawia się projekt „Pierwszy pomysł" z aktywnym zadaniem „Ustaw termin planu zdjęciowego" — z popoverem do wyboru daty.
+- W **Panel Admina → Kampanie** etap pomysłu pokazuje oba aktywne zadania (rekwizyty + termin) z osobnymi statusami.
+
+### Influencer (Tomek)
+- Banner „Brak przypisanego terminu" zostaje, ale jego treść zmieniamy na neutralną: **„Termin nagrania zostanie ustalony przez Admina równolegle"** (bez sugestii, że ma się z kimś kontaktować).
+- Pole „Określ rekwizyty" pozostaje aktywne — wpisanie rekwizytów nie wymaga znajomości terminu.
+
+### Klient (Anna)
+Bez zmian — etap projektu w jego widoku pokazuje, że materiał jest w fazie przygotowań.
 
 ## Zakres zmian (technicznie)
 
-### `src/components/CompletedTaskCard.tsx`
-- Dodać stan: `editingActors: boolean`.
-- Dodać kalkulację `canEditActors` analogicznie do `canEditUrl`, dodatkowo sprawdzającą czy istnieje powiązany task `actor_approval` w `pending_client_approval` (przez `tasks` z kontekstu — już destrukturyzowane).
-- W bloku renderującym aktorów (linie ~370-392) — gdy `canEditActors && !editingActors`, pokazać przycisk „Popraw obsadę" w nagłówku ramki (analogicznie jak `canEditUrl`).
-- Gdy `editingActors`, w miejscu listy aktorów wyrenderować `<ActorAssignmentInput initialActors={...} client={...} clientUsers={...} onSubmit={...} />` z handlerem zapisu i przyciskiem „Anuluj".
+### `src/context/AppContext.tsx` — funkcja `completeTask`, gałąź „Non-approval task"
 
-### `src/context/AppContext.tsx`
-- Dodać metodę `updateActorAssignment(taskId, newActorsJson)` (lub rozszerzyć semantycznie istniejące `updateTaskValue` o synchronizację `previousValue` powiązanego zadania `actor_approval`). Preferowane: nowa metoda dla jasności intencji.
-- Implementacja:
-  1. Znajdź target task; sprawdź warunki (influencer, done, actor_assignment).
-  2. Znajdź powiązane zadanie `actor_approval` (`projectId === target.projectId && inputType === 'actor_approval' && status === 'pending_client_approval'`); jeśli brak — przerwij (edycja niedozwolona).
-  3. Zaktualizuj `target.value` na nową JSON-listę aktorów.
-  4. Zaktualizuj `approval.previousValue` na tę samą nową listę.
-  5. Dopisz wpis do `target.history`: `{ action: 'resubmitted', value: nowa lista, role: 'influencer', timestamp: now }`.
-  6. Zapisz w localStorage; webhook (jeśli aktywny) — wysyła notyfikację o korekcie do klienta (zgodnie z istniejącym wzorcem `webhook.ts`).
+Obecnie (linie 398–409) pętla unlock łapie tylko jedno zadanie nie-approval. Trzeba ją rozszerzyć, by przy domknięciu **approval task** (`actor_approval`) odblokować całą grupę kolejnych zadań do następnego punktu synchronizacji.
+
+Zamiast specjalnej obsługi tylko fazy „Przygotowanie do nagrania", wprowadzić ogólną zasadę: **konsekutywne zadania nie-approval przypisane do różnych ról odblokowujemy razem** (jako równoległą grupę). Synchronizacja na kolejnym zadaniu przypisanym do roli, której zadanie już jest w grupie, lub na kolejnym approval.
+
+Dla bezpieczeństwa początkowego ograniczamy się do konkretnej pary: po zakończeniu zadania o tytule **„Zaakceptuj przypisanie osoby"** odblokuj zarówno „Określ rekwizyty" jak i „Ustaw termin planu zdjęciowego" jednocześnie. (Reszta pipeline'u zachowuje się bez zmian.)
+
+Druga zmiana: gdy zamykane jest jedno z tych równoległych zadań, **nie odblokowuj** kolejnego (`Potwierdź nagranie`), dopóki **oba** nie są `done`. Dodać helper `areParallelGroupTasksDone(projectId, ['Określ rekwizyty', 'Ustaw termin planu zdjęciowego'])` i sprawdzać go przed odblokowaniem zadania `Potwierdź nagranie`.
+
+### `src/components/TaskCard.tsx` — banner deadline (linia 714–718)
+
+Zmienić tekst z `Brak przypisanego terminu — skontaktuj się z Adminem` na `Termin nagrania zostanie ustalony przez Admina równolegle` (delikatniejszy, neutralny ton — Admin już wie).
+
+### `src/components/AdminDashboard.tsx`
+
+- Logika `isAdminTaskActionable` (linia 119) już zadziała poprawnie, gdy zadanie „Ustaw termin..." będzie miało `status === 'todo'` zamiast `'locked'`. Bez zmian.
+- Sekcja „Moje Zadania" (linia 1618+) automatycznie wyświetli zadanie po zmianie statusu w kontekście. Bez zmian kodu.
+- Na karcie pomysłu w widoku „Kampanie" (linia 1152) `activeTask` pokazuje tylko jedno zadanie. Zmienić tę logikę tak, by gdy istnieje więcej niż jedno aktywne zadanie z tej samej fazy, pokazać je rozdzielone przecinkiem (np. „Etap: Określ rekwizyty, Ustaw termin planu zdjęciowego").
 
 ### Pamięć projektu
-Zaktualizować `mem://features/task-archiving` lub utworzyć nowy wpis `mem://features/inflight-correction` opisujący zasadę: „Influencer może poprawić swoją odpowiedź (URL lub obsada) dopóki kolejny aktor nie podjął decyzji. Po decyzji obowiązuje pełna ścieżka ping-pong."
+
+Zaktualizować `mem://logic/task-sequencing` — dopisać wyjątek od sekwencyjności: para *rekwizyty + termin nagrania* odblokowuje się równolegle, oba muszą być `done` zanim odblokuje się `Potwierdź nagranie`.
 
 ## Efekt dla użytkownika
-W zakładce „Wykonane" → „Przypisz osobę do filmu", obok listy aktorów, pojawia się przycisk **„Popraw obsadę"**. Klik otwiera edytor z aktualną obsadą, gdzie influencer może dodać Dorotę i usunąć Janusza. Po zapisaniu klient (Anna Kowalska) zobaczy już poprawioną propozycję — bez sztucznego cyklu „Zmień → Popraw → Wyślij ponownie".
+
+Po akceptacji obsady przez klienta admin **natychmiast** zobaczy czerwoną cyferkę i zadanie „Ustaw termin planu zdjęciowego" w sekcji „Moje Zadania". Influencer może w tym samym czasie wpisywać rekwizyty bez czekania na termin. Pipeline ruszy do „Potwierdź nagranie" dopiero, gdy oba zadania będą wykonane.
