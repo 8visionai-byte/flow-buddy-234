@@ -91,25 +91,25 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
   const [editingActors, setEditingActors] = useState(false);
+  const [editingText, setEditingText] = useState(false);
+  const [editTextValue, setEditTextValue] = useState('');
 
-  // Show edit button only for influencer's done URL tasks where next task hasn't been completed yet
-  const canEditUrl =
-    task.inputType === 'url' &&
-    task.status === 'done' &&
-    currentUser?.role === 'influencer' &&
-    task.assignedRoles.includes('influencer');
-
-  // Influencer can correct actor assignment as long as the client hasn't decided yet.
-  // Safety gate: the next task in the project must still be `pending_client_approval`.
-  const nextApprovalPending = tasks.some(
-    t => t.projectId === task.projectId && t.order === task.order + 1 && t.status === 'pending_client_approval'
+  // GENERAL RULE: a user can edit their submission as long as no downstream task
+  // (any task with order > this one) has been completed yet. The moment the next
+  // actor moves the work forward, the submission becomes immutable to keep
+  // history consistent.
+  const noDownstreamWorkDone = !tasks.some(
+    t => t.projectId === task.projectId && t.order > task.order && t.status === 'done'
   );
-  const canEditActors =
-    task.inputType === 'actor_assignment' &&
-    task.status === 'done' &&
+  const isOwnerInfluencer =
     currentUser?.role === 'influencer' &&
     task.assignedRoles.includes('influencer') &&
-    nextApprovalPending;
+    task.status === 'done';
+
+  const canEditUrl = task.inputType === 'url' && isOwnerInfluencer && noDownstreamWorkDone;
+  const canEditActors = task.inputType === 'actor_assignment' && isOwnerInfluencer && noDownstreamWorkDone;
+  const canEditText = task.inputType === 'text' && isOwnerInfluencer && noDownstreamWorkDone;
+
 
   // Resolve project + client for ActorAssignmentInput (only needed when editing actors)
   const taskProject = projects.find(p => p.id === task.projectId) ?? null;
