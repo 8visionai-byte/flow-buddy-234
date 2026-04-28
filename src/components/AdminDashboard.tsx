@@ -2376,7 +2376,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           <AlertDialogHeader>
             <AlertDialogTitle>Czy na pewno chcesz usunąć kampanię?</AlertDialogTitle>
             <AlertDialogDescription>
-              Kampania „{campaigns.find(c => c.id === deleteCampaignConfirm)?.name || ''}" oraz wszystkie przypisane do niej pomysły zostaną trwale usunięte. Projektów stworzonych z tej kampanii to nie dotyczy. Tej akcji nie można cofnąć.
+              Kampania „{(campaigns.find(c => c.id === deleteCampaignConfirm) as { name?: string } | undefined)?.name || ''}" oraz wszystkie przypisane do niej pomysły zostaną trwale usunięte. Pomysłów utworzonych z tej kampanii to nie dotyczy. Tej akcji nie można cofnąć.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2395,15 +2395,15 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         <AlertDialog open={!!deleteConfirm} onOpenChange={open => !open && setDeleteConfirm(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Czy na pewno chcesz usunąć projekt?</AlertDialogTitle>
+              <AlertDialogTitle>Czy na pewno chcesz usunąć pomysł?</AlertDialogTitle>
               <AlertDialogDescription>
-                Projekt „{getDeleteProjectName()}" oraz wszystkie przypisane do niego zadania zostaną trwale usunięte. Tej akcji nie można cofnąć.
+                Pomysł „{getDeleteProjectName()}" oraz wszystkie przypisane do niego zadania zostaną trwale usunięte. Tej akcji nie można cofnąć.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Anuluj</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Usuń projekt
+                Usuń pomysł
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
