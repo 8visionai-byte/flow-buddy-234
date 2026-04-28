@@ -719,6 +719,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : 'todo' as const;
           return { ...t, status: ns, assignedAt: now };
         }
+        if (parallelMate && t.id === parallelMate.id) {
+          return { ...t, status: 'todo' as const, assignedAt: now };
+        }
         return t;
       });
     });
