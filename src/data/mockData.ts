@@ -109,7 +109,7 @@ export const PIPELINE_STAGES: StageDefinition[] = [
   { roles: ['kierownik_planu', 'admin', 'klient'], title: 'Wnieś uwagi przed montażem', description: 'Kierownik Planu, DZ i Klient wpisują swoje uwagi przed przekazaniem materiału do montażu.', inputType: 'multi_party_notes' },
   { roles: ['influencer'], title: 'Brief dla montażysty', description: 'Na podstawie zebranych uwag przygotuj finalny brief dla montażysty.', inputType: 'text' },
   // ── Faza 5: Montaż ──────────────────────────────────────────────────────────
-  { roles: ['admin'], title: 'Nadaj priorytet montażu', description: 'Ustaw priorytet tego projektu w kolejce montażu i przypisz montażystę.', inputType: 'text' },
+  { roles: ['admin'], title: 'Nadaj priorytet montażu', description: 'Ustaw priorytet tego pomysłu w kolejce montażu i przypisz montażystę.', inputType: 'text' },
   { roles: ['montazysta'], title: 'Wgraj zmontowany film', description: 'Zmontuj materiał, wgraj na frame.io i wklej link. Klient zobaczy ten link do recenzji.', inputType: 'url' },
   { roles: ['klient'], title: 'Weryfikuj film na frame.io', description: 'Otwórz film we frame.io, dodaj komentarze bezpośrednio tam, a następnie zaznacz wynik tutaj.', inputType: 'frameio_review' },
   { roles: ['montazysta'], title: 'Wgraj poprawki', description: 'Wprowadź poprawki wg komentarzy we frame.io i wklej nowy link.', inputType: 'url' },

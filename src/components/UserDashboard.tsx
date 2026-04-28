@@ -222,7 +222,7 @@ const UserDashboard = () => {
             </div>
             <h2 className="text-xl font-semibold text-foreground">Brak nagrań na dziś</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Żaden projekt nie ma zaplanowanego planu zdjęciowego na dzisiaj ({format(new Date(), 'dd.MM.yyyy', { locale: pl })}).
+              Żaden pomysł nie ma zaplanowanego planu zdjęciowego na dzisiaj ({format(new Date(), 'dd.MM.yyyy', { locale: pl })}).
             </p>
           </div>
         </div>
@@ -240,7 +240,7 @@ const UserDashboard = () => {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Odhaczyj projekty, które zostały nagrane. Podaj numer nagrania dla każdego projektu.
+            Odhaczyj pomysły, które zostały nagrane. Podaj numer nagrania dla każdego pomysłu.
           </p>
 
           {filmingDayProjects.map(project => {
@@ -299,7 +299,7 @@ const UserDashboard = () => {
                   size="sm"
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Potwierdź nagranie projektu
+                  Potwierdź nagranie pomysłu
                 </Button>
               </div>
             );
@@ -482,8 +482,8 @@ const UserDashboard = () => {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <Film className="h-8 w-8 text-muted-foreground/40" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Brak projektów w kolejce</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Nie masz teraz żadnych projektów do zmontowania. Świetnie!</p>
+            <h2 className="text-xl font-semibold text-foreground">Brak pomysłów w kolejce</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Nie masz teraz żadnych pomysłów do zmontowania. Świetnie!</p>
           </div>
         </div>
       );
@@ -501,7 +501,7 @@ const UserDashboard = () => {
             <div className="flex items-center gap-2 mb-3">
               <Film className="h-5 w-5 text-primary" />
               <h2 className="text-lg font-semibold text-foreground">Kolejka montażu</h2>
-              <span className="text-sm text-muted-foreground">({editorQueueProjects.length} projektów)</span>
+              <span className="text-sm text-muted-foreground">({editorQueueProjects.length} pomysłów)</span>
             </div>
             <div className="flex gap-2 flex-wrap">
               {(Object.keys(counts) as Prio[]).filter(k => counts[k] > 0).map(k => (
@@ -516,7 +516,7 @@ const UserDashboard = () => {
           {/* Project list */}
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="bg-muted/40 border-b border-border px-4 py-2 grid grid-cols-[1fr_auto_auto_auto] gap-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-              <span>Projekt</span>
+              <span>Pomysł</span>
               <span>Priorytet</span>
               <span>Termin (szac.)</span>
               <span>Akcja</span>
@@ -563,7 +563,7 @@ const UserDashboard = () => {
             <div className="rounded-xl border border-border overflow-hidden">
               {/* Header row */}
               <div className="bg-muted/40 border-b border-border flex">
-                <div className="w-44 shrink-0 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">Projekt</div>
+                <div className="w-44 shrink-0 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">Pomysł</div>
                 {slotHeaders.map((h, i) => (
                   <div key={i} className="flex-1 px-1 py-2 text-[9px] text-muted-foreground text-center border-l border-border leading-tight">{h}</div>
                 ))}
@@ -641,9 +641,9 @@ const UserDashboard = () => {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <FolderOpen className="h-8 w-8 text-muted-foreground/50" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Brak przypisanych projektów</h2>
+            <h2 className="text-xl font-semibold text-foreground">Brak przypisanych pomysłów</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Nie masz jeszcze żadnych aktywnych projektów. Czekaj na przypisanie przez administratora.
+              Nie masz jeszcze żadnych aktywnych pomysłów. Czekaj na przypisanie przez administratora.
             </p>
           </div>
         </div>
@@ -654,7 +654,7 @@ const UserDashboard = () => {
       <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="max-w-3xl mx-auto space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Moje projekty ({myProjects.length})
+            Moje pomysły ({myProjects.length})
           </h2>
 
           {myProjects.map(project => {
@@ -763,7 +763,7 @@ const UserDashboard = () => {
           </div>
         </div>
 
-        {/* Tab bar: Zadania / Projekty [/ Nagrania for KP] */}
+        {/* Tab bar: Zadania / Pomysły [/ Nagrania for KP] */}
         <div className="flex border-b border-border shrink-0">
           <button
             onClick={() => setView('tasks')}
@@ -790,7 +790,7 @@ const UserDashboard = () => {
             }`}
           >
             <FolderOpen className="h-3.5 w-3.5" />
-            Projekty
+            Pomysły
             {myProjects.length > 0 && (
               <span className="ml-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground leading-none">
                 {myProjects.length}
@@ -1121,8 +1121,8 @@ const UserDashboard = () => {
               <FolderOpen className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
               <p className="text-xs text-muted-foreground">
                 {myProjects.length > 0
-                  ? `${myProjects.length} projektów po prawej`
-                  : 'Brak projektów'}
+                  ? `${myProjects.length} pomysłów po prawej`
+                  : 'Brak pomysłów'}
               </p>
             </div>
           </div>
@@ -1144,8 +1144,8 @@ const UserDashboard = () => {
                 ? 'Kolejka montażu'
                 : view === 'projects'
                   ? (selectedProjectId
-                      ? (myProjects.find(p => p.id === selectedProjectId)?.name ?? 'Projekt')
-                      : 'Moje projekty')
+                      ? (myProjects.find(p => p.id === selectedProjectId)?.name ?? 'Pomysł')
+                      : 'Moje pomysły')
                   : selectedItem?.type === 'ideas'
                     ? (currentUser.role === 'klient' ? 'Oceń pomysły' : 'Twoje pomysły')
                     : selectedTask

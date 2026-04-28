@@ -369,7 +369,7 @@ const AddCampaignDialog = ({ onCreated }: { onCreated?: () => void } = {}) => {
                   {/* Add another person */}
                   <div className="space-y-1.5">
                     <p className="text-[11px] text-muted-foreground">
-                      Jeśli inna osoba będzie oceniać lub prowadzić projekty, dodaj ją z numerem telefonu (Telegram):
+                      Jeśli inna osoba będzie oceniać lub prowadzić pomysły, dodaj ją z numerem telefonu (Telegram):
                     </p>
                     <div className="flex gap-1.5">
                       <Input

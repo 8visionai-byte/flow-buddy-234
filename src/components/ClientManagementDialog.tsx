@@ -286,7 +286,7 @@ const ClientManagementDialog = () => {
             <div className="h-px flex-1 bg-border" />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Dodaj osoby, które będą logować się jako klient i oceniać pomysły / projekty.
+            Dodaj osoby, które będą logować się jako klient i oceniać pomysły.
           </p>
 
           {pendingContacts.map((name, i) => (
@@ -483,7 +483,7 @@ const ClientManagementDialog = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Usuń klienta?</AlertDialogTitle>
             <AlertDialogDescription>
-              Firma „{deleteTarget?.companyName}" zostanie usunięta. Projekty i kampanie powiązane z tą firmą stracą powiązanie, ale nie zostaną usunięte.
+              Firma „{deleteTarget?.companyName}" zostanie usunięta. Pomysły i kampanie powiązane z tą firmą stracą powiązanie, ale nie zostaną usunięte.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

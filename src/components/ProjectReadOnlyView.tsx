@@ -422,7 +422,7 @@ export default function ProjectReadOnlyView({
 
         {totalCount === 0 && (
           <div className="py-12 text-center text-sm text-muted-foreground">
-            Brak etapów dla tego projektu.
+            Brak etapów dla tego pomysłu.
           </div>
         )}
 
