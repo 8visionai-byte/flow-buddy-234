@@ -387,9 +387,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const nextAfterGroup = projectTasks.find(t => t.order === groupEnd + 1);
           if (nextAfterGroup && nextAfterGroup.status === 'locked') {
             const newStatus = isApprovalType(nextAfterGroup.inputType) ? 'pending_client_approval' as const : 'todo' as const;
-            return updated.map(t =>
-              t.id === nextAfterGroup.id ? { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now } : t
-            );
+
+            // PARALLEL UNLOCK: After "Zaakceptuj przypisanie osoby" → unlock both
+            // "Określ rekwizyty" (influencer) AND "Ustaw termin planu zdjęciowego" (admin) together,
+            // so admin sees the task in "Moje Zadania" immediately and influencer doesn't have to wait.
+            const parallelMate = (nextAfterGroup.title === 'Określ rekwizyty')
+              ? projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'locked')
+              : null;
+
+            return updated.map(t => {
+              if (t.id === nextAfterGroup.id) {
+                return { ...t, status: newStatus, previousValue: completedTask.value || value, assignedAt: now };
+              }
+              if (parallelMate && t.id === parallelMate.id) {
+                return { ...t, status: 'todo' as const, previousValue: completedTask.value || value, assignedAt: now };
+              }
+              return t;
+            });
           }
         }
         return updated;
