@@ -5,7 +5,7 @@ import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/compone
 import { tryParseSocialDates } from '@/components/SocialDatesWidget';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Instagram, Youtube } from 'lucide-react';
+import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Instagram, Youtube, BookOpen, RotateCcw } from 'lucide-react';
 const TikTokIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
     <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.74a8.18 8.18 0 0 0 4.79 1.52V6.79a4.85 4.85 0 0 1-1.02-.1z"/>
@@ -83,7 +83,7 @@ const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
 );
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
-  const { currentUser, updateTaskValue, tasks } = useApp();
+  const { currentUser, updateTaskValue, tasks, reopenTask } = useApp();
   const [editingUrl, setEditingUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
   const [urlError, setUrlError] = useState('');
@@ -124,8 +124,59 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         Zakończono: {formatTimestamp(task.completedAt)}
       </div>
 
-      {/* Accepted value */}
-      {task.value === 'approved' && task.previousValue && (() => {
+      {/* === SCRIPT REVIEW — explicit confirmation + change-decision option === */}
+      {task.inputType === 'script_review' && task.value === 'approved' && (() => {
+        const scriptUrl = task.previousValue && /^https?:\/\/.+\..+/.test(task.previousValue) ? task.previousValue : null;
+        // Allow change-decision only if no later task in the same project has been completed yet
+        const laterDone = tasks.some(t => t.projectId === task.projectId && t.order > task.order && t.status === 'done');
+        const canChange = currentUser?.role === 'klient' && !laterDone;
+        return (
+          <div className="mb-4 space-y-3">
+            <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4">
+              <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-foreground">Scenariusz zaakceptowany</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Decyzja przekazana — zespół przechodzi do kolejnego etapu.</div>
+              </div>
+            </div>
+            {scriptUrl && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1.5">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Zaakceptowany scenariusz
+                </div>
+                <a
+                  href={scriptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary underline-offset-2 hover:underline font-medium break-all"
+                >
+                  {scriptUrl}
+                </a>
+              </div>
+            )}
+            {canChange && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2 h-10"
+                onClick={() => reopenTask(task.id)}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Zmień decyzję
+              </Button>
+            )}
+            {!canChange && currentUser?.role === 'klient' && laterDone && (
+              <p className="text-xs text-muted-foreground text-center px-2">
+                Nie można już zmienić decyzji — zespół rozpoczął kolejne etapy pomysłu.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Accepted value (skipped for script_review — handled in dedicated block above) */}
+      {task.value === 'approved' && task.previousValue && task.inputType !== 'script_review' && (() => {
         try {
           const parsed = JSON.parse(task.previousValue);
           // New format: ActorEntry[] array
