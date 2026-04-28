@@ -209,6 +209,19 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     resubmitTask(task.id, inputValue);
   };
 
+  const handleResubmitAutoApprove = () => {
+    if (task.inputType === 'text' && inputValue.trim().length === 0) {
+      setError('To pole nie może być puste');
+      return;
+    }
+    if (task.inputType === 'url' && !URL_REGEX.test(inputValue)) {
+      setError('Podaj poprawny adres URL (https://...)');
+      return;
+    }
+    setError('');
+    resubmitTaskAndAutoApprove(task.id, inputValue);
+  };
+
   const isSubmitDisabled =
     task.inputType === 'url' ? !URL_REGEX.test(inputValue) :
     task.inputType === 'text' ? inputValue.trim().length === 0 :
