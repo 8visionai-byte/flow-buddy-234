@@ -1646,7 +1646,14 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       return urgency === 'required' || urgency === 'soon';
     });
 
-    if (projectsWithWork.length === 0) {
+    // Campaigns where admin is the reviewer (no client reviewer assigned) and there are pending ideas
+    const reviewerCampaigns = campaigns.filter(c => {
+      if (c.assignedClientUserId) return false;
+      if (c.status !== 'awaiting_ideas' && c.status !== 'in_review') return false;
+      return ideas.some(i => i.campaignId === c.id && i.status === 'pending');
+    });
+
+    if (projectsWithWork.length === 0 && reviewerCampaigns.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
           <CheckCircle2 className="h-12 w-12 text-success opacity-60" />
@@ -1657,6 +1664,45 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     }
 
     const groups = getProjectGroups(projectsWithWork);
+
+    // Render "Pomysły do oceny" section (when admin acts as reviewer)
+    const renderReviewerSection = () => {
+      if (reviewerCampaigns.length === 0) return null;
+      const totalPending = reviewerCampaigns.reduce((sum, c) =>
+        sum + ideas.filter(i => i.campaignId === c.id && i.status === 'pending').length, 0);
+      return (
+        <div className="rounded-xl border border-warning/40 bg-card shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-3 md:px-6 border-b border-border bg-warning/5 rounded-t-xl">
+            <Lightbulb className="h-4 w-4 text-warning shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="font-semibold text-foreground">Pomysły do oceny</span>
+              <span className="text-xs text-muted-foreground ml-2">
+                Oceniasz jako admin — w tych kampaniach nie wyznaczono osoby z klienta.
+              </span>
+            </div>
+            <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs shrink-0">
+              {totalPending} do oceny
+            </Badge>
+          </div>
+          <div className="divide-y divide-border">
+            {reviewerCampaigns.map(campaign => {
+              const campClient = clients.find(c => c.id === campaign.clientId);
+              return (
+                <div key={campaign.id} className="px-4 py-3 md:px-6 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm text-foreground">{campClient?.companyName || 'Nieznany klient'}</span>
+                    <Badge variant="secondary" className="bg-warning/10 text-warning border-0 text-[10px]">
+                      {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' : 'Klient ocenia'}
+                    </Badge>
+                  </div>
+                  <IdeasPanel campaignId={campaign.id} role="admin" />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
 
     return (
       <div className="space-y-6">
