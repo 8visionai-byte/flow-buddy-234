@@ -2320,7 +2320,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 {previousView === 'campaigns' ? 'Kampanie' :
                  previousView === 'client' ? 'Widok Klienta' :
                  previousView === 'tasks' ? 'Moje Zadania' :
-                 previousView === 'delays' ? 'Opóźnienia' : 'Wszystkie projekty'}
+                 previousView === 'delays' ? 'Opóźnienia' : 'Wszystkie pomysły'}
               </Button>
               <span className="text-muted-foreground text-sm">·</span>
               <span className="text-sm font-medium text-foreground truncate">
