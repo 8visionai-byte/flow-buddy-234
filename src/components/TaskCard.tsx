@@ -109,8 +109,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   // socialFields state removed — handled by SocialDescriptionsInput component
   const [actorType, setActorType] = useState<'client' | 'custom'>('client');
   const [actorCustomName, setActorCustomName] = useState('');
-  const [showAcceptWithNotesForm, setShowAcceptWithNotesForm] = useState(false);
-  const [acceptNotes, setAcceptNotes] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [fileNotesSubmitted, setFileNotesSubmitted] = useState(false);
   const [editingUrl, setEditingUrl] = useState(false);
@@ -444,15 +442,13 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 <TooltipContent side="right" className="max-w-xs space-y-2 p-3 text-xs">
                   {isActorApproval ? (
                     <>
-                      <p><span className="font-semibold text-success">Zaakceptuj</span> — aktorzy zatwierdzeni, produkcja idzie dalej.</p>
-                      <p><span className="font-semibold text-success">Zaakceptuj z uwagami</span> — akceptujesz skład, ale influencer wprowadzi drobne poprawki samodzielnie. Nie wraca do Ciebie.</p>
-                      <p><span className="font-semibold text-warning">Poproś o poprawki</span> — chcesz innych aktorów. Influencer proponuje nowy skład i czeka na Twoją ponowną akceptację.</p>
+                      <p><span className="font-semibold text-success">Zaakceptuj</span> — skład aktorów zatwierdzony, produkcja idzie dalej.</p>
+                      <p><span className="font-semibold text-warning">Zmień</span> — opisz, jakich zmian oczekujesz. Influencer zaproponuje nowy skład i wróci do Ciebie po akceptację.</p>
                     </>
                   ) : (
                     <>
-                      <p><span className="font-semibold text-success">Zaakceptuj</span> — materiał zatwierdzony. Produkcja przechodzi do kolejnego etapu.</p>
-                      <p><span className="font-semibold text-success">Zaakceptuj z uwagami</span> — akceptujesz materiał, ale przekazujesz montażyście informację zwrotną do przemyślenia. Nie wraca do Ciebie ponownie.</p>
-                      <p><span className="font-semibold text-warning">Poproś o poprawki</span> — materiał wymaga zmian. Montażysta wprowadzi poprawki i prześle ponownie do Twojej akceptacji.</p>
+                      <p><span className="font-semibold text-success">Zaakceptuj</span> — materiał zatwierdzony, produkcja przechodzi do kolejnego etapu.</p>
+                      <p><span className="font-semibold text-warning">Zmień</span> — opisz, co należy poprawić. Wykonawca wprowadzi zmiany i prześle materiał ponownie do Twojej akceptacji.</p>
                     </>
                   )}
                 </TooltipContent>
@@ -536,64 +532,21 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
         })()}
 
         {/* Decision buttons */}
-        {!showFeedbackForm && !showRejectFinalForm && !showAcceptWithNotesForm ? (
+        {!showFeedbackForm && !showRejectFinalForm ? (
           <div className="space-y-2">
-            {/* Primary row: Approve + Accept with notes */}
-            <div className="grid grid-cols-2 gap-2">
-              <Button onClick={handleApprove} className="bg-success hover:bg-success/90 text-success-foreground" size="lg">
-                <ThumbsUp className="mr-2 h-4 w-4" />
-                Zaakceptuj
-              </Button>
-              <Button
-                onClick={() => setShowAcceptWithNotesForm(true)}
-                variant="outline"
-                className="border-success/50 text-success hover:bg-success/10"
-                size="lg"
-              >
-                <CheckCheck className="mr-2 h-4 w-4" />
-                Zaakceptuj z uwagami
-              </Button>
-            </div>
-            {/* Secondary row: Request changes */}
+            <Button onClick={handleApprove} className="w-full bg-success hover:bg-success/90 text-success-foreground" size="lg">
+              <ThumbsUp className="mr-2 h-4 w-4" />
+              Zaakceptuj
+            </Button>
             <Button
               onClick={() => setShowFeedbackForm(true)}
               variant="outline"
               className="w-full border-warning/50 text-warning hover:bg-warning/10"
-              size="sm"
+              size="lg"
             >
-              <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
-              Poproś o poprawki
+              <ThumbsDown className="mr-2 h-4 w-4" />
+              Zmień
             </Button>
-          </div>
-        ) : showAcceptWithNotesForm ? (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">
-              {isActorApproval ? 'Twoje uwagi dla influencera (wymagane):' : 'Dodaj uwagi dla influencera (opcjonalnie):'}
-            </p>
-            <Textarea
-              placeholder={isActorApproval ? 'Opisz jakie zmiany chcesz wprowadzić do składu...' : 'Wpisz komentarz, sugestie lub wskazówki do następnych etapów...'}
-              value={acceptNotes}
-              onChange={e => setAcceptNotes(e.target.value)}
-              rows={3}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  completeTask(task.id, acceptNotes.trim() ? `approved: ${acceptNotes.trim()}` : 'approved', currentUser?.role);
-                  setShowAcceptWithNotesForm(false);
-                  setAcceptNotes('');
-                }}
-                className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
-                disabled={isActorApproval && !acceptNotes.trim()}
-              >
-                <CheckCheck className="mr-2 h-4 w-4" />
-                Zatwierdź z uwagami
-              </Button>
-              <Button variant="ghost" onClick={() => { setShowAcceptWithNotesForm(false); setAcceptNotes(''); }}>
-                Anuluj
-              </Button>
-            </div>
           </div>
         ) : showRejectFinalForm ? (
           <div className="space-y-3">
@@ -616,8 +569,9 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           </div>
         ) : (
           <div className="space-y-3">
+            <p className="text-sm font-medium text-foreground">Opisz, co należy zmienić (wymagane):</p>
             <Textarea
-              placeholder="Opisz, co należy zmienić..."
+              placeholder="Napisz, jakich zmian oczekujesz..."
               value={feedbackValue}
               onChange={e => { setFeedbackValue(e.target.value); setError(''); }}
               rows={4}
@@ -632,7 +586,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             <div className="flex gap-2">
               <Button onClick={handleReject} className="flex-1" disabled={feedbackValue.trim().length === 0}>
                 <Send className="mr-2 h-4 w-4" />
-                Wyślij do poprawy
+                Wyślij prośbę o zmiany
               </Button>
               <Button variant="ghost" onClick={() => { setShowFeedbackForm(false); setError(''); }}>
                 Anuluj

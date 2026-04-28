@@ -1,69 +1,62 @@
-# Plan: Ujednolicenie osoby kontaktowej klienta i osoby z dostępem
+# Uproszczenie decyzji klienta — 2 przyciski zamiast 3
 
-## Problem (z podanych zrzutów)
+## Problem (od klienta)
+W zadaniach typu „akceptacja przypisanych osób" oraz „akceptacja materiału" są **trzy** przyciski decyzji:
+1. **Zaakceptuj**
+2. **Zaakceptuj z uwagami**
+3. **Poproś o poprawki**
 
-1. **Brak telefonu przy osobie z dostępem.** W `Zarządzaj klientami` przy dodawaniu osoby z dostępem jest tylko pole "Imię i nazwisko". Telefon będzie potrzebny do powiadomień (Telegram/Make.com).
-2. **Duplikacja osób.** Gdy zakładamy klienta `Dental Care Sp. z o.o.` z osobą kontaktową **Anna Kowalska**, a dodatkowo dodajemy osobę z dostępem **Anna** — w widoku „Przypisz osobę do filmu" pojawiają się obie pozycje: „Anna Kowalska — Kontakt" oraz „Anna — Konto klienta w systemie". Klient nie wie, którą wybrać. To jest ta sama osoba.
+To jest za dużo i myli użytkownika. Klient prosi o **dwa** przyciski:
+1. **Zaakceptuj** — pełna akceptacja, idziemy dalej
+2. **Zmień** — z polem na komentarz (uwagi obowiązkowe)
 
-## Założenie (zgodne z `mem://logic/client-user-unification`)
-Każdy kontakt klienta to **app_user**. „Osoba kontaktowa" wpisywana w formularzu firmy jest pierwszą osobą z dostępem (primary contact) — nie powinna istnieć obok osobnego usera o tym samym imieniu.
+Trzeba też zaktualizować opis (tooltip „i" przy tytule zadania), który dziś tłumaczy logikę trzech opcji.
 
-## Zmiany — TYLKO warstwa wizualna/UX (bez zmian schematu)
+## Zakres zmian
 
-### A) `ClientManagementDialog.tsx`
+### 1. `src/components/TaskCard.tsx` — główny widok akceptacji (linie ~539-567)
+Dotyczy zadań typu `approval` i `actor_approval` (m.in. „Zaakceptuj przypisanie osoby", „Akceptacja propozycji influencera", „Akceptacja materiału").
 
-1. **Sekcja „Nowy klient" — usuń osobne pole „Osoba kontaktowa"** (`form.contactName`) i osobne pole „Telefon firmy"/„Email firmy" w obecnej formie. Zamiast tego:
-   - Pola firmy: **Nazwa firmy** (wymagane), **Email firmy** (opcjonalny — kontaktowy do firmy), **Notatki**.
-   - Sekcja „Osoby z dostępem do systemu" pokazuje **listę osób**, gdzie **pierwsza pozycja jest oznaczona jako „Główny kontakt"** (badge `Główny`). Każda pozycja ma: imię i nazwisko + **PhoneField (telefon)** + przycisk usuń.
-   - Walidacja: musi być co najmniej **1 osoba z dostępem** (główny kontakt).
-   - Przy zapisie:
-     - `addClient({ companyName, contactName: <imię pierwszej osoby>, email, phone: <telefon pierwszej osoby>, notes })` — `contactName`/`phone` na encji `Client` wypełniamy z głównego kontaktu (zachowanie kompatybilności wstecznej z istniejącym typem `Client`).
-     - Dla **każdej** osoby z listy: `addUser({ name, role: 'klient', clientId, phone })`. Pierwsza = główny kontakt.
+**Nowy układ przycisków:**
+- **Zaakceptuj** (zielony, pełna szerokość) — wywołuje `handleApprove()` jak dziś
+- **Zmień** (outline, warning, pełna szerokość) — otwiera formularz z polem tekstowym (wymagane), po wysłaniu wywołuje `rejectTask(task.id, feedbackValue)` (czyli ten sam mechanizm co dziś „Poproś o poprawki" — wraca do influencera/montażysty z prośbą o poprawki)
 
-2. **Sekcja istniejącego klienta** (rozwinięta lista „Osoby z dostępem"):
-   - Każdy `addUser` z formularza inline przyjmuje **imię + telefon** (PhoneField), nie tylko imię. Aktualnie jest tylko jeden `Input` na imię — dodajemy obok PhoneField.
-   - Wiersz osoby pokazuje też telefon (`user.phone`) obok badge `klient`.
-   - Pierwsza utworzona osoba (lub osoba o imieniu === `client.contactName`) dostaje badge **„Główny"**.
+**Co usuwamy:**
+- Środkowy przycisk „Zaakceptuj z uwagami" wraz z całym blokiem `showAcceptWithNotesForm` (stan, formularz, handler `completeTask(..., 'approved: <notes>')`)
+- Stan `acceptNotes`, `setAcceptNotes`, `showAcceptWithNotesForm`, `setShowAcceptWithNotesForm`
 
-3. **Edycja istniejącego klienta** (`startEdit` / `renderFormFields(false)`):
-   - Usuń pola „Osoba kontaktowa" i „Telefon" z formularza firmy. Te dane edytuje się w wierszach „Osoby z dostępem" (każda osoba ma swój telefon).
-   - Zostają: Nazwa firmy, Email firmy, Notatki.
+**Etykieta formularza „Zmień":**
+- Tytuł: „Opisz, co należy zmienić" (wymagane)
+- CTA: „Wyślij prośbę o zmiany"
+- Anuluj — wraca do widoku 2 przycisków
 
-### B) `ActorAssignmentInput.tsx`
+### 2. `src/components/TaskCard.tsx` — tooltip opisu (linie ~444-460)
+Aktualny tooltip wymienia 3 opcje. Zaktualizujemy do dwóch wariantów:
 
-W widoku „Przypisz osobę do filmu" usuwamy duplikat:
+**Dla `actor_approval`:**
+- **Zaakceptuj** — skład aktorów zatwierdzony, produkcja idzie dalej
+- **Zmień** — opisz, jakich zmian oczekujesz; influencer zaproponuje nowy skład i wróci do Ciebie po akceptację
 
-```tsx
-// linia 274 — KASUJEMY cały SuggestionCard dla client.contactName
-{client && !clientUsers.some(u => u.name === client.contactName) && ( … )}
-```
+**Dla pozostałych (script/material approval):**
+- **Zaakceptuj** — materiał zatwierdzony, produkcja przechodzi do kolejnego etapu
+- **Zmień** — opisz, co należy poprawić; wykonawca wprowadzi zmiany i prześle materiał ponownie do Twojej akceptacji
 
-Zostawiamy **tylko** listę `clientUsers` (osoby z dostępem do systemu). Dzięki ujednoliceniu w (A) główny kontakt jest już w `clientUsers` jako pierwsza osoba z badge „Główny", więc nic nie znika.
+### 3. Pozostałe widoki — pozostawiamy bez zmian
+Te miejsca już mają dwie opcje i są zgodne z intencją klienta:
+- **Script review** (linie ~292-317): „Akceptuję scenariusz" / „Uwagi naniesione w pliku"
+- **Frame.io review** (linie ~385-410): „Akceptuję film bez uwag" / „Uwagi dodałam/em we frame.io"
 
-Etykieta sugestii: zamiast „Konto klienta w systemie" pokazujemy bardziej naturalne **„Klient"** + telefon, jeśli jest (`u.phone`).
+Nie zmieniamy ich — używają komentarzy w zewnętrznych narzędziach (Google Docs, frame.io), nie w aplikacji.
 
-### C) Zgodność wsteczna
+### 4. Logika backendu (`AppContext.tsx`, `webhook.ts`) — bez zmian
+- `handleApprove` → `completeTask(..., 'approved', ...)` — bez zmian
+- „Zmień" → `rejectTask(task.id, feedback)` — istniejąca ścieżka odrzucenia, która generuje zadanie poprawkowe i resetuje SLA (zgodnie z pamięcią Ping-Pong / Feedback Loop)
+- Wartość `approved_with_comments` / `approved: <notes>` znika z nowych zadań typu `approval`/`actor_approval`. Stare zadania w historii pozostają wyświetlane poprawnie (CompletedTaskCard już obsługuje ten format — odczyt nie jest dotknięty).
 
-- `Client.contactName` i `Client.phone` zostają w typie (używane w wielu miejscach, np. `AdminDashboard`, `ProjectReadOnlyView`, `UserDashboard`). Wypełniamy je automatycznie z głównego kontaktu — nic w innych komponentach nie pęka.
-- `mockData.ts` — bez zmian struktury, ale jeśli istniejący mock ma `contactName: 'Anna Kowalska'` bez odpowiadającego mu `klient`-usera, dodamy w nim brakującego usera o tym samym imieniu i telefonie, żeby nie było „duchów" w istniejących danych.
+### 5. Pamięć projektu
+Zaktualizować `mem://logic/approval-consensus` (wzmianka o „Tak, ale..." / ping-pong) tak, by odzwierciedlała uproszczony model: każdy reviewer ma dwie opcje — **Zaakceptuj** lub **Zmień (z komentarzem)**. Brak pośredniego stanu „akceptuję z uwagami".
 
-### D) Migracja istniejących danych w localStorage (jednorazowo, przy starcie)
-
-W `AppContext.tsx`, po wczytaniu `clients` i `users`, dla każdego klienta:
-- jeśli `client.contactName` jest niepuste i **nie ma** żadnego usera `klient` z `clientId === client.id` o nazwie === `contactName` (case-insensitive trim) → dodaj go automatycznie z telefonem `client.phone`.
-
-Dzięki temu istniejący użytkownicy nie zobaczą nagle pustej listy osób.
-
-## Co NIE jest zmieniane
-
-- Schemat bazy / typów (`Client`, `User`) — zero zmian.
-- Logika webhooków / Make.com — bez zmian (nadal czyta `user.phone`).
-- `AddCampaignDialog` — sekcja „Nowy klient" tam już ma `pendingContacts` z telefonami, więc tylko wyrównujemy etykiety i również dodajemy logikę „pierwsza osoba = główny kontakt" (analogicznie do A).
-
-## Pliki do edycji
-
-- `src/components/ClientManagementDialog.tsx` — przebudowa formularza (A).
-- `src/components/ActorAssignmentInput.tsx` — usunięcie duplikatu sugestii (B).
-- `src/components/AddCampaignDialog.tsx` — drobne wyrównanie etykiet (analogicznie do A).
-- `src/context/AppContext.tsx` — migracja jednorazowa istniejących danych (D).
-- `src/data/mockData.ts` — uzupełnienie brakujących userów-klientów dla mocka (C).
+## Efekt dla użytkownika
+- Klient widzi dwa wyraźne przyciski: zielony „Zaakceptuj" i pomarańczowy „Zmień"
+- Po kliknięciu „Zmień" pojawia się pole na komentarz (wymagane) i przycisk „Wyślij prośbę o zmiany"
+- Tooltip „i" przy tytule zadania opisuje już tylko dwie opcje, spójnie z UI
