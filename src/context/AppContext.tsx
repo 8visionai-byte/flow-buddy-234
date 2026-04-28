@@ -139,24 +139,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { saveToStorage(STORAGE_KEYS.ideas, ideas); }, [ideas]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.campaigns, campaigns); }, [campaigns]);
 
-  // ── One-time migration: ensure every client with a contactName has a matching klient user ───
-  // This unifies "Client.contactName" and "klient app_user" so that the actor-assignment
-  // dropdown does not show duplicates for the same person.
+  // ── One-time migration: unify Client.contactName with klient app_users ───
+  // Goal: avoid showing the same person twice in dropdowns and avoid creating
+  // a duplicate user that breaks `assignedClientId` references.
+  // Strategy:
+  //   1) If a klient user with matching name already exists → do nothing.
+  //   2) Else if the client has exactly ONE klient user → rename that user to
+  //      contactName (and copy phone if missing). This preserves user IDs that
+  //      are already referenced by `assignedClientId` on projects.
+  //   3) Else (0 users for this client) → create a new user.
   const migratedRef = useRef(false);
   useEffect(() => {
     if (migratedRef.current) return;
+    if (clients.length === 0) return; // wait until clients are loaded
     migratedRef.current = true;
-    const missing: User[] = [];
+    const toCreate: User[] = [];
+    const toRename: { id: string; name: string; phone?: string }[] = [];
     clients.forEach(c => {
       const name = (c.contactName || '').trim();
       if (!name) return;
-      const exists = users.some(u =>
-        u.role === 'klient' &&
-        u.clientId === c.id &&
-        u.name.trim().toLowerCase() === name.toLowerCase()
-      );
-      if (!exists) {
-        missing.push({
+      const linked = users.filter(u => u.role === 'klient' && u.clientId === c.id);
+      const exists = linked.some(u => u.name.trim().toLowerCase() === name.toLowerCase());
+      if (exists) return;
+      if (linked.length === 1) {
+        // Rename the single existing klient user to match the contact, preserving its ID
+        const existing = linked[0];
+        toRename.push({
+          id: existing.id,
+          name,
+          phone: (existing as User & { phone?: string }).phone || c.phone || undefined,
+        });
+      } else if (linked.length === 0) {
+        toCreate.push({
           id: `u-mig-${c.id}-${Math.random().toString(36).slice(2, 7)}`,
           name,
           role: 'klient',
@@ -164,10 +178,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           phone: c.phone || undefined,
         });
       }
+      // If linked.length > 1, do nothing — admin must resolve manually.
     });
-    if (missing.length > 0) {
-      setUsers(prev => [...prev, ...missing]);
-    }
+    if (toCreate.length === 0 && toRename.length === 0) return;
+    setUsers(prev => {
+      const renamed = prev.map(u => {
+        const r = toRename.find(x => x.id === u.id);
+        return r ? { ...u, name: r.name, phone: r.phone } : u;
+      });
+      return [...renamed, ...toCreate];
+    });
   }, [clients, users]);
 
   const isApprovalType = (inputType: string) => inputType === 'approval' || inputType === 'actor_approval';
