@@ -2335,19 +2335,36 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </div>
           ) : (
             <div className="flex gap-1 py-1">
-              {VIEWS.filter(v => v.id !== 'project').map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => setActiveView(v.id)}
-                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors
-                    ${activeView === v.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-                >
-                  <v.icon className="h-4 w-4" />
-                  {v.label}
-                </button>
-              ))}
+              {VIEWS.filter(v => v.id !== 'project').map(v => {
+                // Badge: count ideas where admin is the reviewer (campaign has no client reviewer assigned)
+                const adminReviewerIdeasCount = v.id === 'tasks'
+                  ? ideas.filter(i => {
+                      if (i.status !== 'pending') return false;
+                      const camp = campaigns.find(c => c.id === i.campaignId);
+                      return !!camp && !camp.assignedClientUserId
+                        && (camp.status === 'awaiting_ideas' || camp.status === 'in_review');
+                    }).length
+                  : 0;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setActiveView(v.id)}
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors
+                      ${activeView === v.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                  >
+                    <v.icon className="h-4 w-4" />
+                    {v.label}
+                    {adminReviewerIdeasCount > 0 && (
+                      <span className={`ml-0.5 inline-flex items-center justify-center rounded-full text-[10px] font-bold min-w-[18px] h-[18px] px-1
+                        ${activeView === v.id ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
+                        {adminReviewerIdeasCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
