@@ -444,15 +444,13 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 <TooltipContent side="right" className="max-w-xs space-y-2 p-3 text-xs">
                   {isActorApproval ? (
                     <>
-                      <p><span className="font-semibold text-success">Zaakceptuj</span> — aktorzy zatwierdzeni, produkcja idzie dalej.</p>
-                      <p><span className="font-semibold text-success">Zaakceptuj z uwagami</span> — akceptujesz skład, ale influencer wprowadzi drobne poprawki samodzielnie. Nie wraca do Ciebie.</p>
-                      <p><span className="font-semibold text-warning">Poproś o poprawki</span> — chcesz innych aktorów. Influencer proponuje nowy skład i czeka na Twoją ponowną akceptację.</p>
+                      <p><span className="font-semibold text-success">Zaakceptuj</span> — skład aktorów zatwierdzony, produkcja idzie dalej.</p>
+                      <p><span className="font-semibold text-warning">Zmień</span> — opisz, jakich zmian oczekujesz. Influencer zaproponuje nowy skład i wróci do Ciebie po akceptację.</p>
                     </>
                   ) : (
                     <>
-                      <p><span className="font-semibold text-success">Zaakceptuj</span> — materiał zatwierdzony. Produkcja przechodzi do kolejnego etapu.</p>
-                      <p><span className="font-semibold text-success">Zaakceptuj z uwagami</span> — akceptujesz materiał, ale przekazujesz montażyście informację zwrotną do przemyślenia. Nie wraca do Ciebie ponownie.</p>
-                      <p><span className="font-semibold text-warning">Poproś o poprawki</span> — materiał wymaga zmian. Montażysta wprowadzi poprawki i prześle ponownie do Twojej akceptacji.</p>
+                      <p><span className="font-semibold text-success">Zaakceptuj</span> — materiał zatwierdzony, produkcja przechodzi do kolejnego etapu.</p>
+                      <p><span className="font-semibold text-warning">Zmień</span> — opisz, co należy poprawić. Wykonawca wprowadzi zmiany i prześle materiał ponownie do Twojej akceptacji.</p>
                     </>
                   )}
                 </TooltipContent>
