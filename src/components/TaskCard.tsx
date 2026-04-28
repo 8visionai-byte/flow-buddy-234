@@ -674,6 +674,16 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 <Send className="mr-2 h-4 w-4" />
                 Poprawki wprowadzone — proszę o weryfikację
               </Button>
+              <Button
+                onClick={() => resubmitTaskAndAutoApprove(task.id, task.value!)}
+                variant="outline"
+                className="w-full"
+              >
+                Poprawki naniesione — bez akceptacji klienta
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Użyj, gdy uwagi były drobne i klient nie musi tego ponownie zatwierdzać.
+              </p>
             </div>
           ) : task.inputType === 'url' ? (
             <div className="relative">
