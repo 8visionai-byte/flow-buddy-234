@@ -180,13 +180,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       // If linked.length > 1, do nothing — admin must resolve manually.
     });
-    if (toCreate.length === 0 && toRename.length === 0) return;
+    if (toCreate.length === 0 && toRename.length === 0) {
+      // Still run dedupe pass even if nothing to create/rename
+    }
     setUsers(prev => {
       const renamed = prev.map(u => {
         const r = toRename.find(x => x.id === u.id);
         return r ? { ...u, name: r.name, phone: r.phone } : u;
       });
-      return [...renamed, ...toCreate];
+      const combined = [...renamed, ...toCreate];
+      // Dedupe: drop any klient user whose id starts with "u-mig-" if there's
+      // already another klient user with the same (clientId, name).
+      const seen = new Set<string>();
+      const keep: User[] = [];
+      // Prefer non-"u-mig-" ids first so they win deduplication.
+      const ordered = [...combined].sort((a, b) => {
+        const am = a.id.startsWith('u-mig-') ? 1 : 0;
+        const bm = b.id.startsWith('u-mig-') ? 1 : 0;
+        return am - bm;
+      });
+      ordered.forEach(u => {
+        if (u.role !== 'klient') { keep.push(u); return; }
+        const key = `${u.clientId ?? ''}::${u.name.trim().toLowerCase()}`;
+        if (seen.has(key)) return; // duplicate — drop
+        seen.add(key);
+        keep.push(u);
+      });
+      return keep;
     });
   }, [clients, users]);
 
