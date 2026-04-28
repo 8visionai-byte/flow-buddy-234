@@ -1706,6 +1706,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
     return (
       <div className="space-y-6">
+        {renderReviewerSection()}
         {groups.map(group => {
           const groupAdminTaskCount = group.projects.reduce((sum, project) => {
             const adminTasks = getAdminTasksForProject(project.id);
