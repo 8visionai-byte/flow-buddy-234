@@ -127,10 +127,16 @@ const AddCampaignDialog = ({ onCreated }: { onCreated?: () => void } = {}) => {
 
   const influencers = users.filter(u => u.role === 'influencer');
   const clientUsers = clientId ? users.filter(u => u.role === 'klient' && u.clientId === clientId) : [];
-  // auto-select only when exactly one klient user AND none manually chosen AND not explicitly cleared
-  const autoSelectedClientUser = clientUsers.length === 1 && !clientUserId && !reviewerCleared ? clientUsers[0] : null;
+  // Auto-select primary contact (first by id) when admin hasn't manually chosen and didn't explicitly clear.
+  // Rationale: every campaign should have a reviewer by default — the primary client contact.
+  const sortedClientUsers = [...clientUsers].sort((a, b) => a.id.localeCompare(b.id));
+  const autoSelectedClientUser = sortedClientUsers.length > 0 && !clientUserId && !reviewerCleared
+    ? sortedClientUsers[0]
+    : null;
   const effectiveClientUserId = clientUserId || (autoSelectedClientUser?.id ?? '');
-  const isValid = !!clientId && !!influencerId;
+  // Reviewer must be either an explicit client user OR an explicit "admin" decision (reviewerCleared).
+  const reviewerDecisionMade = !!effectiveClientUserId || reviewerCleared;
+  const isValid = !!clientId && !!influencerId && reviewerDecisionMade;
 
   const [clientEmailError, setClientEmailError] = useState('');
 
