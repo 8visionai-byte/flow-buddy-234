@@ -1152,7 +1152,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {/* Active stage */}
           {activeTask && (
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="font-medium">Etap:</span> {activeTask.title}
+              <span className="font-medium">Etap:</span> {activeTasks.map(t => t.title).join(', ')}
             </p>
           )}
 
