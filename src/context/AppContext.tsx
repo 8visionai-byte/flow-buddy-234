@@ -1067,7 +1067,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, clients, projects, tasks, recordings, projectNotes,
-      completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask,
+      completeTask, rejectTask, resubmitTask, resubmitTaskAndAutoApprove, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask,
       addProject, deleteProject, toggleFreezeProject, assignToProject,
       addUser, updateUser, deleteUser, addClient, updateClient, deleteClient, setTaskDeadline, setFilmingDate,
       addRecording, deleteRecording, addProjectNote, deleteProjectNote, setPublicationDate, setProjectPriority, setProjectSla,
