@@ -2382,36 +2382,58 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </div>
           ) : (
             <div className="flex gap-1 py-1">
-              {VIEWS.filter(v => v.id !== 'project').map(v => {
-                // Badge: count ideas where admin is the reviewer (campaign has no client reviewer assigned)
-                const adminReviewerIdeasCount = v.id === 'tasks'
-                  ? ideas.filter(i => {
-                      if (i.status !== 'pending') return false;
-                      const camp = campaigns.find(c => c.id === i.campaignId);
-                      return !!camp && !camp.assignedClientUserId
-                        && (camp.status === 'awaiting_ideas' || camp.status === 'in_review');
-                    }).length
-                  : 0;
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => setActiveView(v.id)}
-                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors
-                      ${activeView === v.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-                  >
-                    <v.icon className="h-4 w-4" />
-                    {v.label}
-                    {adminReviewerIdeasCount > 0 && (
-                      <span className={`ml-0.5 inline-flex items-center justify-center rounded-full text-[10px] font-bold min-w-[18px] h-[18px] px-1
-                        ${activeView === v.id ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
-                        {adminReviewerIdeasCount}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {(() => {
+                const activeProjectIds = new Set(projects.filter(p => p.status === 'active').map(p => p.id));
+                const adminTasksAll = tasks.filter(t => t.assignedRoles.includes('admin') && activeProjectIds.has(t.projectId));
+                const adminBlockingCount = adminTasksAll.filter(t => isAdminTaskBlocking(t)).length;
+                const adminActionableCount = adminTasksAll.filter(t => isAdminTaskActionable(t)).length;
+                const adminReviewerIdeasCount = ideas.filter(i => {
+                  if (i.status !== 'pending') return false;
+                  const camp = campaigns.find(c => c.id === i.campaignId);
+                  return !!camp && !camp.assignedClientUserId
+                    && (camp.status === 'awaiting_ideas' || camp.status === 'in_review');
+                }).length;
+                const tasksBadgeCount = adminActionableCount + adminReviewerIdeasCount;
+                const tasksHasBlocking = adminBlockingCount > 0;
+
+                return VIEWS.filter(v => v.id !== 'project').map(v => {
+                  let badgeCount = 0;
+                  let badgeBlocking = false;
+                  if (v.id === 'tasks') {
+                    badgeCount = tasksBadgeCount;
+                    badgeBlocking = tasksHasBlocking;
+                  } else if (v.id === 'details') {
+                    badgeCount = adminBlockingCount;
+                    badgeBlocking = adminBlockingCount > 0;
+                  }
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => setActiveView(v.id)}
+                      className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors
+                        ${activeView === v.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                    >
+                      <v.icon className="h-4 w-4" />
+                      {v.label}
+                      {badgeCount > 0 && (
+                        <span
+                          title={badgeBlocking ? `${badgeCount} zadań blokuje proces` : `${badgeCount} do zrobienia`}
+                          className={`ml-0.5 inline-flex items-center justify-center rounded-full text-[10px] font-bold min-w-[18px] h-[18px] px-1
+                            ${activeView === v.id
+                              ? 'bg-primary-foreground/20 text-primary-foreground'
+                              : badgeBlocking
+                                ? 'bg-destructive text-destructive-foreground animate-pulse'
+                                : 'bg-primary text-primary-foreground'}`}
+                        >
+                          {badgeCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
