@@ -187,7 +187,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
             Priorytet montażu
           </DialogTitle>
           <DialogDescription>
-            Przypisz priorytet i montażystę dla projektu{' '}
+            Przypisz priorytet i montażystę dla pomysłu{' '}
             <span className="font-semibold text-foreground">{project?.name}</span>
             {client && <span className="text-muted-foreground"> · {client.name}</span>}
           </DialogDescription>
@@ -262,7 +262,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 <div className={`h-2.5 w-2.5 rounded-full ${PRIO[currentPriority].dot}`} />
-                Priorytet tego projektu
+                Priorytet tego pomysłu
               </label>
               <Select
                 value={currentPriority}
@@ -306,7 +306,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Kolejka montażu · {allQueued.length}{' '}
-                    {allQueued.length === 1 ? 'projekt' : 'projekty'}
+                    {allQueued.length === 1 ? 'pomysł' : allQueued.length < 5 ? 'pomysły' : 'pomysłów'}
                   </span>
                   {!isOverloaded && (
                     <div className="flex items-center gap-1 text-xs text-success">
@@ -327,7 +327,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
                     <thead className="bg-muted/50 text-xs text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium w-6">#</th>
-                        <th className="px-3 py-2 text-left font-medium">Projekt</th>
+                        <th className="px-3 py-2 text-left font-medium">Pomysł</th>
                         <th className="px-3 py-2 text-left font-medium">Klient</th>
                         <th className="px-3 py-2 text-left font-medium w-40">Priorytet</th>
                         <th className="px-3 py-2 text-left font-medium w-24">Czas</th>
@@ -413,7 +413,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
                   {/* Slot headers */}
                   <div className="flex border-b border-border bg-muted/50">
                     <div className="w-40 shrink-0 px-3 py-1.5 text-xs text-muted-foreground font-medium border-r border-border">
-                      Projekt
+                      Pomysł
                     </div>
                     {slotHeaders.map((h, i) => (
                       <div
@@ -474,7 +474,7 @@ export default function PriorityAssignmentDialog({ task, open, onOpenChange }: P
               {allQueued.length === 1 && (
                 <div className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-xs text-success">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Montażysta nie ma innych projektów w kolejce — idealny wybór!
+                  Montażysta nie ma innych pomysłów w kolejce — idealny wybór!
                 </div>
               )}
             </>

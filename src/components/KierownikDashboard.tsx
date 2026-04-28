@@ -56,7 +56,7 @@ const KierownikDashboard = () => {
         {activeProjects.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Video className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p>Brak aktywnych projektów</p>
+            <p>Brak aktywnych pomysłów</p>
           </div>
         ) : (
           <div className="space-y-2">

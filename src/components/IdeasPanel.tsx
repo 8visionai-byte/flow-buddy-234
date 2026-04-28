@@ -189,7 +189,7 @@ const IdeasPanel = ({ campaignId, role, projectName }: IdeasPanelProps) => {
             {idea.resultingProjectId && (
               <div className="mt-1.5 flex items-center gap-1">
                 <FolderOpen className="h-3 w-3 text-success" />
-                <span className="text-[10px] font-medium text-success">Projekt stworzony</span>
+                <span className="text-[10px] font-medium text-success">Pomysł utworzony</span>
               </div>
             )}
             <p className="text-[10px] text-muted-foreground mt-1.5">
