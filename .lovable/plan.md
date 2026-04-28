@@ -1,45 +1,55 @@
-# Personalizacja: nazwa firmy zamiast "Klient"
+# Pomysły utykają, gdy nie ma oceniającego
 
-## Cel
-Gdy zalogowany użytkownik ma rolę `klient`, w jego UI nie pokazujemy generycznego słowa „Klient", tylko nazwę jego firmy (`Client.companyName`, dostępna przez `user.clientId`). Reszta widoków (Admin, Influencer, Montażysta, historia, ślady audytu) zostaje bez zmian — tam „Klient" jest opisem roli innej osoby i ma sens.
+## Diagnoza
+
+Pomysł utknął, bo kampania miała `assignedClientUserId = null`. W tym stanie:
+
+- **Klient nie widzi pomysłów** — w `UserDashboard.tsx:181` filtr `c.assignedClientUserId !== currentUser.id` odrzuca kampanię dla każdego użytkownika klienta.
+- **Admin też nic nie widzi** — w panelu admina nie ma żadnej zakładki/sekcji „pomysły do oceny przeze mnie", mimo że opcja `— Ocenia admin —` istnieje w selectach.
+- Auto-przypisanie w `AddCampaignDialog` działa tylko gdy klient ma **dokładnie jedną** osobę kontaktową (linia 131). Gdy jest 2+ kontaktów i admin nie wybierze ręcznie → zapisuje się `null`.
+
+Z założenia (Twoje słowa) oceniającym powinna być **osoba przypisana do kontaktu** ze strony klienta — czyli osoba oznaczona jako primary contact (mamy taką flagę zgodnie z memory `client-user-unification`).
 
 ## Zakres zmian
 
-### 1. Helper roli (centralnie)
-W `src/types/index.ts` dodać czystą funkcję pomocniczą:
+### 1. Domyślny oceniający = primary contact klienta
+Plik: `src/components/AddCampaignDialog.tsx` (linie ~126–132).
 
-```ts
-export const getRoleDisplayLabel = (
-  user: { role: UserRole; clientId?: string | null },
-  clients: { id: string; companyName: string }[]
-): string
-```
+Zmiana logiki `autoSelectedClientUser`:
+- jeśli wśród `clientUsers` jest osoba z flagą primary contact → wybierz ją,
+- w przeciwnym razie, jeśli jest dokładnie jedna osoba → wybierz ją (obecne zachowanie),
+- w przeciwnym razie → bez auto-wyboru (admin musi świadomie wybrać).
 
-Zwraca `companyName` gdy `user.role === 'klient'` i znaleziono firmę; w przeciwnym razie `ROLE_LABELS[user.role]`. Dzięki temu nie duplikujemy logiki.
+Dodatkowo: walidacja `isValid` — jeśli admin świadomie nie zaznaczył „Ocenia admin" i nie wybrał nikogo z listy, blokujemy „Utwórz" i pokazujemy hint pod selectem („Wybierz osobę oceniającą lub wybierz «Ocenia admin»"). Cel: nie da się zapisać kampanii w stanie „nikt nie ocenia, bez świadomej decyzji".
 
-### 2. Header użytkownika — `src/components/UserDashboard.tsx` (linia ~764)
-Zamiast `{ROLE_LABELS[currentUser.role]}` użyć `getRoleDisplayLabel(currentUser, clients)`. To jest miejsce widoczne na zrzucie ekranu („Anna Kowalska / Klient" → „Anna Kowalska / Nazwa Firmy Sp. z o.o.").
+### 2. Backfill istniejących kampanii
+Plik: `src/context/AppContext.tsx`.
 
-### 3. RoleSelector — `src/components/RoleSelector.tsx`
-Nagłówek grupy „Klient" (linia 72, `group[0].label`) — gdy grupa to klienci, zamiast jednego nagłówka „Klient" pogrupować przyciski klientów per firma (po `user.clientId`) i jako nagłówek wyświetlać nazwę firmy. Jeśli klient nie ma przypisanej firmy → fallback do „Klient".
+W momencie ładowania kampanii (lub przy pierwszym renderze) — dla kampanii ze statusem `awaiting_ideas`/`in_review` i `assignedClientUserId === null`, jeśli istnieje primary contact klienta, ustawiamy go jako oceniającego (jednorazowy soft-fix). Dzięki temu Twój utknięty pomysł rozwiąże się sam po wejściu, bez konieczności ręcznego klikania.
 
-### 4. Widoki własnych zadań/pomysłów klienta
-Sprawdzić i podmienić ewentualne sformułowania typu „Jako Klient…", „Twoja rola: Klient" w:
-- `src/components/UserDashboard.tsx` (sekcja powitalna i puste stany dla `currentUser.role === 'klient'`),
-- `src/components/IdeasPanel.tsx` i `src/components/CompletedTaskCard.tsx` — ale **tylko** komunikaty skierowane do samego klienta („Czekasz aż Klient…"). W audycie historii (`history.by`, badge'e ról) zostawiamy `ROLE_LABELS` bez zmian — to opis kto wykonał akcję, nie personalizacja.
+### 3. Widok admina: „Pomysły do oceny"
+Plik: `src/components/AdminDashboard.tsx`.
 
-### 5. Czego NIE zmieniamy
-- Wszystkie widoki Admina/Influencera/Montażysty/Kierownika — tam „Klient" oznacza inną stronę procesu i musi pozostać jako rola.
-- Webhooki (`src/lib/webhook.ts`) — `role_label` to dane techniczne dla Make.com.
-- Historia akcji, `roleCompletions`, badge'e ról w timeline — opisują rolę aktora, nie tożsamość zalogowanego.
-- Ogólne komunikaty systemowe widoczne dla innych ról („Klient ocenia film…", „Klient zaakceptował pomysł…") — to opis czyjejś akcji, nie personalizacja siebie.
+W zakładce **Moje Zadania** (i na badge'u zakładki) admin powinien widzieć również pomysły, dla których jest oceniającym — czyli te, gdzie `campaign.assignedClientUserId === null` **oraz** `idea.status === 'pending'`. Dodajemy:
+- sekcję „Pomysły do oceny" w „Moje Zadania" admina, listującą każdy pending idea + kampanię + przyciski „Akceptuj / Tak, ale… / Odrzuć / Zachowaj na później" (te same akcje co u klienta, wywołujące `reviewIdea(..., currentUser.id)`),
+- licznik tych pomysłów dolicza się do badge'a „Moje Zadania" admina (spójne z regułą `unified-badges`).
+
+### 4. Komunikat „nie ma oceniającego" (defensywny UX)
+Plik: `src/components/AdminDashboard.tsx` (lista kampanii, linia ~1492).
+
+Gdy `assignedClientUserId === null` i są pending pomysły → przy nazwie kampanii mała czerwona plakietka „Brak oceniającego — ustaw" (klikalna, otwiera istniejący select). Żeby na przyszłość admin od razu widział anomalię.
+
+## Czego nie zmieniamy
+
+- Mechaniki głosowania klienta (`client_votes`, multi-reviewer) — zostają bez zmian.
+- Webhooków — `reviewIdea` już dziś przekazuje aktora, więc działa poprawnie też dla admina jako oceniającego.
+- Filtra widoczności klienta (`c.assignedClientUserId !== currentUser.id`) — nadal poprawny, bo backfill + walidacja zapewnią, że dla kampanii „klient ocenia" zawsze jest ID.
 
 ## Pamięć
-Dopisać memory `mem://logic/client-personalization`: w widokach własnych klienta etykieta roli renderowana jest jako `companyName`; w widokach innych ról oraz w historii zostaje „Klient".
+Dopisać memory `mem://logic/idea-reviewer-defaults`: domyślnym oceniającym pomysły jest primary contact klienta; jeśli admin świadomie wybrał „Ocenia admin", pomysły pojawiają się w jego „Moje Zadania" jako sekcja „Pomysły do oceny". Brak oceniającego = blokada zapisu kampanii i czerwona plakietka na istniejących kampaniach.
 
 ## Pliki do edycji
-- `src/types/index.ts` (helper)
-- `src/components/UserDashboard.tsx` (header + komunikaty do siebie)
-- `src/components/RoleSelector.tsx` (nagłówki grup klientów per firma)
-- `src/components/IdeasPanel.tsx`, `src/components/CompletedTaskCard.tsx` — przejrzeć i podmienić tylko komunikaty „do mnie jako klienta"
-- `mem://logic/client-personalization` (nowy plik + wpis w `mem://index.md`)
+- `src/components/AddCampaignDialog.tsx` (auto-wybór primary + walidacja)
+- `src/context/AppContext.tsx` (backfill kampanii bez oceniającego)
+- `src/components/AdminDashboard.tsx` (sekcja „Pomysły do oceny" w Moich Zadaniach + badge + plakietka „Brak oceniającego")
+- `mem://logic/idea-reviewer-defaults` (+ wpis w `mem://index.md`)

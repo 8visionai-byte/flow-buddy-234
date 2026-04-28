@@ -210,6 +210,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [clients, users]);
 
+  // ── One-time backfill: assign reviewer to campaigns missing one ─────────
+  // For active campaigns (awaiting_ideas / in_review) with assignedClientUserId === null,
+  // pick the first (by id) klient user of the campaign's client as the reviewer.
+  // Without this, ideas stall: the client filter (c.assignedClientUserId !== currentUser.id)
+  // hides the campaign from every klient user.
+  const reviewerBackfillRef = useRef(false);
+  useEffect(() => {
+    if (reviewerBackfillRef.current) return;
+    if (campaigns.length === 0) return;
+    if (users.length === 0) return;
+    reviewerBackfillRef.current = true;
+    const updates: { id: string; userId: string }[] = [];
+    campaigns.forEach(c => {
+      if (c.assignedClientUserId) return;
+      if (c.status !== 'awaiting_ideas' && c.status !== 'in_review') return;
+      const candidates = users
+        .filter(u => u.role === 'klient' && u.clientId === c.clientId)
+        .sort((a, b) => a.id.localeCompare(b.id));
+      if (candidates.length > 0) {
+        updates.push({ id: c.id, userId: candidates[0].id });
+      }
+    });
+    if (updates.length > 0) {
+      setCampaigns(prev => prev.map(c => {
+        const u = updates.find(x => x.id === c.id);
+        return u ? { ...c, assignedClientUserId: u.userId } : c;
+      }));
+    }
+  }, [campaigns, users]);
+
   const isApprovalType = (inputType: string) => inputType === 'approval' || inputType === 'actor_approval';
 
   // When a pre-valued filming task gets unlocked by the pipeline (locked → todo), auto-complete it

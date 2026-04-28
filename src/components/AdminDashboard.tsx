@@ -1504,6 +1504,11 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                          campaign.status === 'in_review' ? 'Klient ocenia' :
                          campaign.status === 'completed' ? 'Zakończona' : 'Anulowana'}
                       </Badge>
+                      {!campaign.assignedClientUserId && pendingCount > 0 && (
+                        <Badge variant="secondary" className="border-0 text-xs bg-destructive/10 text-destructive animate-pulse">
+                          Brak oceniającego — ustaw poniżej
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
                       <span className="flex items-center gap-1">
@@ -1641,7 +1646,14 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       return urgency === 'required' || urgency === 'soon';
     });
 
-    if (projectsWithWork.length === 0) {
+    // Campaigns where admin is the reviewer (no client reviewer assigned) and there are pending ideas
+    const reviewerCampaigns = campaigns.filter(c => {
+      if (c.assignedClientUserId) return false;
+      if (c.status !== 'awaiting_ideas' && c.status !== 'in_review') return false;
+      return ideas.some(i => i.campaignId === c.id && i.status === 'pending');
+    });
+
+    if (projectsWithWork.length === 0 && reviewerCampaigns.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
           <CheckCircle2 className="h-12 w-12 text-success opacity-60" />
@@ -1653,8 +1665,48 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
     const groups = getProjectGroups(projectsWithWork);
 
+    // Render "Pomysły do oceny" section (when admin acts as reviewer)
+    const renderReviewerSection = () => {
+      if (reviewerCampaigns.length === 0) return null;
+      const totalPending = reviewerCampaigns.reduce((sum, c) =>
+        sum + ideas.filter(i => i.campaignId === c.id && i.status === 'pending').length, 0);
+      return (
+        <div className="rounded-xl border border-warning/40 bg-card shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-3 md:px-6 border-b border-border bg-warning/5 rounded-t-xl">
+            <Lightbulb className="h-4 w-4 text-warning shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="font-semibold text-foreground">Pomysły do oceny</span>
+              <span className="text-xs text-muted-foreground ml-2">
+                Oceniasz jako admin — w tych kampaniach nie wyznaczono osoby z klienta.
+              </span>
+            </div>
+            <Badge variant="secondary" className="bg-destructive/10 text-destructive border-0 text-xs shrink-0">
+              {totalPending} do oceny
+            </Badge>
+          </div>
+          <div className="divide-y divide-border">
+            {reviewerCampaigns.map(campaign => {
+              const campClient = clients.find(c => c.id === campaign.clientId);
+              return (
+                <div key={campaign.id} className="px-4 py-3 md:px-6 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm text-foreground">{campClient?.companyName || 'Nieznany klient'}</span>
+                    <Badge variant="secondary" className="bg-warning/10 text-warning border-0 text-[10px]">
+                      {campaign.status === 'awaiting_ideas' ? 'Oczekuje na pomysły' : 'Klient ocenia'}
+                    </Badge>
+                  </div>
+                  <IdeasPanel campaignId={campaign.id} role="admin" />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-6">
+        {renderReviewerSection()}
         {groups.map(group => {
           const groupAdminTaskCount = group.projects.reduce((sum, project) => {
             const adminTasks = getAdminTasksForProject(project.id);
@@ -2330,19 +2382,36 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </div>
           ) : (
             <div className="flex gap-1 py-1">
-              {VIEWS.filter(v => v.id !== 'project').map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => setActiveView(v.id)}
-                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors
-                    ${activeView === v.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-                >
-                  <v.icon className="h-4 w-4" />
-                  {v.label}
-                </button>
-              ))}
+              {VIEWS.filter(v => v.id !== 'project').map(v => {
+                // Badge: count ideas where admin is the reviewer (campaign has no client reviewer assigned)
+                const adminReviewerIdeasCount = v.id === 'tasks'
+                  ? ideas.filter(i => {
+                      if (i.status !== 'pending') return false;
+                      const camp = campaigns.find(c => c.id === i.campaignId);
+                      return !!camp && !camp.assignedClientUserId
+                        && (camp.status === 'awaiting_ideas' || camp.status === 'in_review');
+                    }).length
+                  : 0;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setActiveView(v.id)}
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors
+                      ${activeView === v.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                  >
+                    <v.icon className="h-4 w-4" />
+                    {v.label}
+                    {adminReviewerIdeasCount > 0 && (
+                      <span className={`ml-0.5 inline-flex items-center justify-center rounded-full text-[10px] font-bold min-w-[18px] h-[18px] px-1
+                        ${activeView === v.id ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
+                        {adminReviewerIdeasCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
