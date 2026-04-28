@@ -31,12 +31,23 @@ const RoleSelector = () => {
 
   const getActiveTaskCount = (user: typeof users[0]) => {
     const assignedProjectIds = getAssignedProjectIds(user);
-    const projectTaskCount = tasks.filter(t =>
-      assignedProjectIds.includes(t.projectId) &&
-      t.assignedRoles.includes(user.role as any) &&
-      (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision') &&
-      !(t.assignedRoles.length > 1 && t.roleCompletions[user.role])
-    ).length;
+    // Kierownik Planu sees his tasks in dashboard regardless of `locked` status
+    // (Potwierdź nagranie + Wnieś uwagi przed montażem are actionable as long as
+    // they exist and haven't been completed by him). Count them the same way here
+    // so the badge matches the dashboard.
+    const projectTaskCount = user.role === 'kierownik_planu'
+      ? tasks.filter(t =>
+          assignedProjectIds.includes(t.projectId) &&
+          t.assignedRoles.includes('kierownik_planu') &&
+          t.status !== 'done' &&
+          !t.roleCompletions['kierownik_planu']
+        ).length
+      : tasks.filter(t =>
+          assignedProjectIds.includes(t.projectId) &&
+          t.assignedRoles.includes(user.role as any) &&
+          (t.status === 'todo' || t.status === 'pending_client_approval' || t.status === 'needs_influencer_revision') &&
+          !(t.assignedRoles.length > 1 && t.roleCompletions[user.role])
+        ).length;
 
     const campaignTaskCount = user.role === 'influencer'
       ? campaigns.filter(c => c.assignedInfluencerId === user.id && c.status === 'awaiting_ideas').length
