@@ -1,62 +1,47 @@
-# Uproszczenie decyzji klienta — 2 przyciski zamiast 3
+# Korekta przypisania osób przez influencera (przed akceptacją klienta)
 
-## Problem (od klienta)
-W zadaniach typu „akceptacja przypisanych osób" oraz „akceptacja materiału" są **trzy** przyciski decyzji:
-1. **Zaakceptuj**
-2. **Zaakceptuj z uwagami**
-3. **Poproś o poprawki**
+## Problem
+Influencer wysłał zadanie „Przypisz osobę do filmu" z błędną obsadą (np. dał tylko Annę Kowalską, a miała być Dorota zamiast Janusza). Klient jeszcze nie zaakceptował, ale w zakładce „Wykonane" influencer widzi tylko podgląd przesłanej treści — bez żadnej opcji korekty. Nie ma jak naprawić pomyłki, dopóki klient nie kliknie „Zmień", a to wprowadza niepotrzebną pętlę i hałas w historii.
 
-To jest za dużo i myli użytkownika. Klient prosi o **dwa** przyciski:
-1. **Zaakceptuj** — pełna akceptacja, idziemy dalej
-2. **Zmień** — z polem na komentarz (uwagi obowiązkowe)
+## Rozwiązanie
+Dodać tę samą mechanikę „Popraw", która już działa dla URL-i (przycisk **„Popraw link"** widoczny w `CompletedTaskCard` dla influencera). Analogicznie pojawi się **„Popraw obsadę"** dla zadań typu `actor_assignment`, ale tylko dopóki klient ma jeszcze decyzję przed sobą.
 
-Trzeba też zaktualizować opis (tooltip „i" przy tytule zadania), który dziś tłumaczy logikę trzech opcji.
+### Warunki dostępności (kiedy widać „Popraw obsadę")
+1. `task.inputType === 'actor_assignment'`
+2. `task.status === 'done'`
+3. `currentUser.role === 'influencer'` i task ma w `assignedRoles` rolę `influencer`
+4. **Bramka bezpieczeństwa:** powiązane zadanie akceptacji u klienta (`actor_approval` w tym samym `projectId`, najnowsze) ma `status === 'pending_client_approval'` — czyli klient jeszcze nie kliknął „Zaakceptuj" ani „Zmień". Po decyzji klienta przycisk znika i korekta odbywa się normalną ścieżką ping-pong (zadanie wraca do influencera ze statusem `needs_influencer_revision`, gdzie edycja obsady już istnieje).
 
-## Zakres zmian
+### UI
+Po wejściu w ukończony task „Przypisz osobę do filmu":
+- W ramce „Przesłana treść" obok listy aktorów pojawia się mały przycisk **„Popraw obsadę"** (ikonka ołówka), spójny stylistycznie z istniejącym „Popraw link".
+- Klik otwiera ten sam komponent `ActorAssignmentInput` (z `initialActors` wczytanymi z aktualnej wartości), z dwoma akcjami: **„Zapisz"** (potwierdza nową obsadę) i **„Anuluj"** (powrót do podglądu, bez zmian).
+- Po zapisaniu: aktualizujemy `task.value` nową listą `ActorEntry[]` i równolegle aktualizujemy `previousValue` w powiązanym zadaniu akceptacji klienta, żeby klient widział poprawioną obsadę bez przeładowania kontekstu.
+- Komunikat toast: „Obsada poprawiona. Klient zobaczy zaktualizowaną propozycję."
 
-### 1. `src/components/TaskCard.tsx` — główny widok akceptacji (linie ~539-567)
-Dotyczy zadań typu `approval` i `actor_approval` (m.in. „Zaakceptuj przypisanie osoby", „Akceptacja propozycji influencera", „Akceptacja materiału").
+### Wpis do historii
+Akcja zapisuje wpis w `task.history` typu `resubmitted` z opisem „Influencer skorygował obsadę przed decyzją klienta" — zgodnie z zasadą memory: historię tworzymy tylko przy świadomych akcjach użytkownika. SLA klienta nie jest resetowane (to nie jest pełen ping-pong, klient po prostu otrzymuje świeższą wersję tej samej propozycji).
 
-**Nowy układ przycisków:**
-- **Zaakceptuj** (zielony, pełna szerokość) — wywołuje `handleApprove()` jak dziś
-- **Zmień** (outline, warning, pełna szerokość) — otwiera formularz z polem tekstowym (wymagane), po wysłaniu wywołuje `rejectTask(task.id, feedbackValue)` (czyli ten sam mechanizm co dziś „Poproś o poprawki" — wraca do influencera/montażysty z prośbą o poprawki)
+## Zakres zmian (technicznie)
 
-**Co usuwamy:**
-- Środkowy przycisk „Zaakceptuj z uwagami" wraz z całym blokiem `showAcceptWithNotesForm` (stan, formularz, handler `completeTask(..., 'approved: <notes>')`)
-- Stan `acceptNotes`, `setAcceptNotes`, `showAcceptWithNotesForm`, `setShowAcceptWithNotesForm`
+### `src/components/CompletedTaskCard.tsx`
+- Dodać stan: `editingActors: boolean`.
+- Dodać kalkulację `canEditActors` analogicznie do `canEditUrl`, dodatkowo sprawdzającą czy istnieje powiązany task `actor_approval` w `pending_client_approval` (przez `tasks` z kontekstu — już destrukturyzowane).
+- W bloku renderującym aktorów (linie ~370-392) — gdy `canEditActors && !editingActors`, pokazać przycisk „Popraw obsadę" w nagłówku ramki (analogicznie jak `canEditUrl`).
+- Gdy `editingActors`, w miejscu listy aktorów wyrenderować `<ActorAssignmentInput initialActors={...} client={...} clientUsers={...} onSubmit={...} />` z handlerem zapisu i przyciskiem „Anuluj".
 
-**Etykieta formularza „Zmień":**
-- Tytuł: „Opisz, co należy zmienić" (wymagane)
-- CTA: „Wyślij prośbę o zmiany"
-- Anuluj — wraca do widoku 2 przycisków
+### `src/context/AppContext.tsx`
+- Dodać metodę `updateActorAssignment(taskId, newActorsJson)` (lub rozszerzyć semantycznie istniejące `updateTaskValue` o synchronizację `previousValue` powiązanego zadania `actor_approval`). Preferowane: nowa metoda dla jasności intencji.
+- Implementacja:
+  1. Znajdź target task; sprawdź warunki (influencer, done, actor_assignment).
+  2. Znajdź powiązane zadanie `actor_approval` (`projectId === target.projectId && inputType === 'actor_approval' && status === 'pending_client_approval'`); jeśli brak — przerwij (edycja niedozwolona).
+  3. Zaktualizuj `target.value` na nową JSON-listę aktorów.
+  4. Zaktualizuj `approval.previousValue` na tę samą nową listę.
+  5. Dopisz wpis do `target.history`: `{ action: 'resubmitted', value: nowa lista, role: 'influencer', timestamp: now }`.
+  6. Zapisz w localStorage; webhook (jeśli aktywny) — wysyła notyfikację o korekcie do klienta (zgodnie z istniejącym wzorcem `webhook.ts`).
 
-### 2. `src/components/TaskCard.tsx` — tooltip opisu (linie ~444-460)
-Aktualny tooltip wymienia 3 opcje. Zaktualizujemy do dwóch wariantów:
-
-**Dla `actor_approval`:**
-- **Zaakceptuj** — skład aktorów zatwierdzony, produkcja idzie dalej
-- **Zmień** — opisz, jakich zmian oczekujesz; influencer zaproponuje nowy skład i wróci do Ciebie po akceptację
-
-**Dla pozostałych (script/material approval):**
-- **Zaakceptuj** — materiał zatwierdzony, produkcja przechodzi do kolejnego etapu
-- **Zmień** — opisz, co należy poprawić; wykonawca wprowadzi zmiany i prześle materiał ponownie do Twojej akceptacji
-
-### 3. Pozostałe widoki — pozostawiamy bez zmian
-Te miejsca już mają dwie opcje i są zgodne z intencją klienta:
-- **Script review** (linie ~292-317): „Akceptuję scenariusz" / „Uwagi naniesione w pliku"
-- **Frame.io review** (linie ~385-410): „Akceptuję film bez uwag" / „Uwagi dodałam/em we frame.io"
-
-Nie zmieniamy ich — używają komentarzy w zewnętrznych narzędziach (Google Docs, frame.io), nie w aplikacji.
-
-### 4. Logika backendu (`AppContext.tsx`, `webhook.ts`) — bez zmian
-- `handleApprove` → `completeTask(..., 'approved', ...)` — bez zmian
-- „Zmień" → `rejectTask(task.id, feedback)` — istniejąca ścieżka odrzucenia, która generuje zadanie poprawkowe i resetuje SLA (zgodnie z pamięcią Ping-Pong / Feedback Loop)
-- Wartość `approved_with_comments` / `approved: <notes>` znika z nowych zadań typu `approval`/`actor_approval`. Stare zadania w historii pozostają wyświetlane poprawnie (CompletedTaskCard już obsługuje ten format — odczyt nie jest dotknięty).
-
-### 5. Pamięć projektu
-Zaktualizować `mem://logic/approval-consensus` (wzmianka o „Tak, ale..." / ping-pong) tak, by odzwierciedlała uproszczony model: każdy reviewer ma dwie opcje — **Zaakceptuj** lub **Zmień (z komentarzem)**. Brak pośredniego stanu „akceptuję z uwagami".
+### Pamięć projektu
+Zaktualizować `mem://features/task-archiving` lub utworzyć nowy wpis `mem://features/inflight-correction` opisujący zasadę: „Influencer może poprawić swoją odpowiedź (URL lub obsada) dopóki kolejny aktor nie podjął decyzji. Po decyzji obowiązuje pełna ścieżka ping-pong."
 
 ## Efekt dla użytkownika
-- Klient widzi dwa wyraźne przyciski: zielony „Zaakceptuj" i pomarańczowy „Zmień"
-- Po kliknięciu „Zmień" pojawia się pole na komentarz (wymagane) i przycisk „Wyślij prośbę o zmiany"
-- Tooltip „i" przy tytule zadania opisuje już tylko dwie opcje, spójnie z UI
+W zakładce „Wykonane" → „Przypisz osobę do filmu", obok listy aktorów, pojawia się przycisk **„Popraw obsadę"**. Klik otwiera edytor z aktualną obsadą, gdzie influencer może dodać Dorotę i usunąć Janusza. Po zapisaniu klient (Anna Kowalska) zobaczy już poprawioną propozycję — bez sztucznego cyklu „Zmień → Popraw → Wyślij ponownie".
