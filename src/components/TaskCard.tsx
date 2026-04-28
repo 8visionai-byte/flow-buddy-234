@@ -460,7 +460,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                   {isActorApproval ? (
                     <>
                       <p><span className="font-semibold text-success">Zaakceptuj</span> — skład aktorów zatwierdzony, produkcja idzie dalej.</p>
-                      <p><span className="font-semibold text-warning">Zmień</span> — opisz, jakich zmian oczekujesz. Influencer zaproponuje nowy skład i wróci do Ciebie po akceptację.</p>
+                      <p><span className="font-semibold text-warning">Zmień</span> — opisz, jakich zmian oczekujesz. Influencer naniesie poprawki i przejdzie dalej bez ponownej akceptacji z Twojej strony.</p>
                     </>
                   ) : (
                     <>
@@ -657,7 +657,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 clientUsers={users.filter(u => u.role === 'klient' && u.clientId === project?.clientId)}
                 initialActors={initialActors}
                 onSubmit={(actors: ActorEntry[]) => {
-                  resubmitTask(task.id, JSON.stringify(actors));
+                  // Aktor: pipeline ma tylko jedną akceptację klienta — poprawki idą dalej automatycznie
+                  resubmitTaskAndAutoApprove(task.id, JSON.stringify(actors));
                 }}
               />
             );
