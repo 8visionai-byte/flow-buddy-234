@@ -176,12 +176,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const role = byRole || task.assignedRole;
       const isMultiRole = task.assignedRoles.length > 1;
 
-      // Script review with file notes → bounce back to influencer (don't advance)
+      // Script review with file notes → mark client's decision as completed, bounce back to influencer, don't advance
       if (task.inputType === 'script_review' && value === 'approved_with_file_notes') {
         const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
         const bounceEntry: TaskHistoryEntry = { action: 'file_notes', by: 'klient', feedback: 'Klient dodał uwagi bezpośrednio w pliku. Przejrzyj komentarze i wprowadź poprawki.', timestamp: now };
         return prev.map(t => {
-          if (t.id === taskId) return { ...t, status: 'locked' as const, history: [...t.history, bounceEntry] };
+          if (t.id === taskId) return {
+            ...t,
+            status: 'done' as const,
+            value,
+            completedAt: now,
+            completedBy: 'klient',
+            history: [...t.history, bounceEntry],
+          };
           if (scriptTask && t.id === scriptTask.id) return {
             ...t,
             status: 'needs_influencer_revision' as const,
@@ -532,6 +539,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTasks(prev => {
       const task = prev.find(t => t.id === taskId);
       if (!task || task.status !== 'done') return prev;
+
+      if (task.inputType === 'script_review' && task.value === 'approved_with_file_notes') {
+        const now = new Date().toISOString();
+        const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
+        return prev.map(t => {
+          if (t.id === taskId) {
+            return {
+              ...t,
+              status: 'pending_client_approval' as const,
+              value: null,
+              completedAt: null,
+              completedBy: null,
+              assignedAt: now,
+              previousValue: scriptTask?.value || t.previousValue,
+            };
+          }
+          if (scriptTask && t.id === scriptTask.id && t.status === 'needs_influencer_revision') {
+            return { ...t, status: 'done' as const, completedAt: now, completedBy: t.assignedRole, clientFeedback: null };
+          }
+          return t;
+        });
+      }
 
       // If this task has a next approval task, lock it
       return prev.map(t => {
