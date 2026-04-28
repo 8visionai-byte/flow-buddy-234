@@ -546,6 +546,11 @@ const AddCampaignDialog = ({ onCreated }: { onCreated?: () => void } = {}) => {
                     </div>
                   </div>
                 )}
+                {clientId && !effectiveClientUserId && !reviewerCleared && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Domyślnie ustawimy pierwszą osobę z listy klienta jako oceniającego.
+                  </p>
+                )}
               </>
             )}
           </div>
