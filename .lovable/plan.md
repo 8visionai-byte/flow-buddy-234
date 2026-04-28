@@ -1,83 +1,60 @@
+## Diagnoza — znalazłem przyczynę
 
-# Naprawa błędu: auto-akceptacja przeskakuje do złego etapu
+Porównałem dane w bazie dla pomysłów widocznych na screenshotach:
 
-## Diagnoza (potwierdzona w kodzie)
+| Pomysł (UI) | Projekt (DB) | Status order 5 (akcept. obsady) | Status order 6 (Określ rekwizyty) | Status order 7 (Ustaw termin — admin) |
+|---|---|---|---|---|
+| Pomysł 2 | `1` | done | done | **done** ✅ |
+| Pomysł 3 | `2`/`3` | done | done | **done** ✅ |
+| **Pomysł 4** | `Test1` | done | **todo** | **locked** ❌ |
 
-W `src/context/AppContext.tsx` (linia 670–672) funkcja `resubmitTaskAndAutoApprove` wyszukuje kolejne zadanie akceptacji klienta tak:
+Wniosek: w pomysłach 2 i 3 użytkownik przeszedł "klasyczną" akceptację obsady przez Klienta — `completeTask` zawiera blok `parallelMate` (linie 427–442 w `AppContext.tsx`), który **równolegle** odblokowuje `Określ rekwizyty` (Influencer) i `Ustaw termin planu zdjęciowego` (Admin). Dlatego admin od razu widzi zadanie.
 
-```ts
-const approvalTask = projectTasks.find(
-  t => t.order > task.order && (t.inputType === 'approval' || t.inputType === 'script_review')
-);
-```
+W pomyśle 4 użytkownik użył ścieżki **"Poprawki naniesione, nie wymagana kolejna akceptacja klienta"** → wywołane zostało `resubmitTaskAndAutoApprove` (linie 650–725). Ta funkcja po naprawce z poprzedniego planu poprawnie auto-akceptuje `actor_approval` i odblokowuje `afterApproval` = order 6 (`Określ rekwizyty`), ale **NIE ZAWIERA logiki parallelMate** — order 7 zostaje `locked`. Stąd w widoku admina nie ma żadnego badge'a / blokera dla Pomysłu 4.
 
-Brakuje typu **`actor_approval`** — czyli właśnie tego, który występuje po `actor_assignment` (FAZA 3 — Obsada → "Zaakceptuj przypisanie osoby").
-
-Skutek: gdy Influencer w widoku obsady kliknął "Poprawki naniesione, nie wymagana kolejna akceptacja klienta", funkcja **pominęła** najbliższy `actor_approval` i znalazła pierwszy następny `approval` w pipeline — czyli **"Akceptacja materiału"** w FAZIE 5 — i to ją oznaczyła jako auto-zatwierdzoną. Stąd na zrzucie:
-- ✅ "Przypisz osobę do filmu" (Influencer) — zrobione
-- 🔒 "Zaakceptuj przypisanie osoby" (Klient) — **wciąż locked, nigdy nie odblokowane**
-- … cała FAZA 4 i 5 zablokowana …
-- ✅ "Akceptacja materiału" (Klient, 28.04.2026 17:56) — **niepoprawnie auto-ukończone**
-
-W projekcie istnieje już helper (linia 244) `isApprovalType` obejmujący `actor_approval` — `resubmitTaskAndAutoApprove` po prostu go nie używa.
+To nie jest problem badge'ów — to brakujące parallel-unlock w jednej z dwóch ścieżek odblokowywania.
 
 ## Plan naprawy
 
-### 1. Naprawa logiki (`src/context/AppContext.tsx`)
+### 1. `src/context/AppContext.tsx` — `resubmitTaskAndAutoApprove` (~linia 681–720)
 
-W `resubmitTaskAndAutoApprove` (linia ~670) zmienić warunek wyszukiwania `approvalTask` tak, żeby obejmował `actor_approval`:
-
-```ts
-const approvalTask = projectTasks.find(
-  t => t.order > task.order &&
-       (t.inputType === 'approval' || t.inputType === 'script_review' || t.inputType === 'actor_approval')
-);
-```
-
-Dodatkowo dla bezpieczeństwa: ograniczyć wyszukiwanie do **bezpośrednio następnego** zadania (`t.order === task.order + 1`), zamiast pierwszego `approval` w całym pipeline. Nawet gdyby ktoś w przyszłości dodał kolejny typ — nie odpalimy auto-akceptacji w odległym etapie. Jeśli następny task nie jest typem akceptacji, funkcja po prostu nie odblokuje niczego "na zapas" i wymusi ponowne sprawdzenie scenariusza.
+Po znalezieniu `afterApproval`, dodać symetryczny `parallelMate` — dokładnie jak w `completeTask`:
 
 ```ts
-const next = projectTasks.find(t => t.order === task.order + 1);
-const approvalTask = next && (next.inputType === 'approval'
-  || next.inputType === 'script_review'
-  || next.inputType === 'actor_approval') ? next : null;
+const parallelMate = (afterApproval?.title === 'Określ rekwizyty')
+  ? projectTasks.find(t => t.title === 'Ustaw termin planu zdjęciowego' && t.status === 'locked')
+  : null;
 ```
 
-To jest chirurgiczna zmiana — nie dotyka żadnego innego flow.
+W `prev.map(...)` dodać branch:
 
-### 2. Naprawa danych istniejącego pomysłu "Pomysł drugi"
+```ts
+if (parallelMate && t.id === parallelMate.id) {
+  return { ...t, status: 'todo' as const, assignedAt: now };
+}
+```
 
-Dane są w localStorage (mock data), więc skrypt SQL nie zadziała. Trzeba dać użytkownikowi prosty mechanizm do "cofnięcia" tego konkretnego stanu. Dwie opcje — proszę wybrać:
+To jedyna zmiana logiki. ~5 linii. Chirurgicznie kopiuje istniejący wzorzec z `completeTask` — żadnego nowego zachowania, tylko wyrównanie obu ścieżek.
 
-**A. Ręczny revert przez chat history** (zero kodu, zero ryzyka):
-   - Cofnąć projekt do wersji sprzed błędnego "Poprawki naniesione…" (revert w chat).
-   - Po revercie wgrać samą poprawkę logiki z punktu 1.
-   - Wszystkie inne pomysły zachowają się.
+### 2. Naprawa istniejących danych dla Pomysłu 4 (`Test1`)
 
-**B. Skrypt naprawczy w UI** (jednorazowy "Reset etapu" w widoku Admina):
-   - Admin Override już istnieje w panelu zadań — dodać akcję "Cofnij auto-akceptację" na zadaniu z `value === 'auto_approved'`, która:
-     - resetuje to zadanie do `locked`,
-     - resetuje wcześniejsze zadanie z `inputType === 'actor_assignment'` do `pending_client_approval` (żeby Klient mógł zaakceptować obsadę),
-     - czyści wpisy `resubmitted_auto_approved` / `auto_approved_by_influencer` z historii.
+Dane są w Supabase (nie localStorage — sprawdziłem schema). Najprostsza naprawa to migracja jednorazowa, która ustawi order 7 na `todo` dla projektów, w których order 5 = `done`, order 6 ∈ {`todo`, `done`}, a order 7 = `locked`. Bezpieczna — pasuje tylko do realnie zepsutych danych z tej dziury.
 
-Rekomenduję **opcję A** — szybciej, bezpieczniej, bez nowego kodu na produkcji.
+Alternatywnie, jeśli wolisz nie ruszać produkcyjnych danych migracją: po wdrożeniu fixa po prostu klikniesz na Pomyśle 4 jakiekolwiek następne zadanie zmieniające stan, ale to nie odblokuje order 7 wstecznie. **Rekomenduję migrację** dla tego jednego rekordu, bo inaczej Pomysł 4 zostanie permanentnie zawieszony.
 
-### 3. Test po wdrożeniu (manualny)
+### 3. Test po wdrożeniu
 
-Na nowym pomyśle przejść:
-1. Influencer: "Przypisz osobę do filmu" → wprowadzić obsadę.
-2. Klient: kliknąć "Zmień" w "Zaakceptuj przypisanie osoby".
-3. Influencer: poprawić obsadę i potwierdzić.
-4. **Oczekiwane:** "Zaakceptuj przypisanie osoby" → `Ukończono` (auto_approved). Następny etap (FAZA 4 — "Określ rekwizyty") → `todo` dla Influencera.
-5. Reszta pipeline (Akceptacja materiału w FAZIE 5) — pozostaje `locked`.
-
-Powtórzyć analogicznie dla scenariusza (`script_review`) — żeby potwierdzić, że ta ścieżka nadal działa bez regresji.
+1. Stworzyć nowy pomysł, przejść do akceptacji obsady.
+2. Klient: "Zmień" → Influencer poprawia → "Poprawki naniesione, nie wymagana kolejna akceptacja".
+3. **Oczekiwane:** order 6 = `todo` (Influencer widzi "Określ rekwizyty"), order 7 = `todo` (Admin widzi "Ustaw termin planu zdjęciowego" w "Moje Zadania" + badge).
+4. Powtórzyć ścieżkę "klasyczną" (Klient akceptuje obsadę bezpośrednio) — sprawdzić, że dalej działa bez regresji.
 
 ## Pliki
 
-- `src/context/AppContext.tsx` — jedna funkcja, ~5 linii zmiany.
+- `src/context/AppContext.tsx` — ~5 linii w `resubmitTaskAndAutoApprove`
+- migracja SQL — jeden `UPDATE` dla naprawy `Test1`
 
 ## Co NIE jest w zakresie
 
-- Brak zmian w `TaskCard.tsx` — UI już wywołuje poprawną funkcję.
-- Brak zmian w pamięci — istniejący wpis `mem://features/actor-assignment` opisuje poprawne zachowanie; to był bug implementacyjny, nie zmiana scenariusza.
+- Brak zmian w `AdminDashboard.tsx` — predykaty `isAdminTaskActionable` / `isAdminTaskBlocking` działają poprawnie (potwierdzone na danych Pomysłów 2 i 3 — admin widzi tam blocker, bo order 7 jest `todo`).
+- Brak zmian w UI / badge'ach.
