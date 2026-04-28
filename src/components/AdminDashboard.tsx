@@ -59,7 +59,7 @@ const VIEWS: { id: ViewId; label: string; icon: React.FC<{ className?: string }>
   { id: 'tasks', label: 'Moje Zadania', icon: ClipboardList },
   { id: 'client', label: 'Widok Klienta', icon: Building2 },
   { id: 'delays', label: 'Opóźnienia', icon: Clock },
-  { id: 'details', label: 'Wszystkie projekty', icon: LayoutList },
+  { id: 'details', label: 'Wszystkie pomysły', icon: LayoutList },
 ];
 
 const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProps) => {
@@ -499,7 +499,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                   return (
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Projekty w tej sesji
+                        Pomysły w tej sesji
                       </label>
                       <div className="space-y-1 max-h-32 overflow-y-auto">
                         {allClientFilmingIds.map(projId => {
@@ -1229,7 +1229,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   // --- VIEW 5: Project detail page ---
   const renderProjectView = () => {
     const project = projects.find(p => p.id === selectedProjectId);
-    if (!project) return <div className="text-center py-16 text-muted-foreground">Projekt nie znaleziony.</div>;
+    if (!project) return <div className="text-center py-16 text-muted-foreground">Pomysł nie znaleziony.</div>;
 
     const projectTasks = getTasksForProject(project.id);
     const isFrozen = project.status === 'frozen';
@@ -1260,7 +1260,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5 items-center">
-                {isProjectComplete && <Badge variant="secondary" className="gap-1 border-0 bg-success/15 text-success"><CheckCircle2 className="h-3 w-3" />Projekt zakończony</Badge>}
+                {isProjectComplete && <Badge variant="secondary" className="gap-1 border-0 bg-success/15 text-success"><CheckCircle2 className="h-3 w-3" />Pomysł zakończony</Badge>}
                 {isFrozen && <Badge variant="secondary" className="gap-1 border-0 bg-muted text-muted-foreground"><Snowflake className="h-3 w-3" />Zamrożony</Badge>}
                 {project.priority && project.priority !== 'medium' && (
                   <Badge variant="secondary" className={`${PRIORITY_COLORS[project.priority]} border-0 gap-1`}><Flag className="h-3 w-3" />{PRIORITY_LABELS[project.priority]}</Badge>
@@ -1327,7 +1327,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setDeleteConfirm(project.id); }}>
-                      <Trash2 className="mr-2 h-4 w-4" />Usuń projekt
+                      <Trash2 className="mr-2 h-4 w-4" />Usuń pomysł
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1596,7 +1596,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                       style={{ width: `${Math.min(100, (campaignIdeas.length / campaign.targetIdeaCount) * 100)}%` }} />
                   </div>
                   <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stały się projektami` : 'Brak pomysłów'}</span>
+                    <span>{pendingCount > 0 ? `${pendingCount} oczekuje na ocenę klienta` : acceptedCount > 0 ? `${acceptedCount} zaakceptowanych → stało się pomysłami` : 'Brak pomysłów'}</span>
                     <span>{campaignIdeas.length} z {campaign.targetIdeaCount}</span>
                   </div>
                 </div>
@@ -1872,7 +1872,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                                           if (!allClientFilmingIds.length) return null;
                                           return (
                                             <div className="space-y-1.5">
-                                              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Projekty w tej sesji</label>
+                                              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pomysły w tej sesji</label>
                                               <div className="space-y-1 max-h-32 overflow-y-auto">
                                                 {allClientFilmingIds.map(projId => {
                                                   const proj = projects.find(p => p.id === projId);
@@ -1966,7 +1966,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         {!clientViewId && (
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
             <Building2 className="h-12 w-12 text-muted-foreground opacity-40" />
-            <p className="text-muted-foreground">Wybierz klienta, aby zobaczyć jego projekty.</p>
+            <p className="text-muted-foreground">Wybierz klienta, aby zobaczyć jego pomysły.</p>
           </div>
         )}
 
@@ -2000,7 +2000,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 <div className="flex gap-4 shrink-0">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-foreground">{clientProjects.length}</div>
-                    <div className="text-xs text-muted-foreground">Projektów</div>
+                    <div className="text-xs text-muted-foreground">Pomysłów</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary">
@@ -2024,7 +2024,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             {/* Projects grid */}
             {clientProjects.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
-                Brak projektów dla tego klienta.
+                Brak pomysłów dla tego klienta.
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -2220,7 +2220,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     );
   };
 
-  // --- VIEW 4: Wszystkie projekty ---
+  // --- VIEW 4: Wszystkie pomysły ---
   const renderDetailsView = () => {
     const groups = getProjectGroups(filteredProjects);
 
@@ -2246,7 +2246,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 Wyczyść
               </Button>
             )}
-            <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} projekt{filteredProjects.length === 1 ? '' : 'ów'}</span>
+            <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} pomysł{filteredProjects.length === 1 ? '' : filteredProjects.length < 5 ? 'y' : 'ów'}</span>
           </div>
         )}
 
@@ -2264,7 +2264,7 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 </span>
               )}
               <Badge variant="secondary" className="border-0 bg-muted text-muted-foreground text-xs">
-                {group.projects.length} projekt{group.projects.length === 1 ? '' : 'ów'}
+                {group.projects.length} pomysł{group.projects.length === 1 ? '' : group.projects.length < 5 ? 'y' : 'ów'}
               </Badge>
               <div className="flex-1 h-px bg-border" />
             </div>
