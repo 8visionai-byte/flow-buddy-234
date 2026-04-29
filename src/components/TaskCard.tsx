@@ -22,6 +22,7 @@ import {
 import { CheckCircle2, Link as LinkIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Send, MessageSquare, CalendarClock, UserPlus, User as UserIcon, Clock, XCircle, ExternalLink, BookOpen, CheckCheck, Copy, Check, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import SlaTimer from '@/components/SlaTimer';
+import StepBadge from '@/components/StepBadge';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
