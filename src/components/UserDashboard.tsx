@@ -3,6 +3,7 @@ import { useApp } from '@/context/AppContext';
 import { ROLE_LABELS, Task, Project, getRoleDisplayLabel } from '@/types';
 import TaskCard from '@/components/TaskCard';
 import CompletedTaskCard from '@/components/CompletedTaskCard';
+import StepBadge from '@/components/StepBadge';
 import IdeasPanel from '@/components/IdeasPanel';
 import ProjectReadOnlyView from '@/components/ProjectReadOnlyView';
 import MultiPartyNotesPanel from '@/components/MultiPartyNotesPanel';
@@ -1021,14 +1022,15 @@ const UserDashboard = () => {
                     >
                       {taskIcon(task.status)}
                       <div className="flex-1 truncate min-w-0">
-                        {/* Project name — prominent chip */}
-                        {project?.name && (
-                          <div className="mb-0.5 truncate">
-                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
+                        {/* Project name + step number */}
+                        <div className="mb-0.5 flex items-center gap-1 truncate">
+                          {project?.name && (
+                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight truncate">
                               {project.name}
                             </span>
-                          </div>
-                        )}
+                          )}
+                          <StepBadge order={task.order} variant="compact" />
+                        </div>
                         {/* Task title */}
                         <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
                         {/* Time info */}
@@ -1078,13 +1080,14 @@ const UserDashboard = () => {
                     >
                       <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                       <div className="flex-1 truncate min-w-0">
-                        {project?.name && (
-                          <div className="mb-0.5 truncate">
-                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight max-w-full truncate">
+                        <div className="mb-0.5 flex items-center gap-1 truncate">
+                          {project?.name && (
+                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight truncate">
                               {project.name}
                             </span>
-                          </div>
-                        )}
+                          )}
+                          <StepBadge order={task.order} variant="compact" />
+                        </div>
                         <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
                         {task.value && (
                           <div className="truncate text-[11px] text-muted-foreground mt-0.5">
