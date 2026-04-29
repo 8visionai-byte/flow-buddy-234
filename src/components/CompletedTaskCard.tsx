@@ -3,6 +3,7 @@ import { useApp } from '@/context/AppContext';
 import { Task, ROLE_LABELS, UserRole, TaskHistoryEntry } from '@/types';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { tryParseSocialDates } from '@/components/SocialDatesWidget';
+import StepBadge from '@/components/StepBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Instagram, Youtube, BookOpen, RotateCcw } from 'lucide-react';
@@ -135,9 +136,12 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
   return (
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
       {/* Header */}
-      <div className="mb-1 flex items-center justify-between">
-        <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide">{projectName}</span>
-        <Badge variant="secondary" className="gap-1 border-0 bg-success/10 text-success text-xs">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide">{projectName}</span>
+          <StepBadge order={task.order} />
+        </div>
+        <Badge variant="secondary" className="gap-1 border-0 bg-success/10 text-success text-xs shrink-0">
           <CheckCircle2 className="h-3 w-3" />
           Ukończone
         </Badge>
