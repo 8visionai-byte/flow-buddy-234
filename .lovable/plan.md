@@ -1,61 +1,61 @@
-## Problem
+## Cel
 
-Operator obecnie musi otworzyć każdy pomysł osobno i wkleić ten sam link do surówki dla każdego z osobna (zadanie "Wgraj surówkę na serwer", `inputType: 'raw_footage'`). W praktyce jedno nagranie z planu zawiera materiał do kilku pomysłów, więc ten sam link powinien zostać przypisany do wielu zadań jednym kliknięciem — analogicznie do batchowego "Ustaw termin nagrania" w panelu Admina.
+W zadaniu "Wnieś uwagi przed montażem" (multi-party notes — KP, DZ, Klient) ma się dodatkowo pojawiać **notatka od operatora** wpisana w polu „Notatka / opis surówki" przy zadaniu „Wgraj surówkę na serwer". Operator nie jest stroną piszącą w tym zadaniu — jego uwaga ma być widoczna jako informacja zaciągnięta z poprzedniego kroku tej samej fazy.
 
-## Rozwiązanie
+Dziś tę notatkę widzą tylko Admin, Montażysta i historia projektu. Influencer (który robi „Brief dla montażysty") oraz pozostałe strony przy panelu nie mają jej pod ręką.
 
-Rozszerzyć panel zadania "Wgraj surówkę na serwer" w `TaskCard.tsx` o sekcję wyboru, do których innych pomysłów (tasków `raw_footage` w statusie `todo`) Operator chce zastosować ten sam link, numer nagrania i notatkę. Po kliknięciu "Wgraj surówkę" wszystkie zaznaczone zadania zostają oznaczone jako wykonane z tymi samymi danymi.
+## Zakres zmian
 
-### Zachowanie UI
+### 1) `src/components/MultiPartyNotesPanel.tsx`
 
-W panelu zadania (sekcja `inputType === 'raw_footage'` w `TaskCard.tsx`, linie 816–858) pod polami "Link / Numer / Notatka" dodać blok:
+- Dodać opcjonalny prop `operatorNote?: { url?: string; notes?: string; uploadedBy?: string }`.
+- Jeśli `operatorNote.notes` (lub url) istnieje, wyświetlić nową, wyróżnioną kartkę nad sekcją „Uwagi od zespołu":
+  - Etykieta: „Uwaga od operatora (surówka)" + ikona 🎥 / `Film`.
+  - Pokazać tekst notatki (`whitespace-pre-wrap`) i — jeśli jest — link do surówki jako mały link „Otwórz surówkę".
+  - Read-only, lekko inny kolor tła (np. `bg-muted/40 border-muted`) żeby nie mylić z notatkami stron.
+- Nie zmieniać logiki zapisu — operator nie wpisuje tu nic, jego uwaga przychodzi z innego zadania.
 
-```text
-┌─ Zastosuj do innych pomysłów ────────────────┐
-│ ☑ Aktualny pomysł (zawsze, disabled)          │
-│ ☐ "Tytuł pomysłu B" — Klient X                │
-│ ☐ "Tytuł pomysłu C" — Klient X                │
-│ ☐ "Tytuł pomysłu D" — Klient Y                │
-└───────────────────────────────────────────────┘
-Wgrasz surówkę do: 3 pomysłów
-[ ✈ Wgraj surówkę do 3 pomysłów ]
+### 2) Helper do pobierania notatki operatora
+
+W każdym z trzech miejsc, gdzie używany jest `MultiPartyNotesPanel`, znajdujemy zadanie operatora dla tego samego `projectId`:
+
+```ts
+const rawTask = tasks.find(
+  t => t.projectId === task.projectId &&
+       t.inputType === 'raw_footage' &&
+       t.status === 'done'
+);
+let operatorNote;
+try {
+  if (rawTask?.value) {
+    const parsed = JSON.parse(rawTask.value);
+    if (parsed?.notes || parsed?.url) operatorNote = parsed;
+  }
+} catch {}
 ```
 
-Reguły listy:
-- Pokazują się wszystkie inne taski Operatora typu `raw_footage` w statusie `todo` (czyli pozycje z lewej kolumny "Do zrobienia"), niezależnie od klienta — Operator sam decyduje, co należy do tej samej sesji nagraniowej.
-- Sortowanie: najpierw projekty tego samego klienta co bieżący, potem reszta. Pokazujemy tytuł pomysłu + nazwę firmy klienta dla rozróżnienia.
-- Jeżeli nie ma innych zadań `raw_footage todo`, sekcja w ogóle się nie renderuje (zachowanie identyczne jak dziś).
-- Bieżący task jest zawsze włączony i nie da się go odznaczyć.
-- Etykieta przycisku zmienia się dynamicznie: "Wgraj surówkę" (1 pomysł) lub "Wgraj surówkę do N pomysłów".
+Przekazać `operatorNote` do `<MultiPartyNotesPanel ... operatorNote={operatorNote} />`.
 
-### Logika submit
+### 3) Miejsca wywołań do zaktualizowania
 
-W `handleSubmit` dla `raw_footage`:
-1. Zwalidować URL i numer nagrania (bez zmian).
-2. Zbudować jednolity `jsonValue = { url, recordingNumber, notes }`.
-3. Wywołać `completeTask(taskId, jsonValue, currentUser?.role)` dla bieżącego zadania **oraz** dla każdego zaznaczonego dodatkowego taska.
-4. Każde wywołanie przechodzi przez istniejące mechanizmy `AppContext` (historia, odblokowanie kolejnego etapu „Wgraj zmontowany film" dla każdego pomysłu, webhooki) — nie dotykamy logiki sekwencji.
+- `src/components/TaskCard.tsx` (linia ~829) — panel widoczny dla KP/DZ/Klient, gdy otwierają zadanie.
+- `src/components/UserDashboard.tsx` (linia ~411) — sekcja read-only przy zadaniu Montażysty „Wgraj zmontowany film".
+- `src/components/UserDashboard.tsx` (linia ~1209) — live panel u Influencera.
 
-### Stan komponentu
+W każdym miejscu mamy już dostęp do tablicy `tasks` z kontekstu, więc wyszukanie zadania `raw_footage` jest trywialne.
 
-Dodać w `TaskCard.tsx` nowy lokalny stan:
-- `additionalTaskIds: Set<string>` — początkowo pusty.
-- Wyliczana lista kandydatów: `tasks.filter(t => t.id !== task.id && t.inputType === 'raw_footage' && t.status === 'todo' && t.assignedRoles?.includes('operator'))`.
+### 4) `src/components/CompletedTaskCard.tsx` (opcjonalnie)
 
-Reset stanu po wykonaniu (komponent i tak się odmontowuje, gdy task znika z listy).
+Sekcja podsumowująca „Uwagi przed montażem" (linia ~323) — dla spójności dorzucić tę samą uwagę operatora jako pierwszy wpis (read-only), również wyciągając ją z zadania `raw_footage` tego projektu.
 
-## Pliki do zmiany
+## Czego NIE robimy
 
-- `src/components/TaskCard.tsx`
-  - dodać stan `additionalTaskIds`
-  - rozszerzyć `handleSubmit` o pętlę `completeTask` dla zaznaczonych
-  - rozszerzyć blok `raw_footage` (linie 816–858) o checklistę innych pomysłów i dynamiczną etykietę przycisku
-  - użyć `useApp()` do pobrania `tasks` i `projects` (już importowane)
+- Nie dodajemy operatora do `assignedRoles` zadania „Wnieś uwagi przed montażem" — nie jest on uczestnikiem konsensusu i nie blokuje przejścia kroku.
+- Nie tworzymy nowego pola w bazie — używamy istniejącej notatki z `raw_footage.value` (klucz `notes`).
+- Nie ruszamy webhooków, historii, kolejności pipeline'u.
 
-Brak zmian w bazie, kontekście, schemacie tasków ani w logice odblokowywania kolejnych etapów. Brak migracji.
+## Efekt dla użytkownika
 
-## Edge cases
-
-- Gdy Operator zaznaczy kilka pomysłów, ale walidacja URL/numeru zawiedzie → żaden task nie jest zapisany (walidacja przed pętlą).
-- Gdy dwa zaznaczone taski należą do różnych klientów — to świadomy wybór Operatora (np. jedno nagranie dla dwóch firm), dozwolony.
-- Numer nagrania jest ten sam dla wszystkich zaznaczonych pozycji — zgodne z user storym (jedno fizyczne nagranie = jeden numer).
+- Influencer pisząc „Brief dla montażysty" widzi w jednym panelu: uwagę operatora z planu + uwagi KP/DZ/Klienta.
+- KP/DZ/Klient otwierając zadanie „Wnieś uwagi przed montażem" od razu widzą, co operator zanotował przy wgrywaniu surówki.
+- Montażysta w swoim widoku też ma tę uwagę pod ręką (już dziś widzi ją osobno, teraz będzie spójnie w panelu).
