@@ -55,6 +55,7 @@ export type ProjectRow = {
   assigned_influencer_id: string | null; assigned_editor_id: string | null;
   assigned_client_id: string | null; assigned_kierownik_id: string | null;
   assigned_operator_id: string | null;
+  assigned_publikator_id: string | null;
   publication_date: string | null;
   priority: ProjectPriority; sla_hours: number | null;
   assigned_client_ids: string[];
@@ -68,7 +69,7 @@ export const projectFromRow = (r: ProjectRow): Project => ({
   assignedInfluencerId: r.assigned_influencer_id, assignedEditorId: r.assigned_editor_id,
   assignedClientId: r.assigned_client_id, assignedKierownikId: r.assigned_kierownik_id,
   assignedOperatorId: r.assigned_operator_id,
-  assignedPublikatorId: null, // kolumna nie istnieje w DB; pole zachowane w typie
+  assignedPublikatorId: r.assigned_publikator_id ?? null,
   publicationDate: r.publication_date,
   priority: r.priority, slaHours: r.sla_hours,
 });
@@ -81,6 +82,7 @@ export const projectToRow = (p: Project): ProjectRow => ({
   assigned_influencer_id: p.assignedInfluencerId, assigned_editor_id: p.assignedEditorId,
   assigned_client_id: p.assignedClientId, assigned_kierownik_id: p.assignedKierownikId,
   assigned_operator_id: p.assignedOperatorId,
+  assigned_publikator_id: p.assignedPublikatorId,
   publication_date: p.publicationDate,
   priority: p.priority, sla_hours: p.slaHours,
   assigned_client_ids: [],
