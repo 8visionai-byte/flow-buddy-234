@@ -350,6 +350,14 @@ const UserDashboard = () => {
     const notesTask = projectTasks.find(t => t.title === 'Wnieś uwagi przed montażem');
     const uploadTask = projectTasks.find(t => t.title === 'Wgraj zmontowany film');
     const poprawkiTask = projectTasks.find(t => t.title === 'Wgraj poprawki');
+    const rawFootageTask = projectTasks.find(t => t.inputType === 'raw_footage' && t.status === 'done');
+    let editorOperatorNote: { url?: string; notes?: string } | undefined;
+    try {
+      if (rawFootageTask?.value) {
+        const parsed = JSON.parse(rawFootageTask.value);
+        if (parsed?.notes || parsed?.url) editorOperatorNote = parsed;
+      }
+    } catch { /* ignore */ }
 
     // The active editing task (whichever is currently todo)
     const activeEditTask = [uploadTask, poprawkiTask].find(t => t && t.status === 'todo');
@@ -411,6 +419,7 @@ const UserDashboard = () => {
               <MultiPartyNotesPanel
                 task={notesTask}
                 role="montazysta"
+                operatorNote={editorOperatorNote}
                 onSubmit={() => {}}
                 onUpdate={() => {}}
               />
@@ -1198,6 +1207,14 @@ const UserDashboard = () => {
                 <div className="w-full max-w-lg mx-auto space-y-4 mb-4">
                   {liveNotesTasks.map(task => {
                     const proj = projects.find(p => p.id === task.projectId);
+                    const rawTask = tasks.find(t => t.projectId === task.projectId && t.inputType === 'raw_footage' && t.status === 'done');
+                    let operatorNote: { url?: string; notes?: string } | undefined;
+                    try {
+                      if (rawTask?.value) {
+                        const parsed = JSON.parse(rawTask.value);
+                        if (parsed?.notes || parsed?.url) operatorNote = parsed;
+                      }
+                    } catch { /* ignore */ }
                     return (
                       <div key={task.id} className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-3">
                         <div className="flex items-center gap-2">
@@ -1209,6 +1226,7 @@ const UserDashboard = () => {
                         <MultiPartyNotesPanel
                           task={task}
                           role="influencer"
+                          operatorNote={operatorNote}
                           onSubmit={(note) => updatePartyNote(task.id, 'influencer', note)}
                           onUpdate={(note) => updatePartyNote(task.id, 'influencer', note)}
                         />
