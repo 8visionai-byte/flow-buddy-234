@@ -168,6 +168,11 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
       }
       const jsonValue = JSON.stringify({ url: noteUrl.trim(), recordingNumber: recordingNumber.trim(), notes: noteText.trim() });
       completeTask(task.id, jsonValue, currentUser?.role);
+      // Apply same link / number / note to additionally selected operator tasks
+      additionalRawTaskIds.forEach(extraId => {
+        completeTask(extraId, jsonValue, currentUser?.role);
+      });
+      setAdditionalRawTaskIds(new Set());
       return;
     }
     if (task.inputType === 'actor_assignment') {
