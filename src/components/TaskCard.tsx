@@ -863,6 +863,43 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
               rows={3}
             />
           </div>
+          {otherRawFootageTasks.length > 0 && (
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-foreground">Zastosuj ten sam link do innych pomysłów</p>
+                <span className="text-[11px] text-muted-foreground">{additionalRawTaskIds.size} zaznaczonych</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Przydatne, gdy jedno nagranie obejmuje materiał dla kilku pomysłów.</p>
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pt-1">
+                {otherRawFootageTasks.map(({ task: t, project: p, sameClient }) => {
+                  const checked = additionalRawTaskIds.has(t.id);
+                  return (
+                    <label key={t.id} className="flex items-start gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-background">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          setAdditionalRawTaskIds(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(t.id);
+                            else next.delete(t.id);
+                            return next;
+                          });
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                      />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm text-foreground truncate">{p?.name || 'Pomysł'}</span>
+                        <span className="block text-[11px] text-muted-foreground truncate">
+                          {p?.company || p?.clientName || '—'}{sameClient ? ' • ten sam klient' : ''}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {error && (
             <div className="flex items-center gap-1.5 text-xs text-destructive">
               <AlertCircle className="h-3.5 w-3.5" />
@@ -871,9 +908,11 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           )}
           <Button onClick={handleSubmit} className="w-full" size="lg" disabled={!noteUrl.trim()}>
             <Send className="mr-2 h-5 w-5" />
-            Wgraj surówkę
+            {additionalRawTaskIds.size > 0
+              ? `Wgraj surówkę do ${additionalRawTaskIds.size + 1} pomysłów`
+              : 'Wgraj surówkę'}
           </Button>
-        </div>
+
       ) : task.inputType === 'boolean' ? (
         <Button onClick={handleSubmit} className="w-full" size="lg">
           <CheckCircle2 className="mr-2 h-5 w-5" />
