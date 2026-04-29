@@ -162,13 +162,9 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
         setError('Podaj poprawny adres URL surówki (https://...)');
         return;
       }
-      if (!recordingNumber.trim()) {
-        setError('Podaj numer nagrania');
-        return;
-      }
-      const jsonValue = JSON.stringify({ url: noteUrl.trim(), recordingNumber: recordingNumber.trim(), notes: noteText.trim() });
+      const jsonValue = JSON.stringify({ url: noteUrl.trim(), notes: noteText.trim() });
       completeTask(task.id, jsonValue, currentUser?.role);
-      // Apply same link / number / note to additionally selected operator tasks
+      // Apply same link / note to additionally selected operator tasks
       additionalRawTaskIds.forEach(extraId => {
         completeTask(extraId, jsonValue, currentUser?.role);
       });
@@ -844,15 +840,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
                 className="pl-10"
               />
             </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Numer nagrania *</label>
-            <Input
-              placeholder="np. 001, 002..."
-              value={recordingNumber}
-              onChange={e => { setRecordingNumber(e.target.value); setError(''); }}
-              className="font-mono"
-            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Notatka / opis surówki</label>
