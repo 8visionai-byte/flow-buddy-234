@@ -1099,6 +1099,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Ładowanie danych z chmury…</div>
+      </div>
+    );
+  }
+
   return (
     <AppContext.Provider value={{
       currentUser, setCurrentUser, users, clients, projects, tasks, recordings, projectNotes,
