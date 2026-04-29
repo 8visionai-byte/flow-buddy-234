@@ -1206,22 +1206,147 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
                 <PopoverContent className="w-auto p-0" align="start">
                   <div className="p-3 border-b">
                     <p className="text-xs font-semibold text-foreground">Termin nagrania — {project.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Ustaw datę planu zdjęciowego</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Wybierz datę, Kierownika Planu i Operatora</p>
                   </div>
-                  <Calendar
-                    mode="single"
-                    selected={filmingDateParsed ?? undefined}
-                    onSelect={date => {
-                      if (date) {
-                        setFilmingDate(project.id, date.toISOString());
-                        setFilmingDateOpen(prev => ({ ...prev, [project.id]: false }));
-                      }
-                    }}
-                    disabled={(date) => { const t = new Date(); t.setHours(0,0,0,0); return date < t; }}
-                    locale={pl}
-                    initialFocus
-                  />
-                  {filmingDateParsed && (
+                  {(() => {
+                    const setupKey = project.id;
+                    const setup = filmingSetup[setupKey];
+                    if (!setup) {
+                      return (
+                        <Calendar
+                          mode="single"
+                          selected={filmingDateParsed ?? undefined}
+                          onSelect={date => {
+                            if (date) {
+                              const pendingIds = tasks
+                                .filter(t => {
+                                  if (t.title !== 'Ustaw termin planu zdjęciowego' || t.value) return false;
+                                  const relatedProject = projects.find(p => p.id === t.projectId);
+                                  return relatedProject?.clientId === project.clientId;
+                                })
+                                .map(t => t.projectId)
+                                .filter((id, i, a) => a.indexOf(id) === i);
+                              const selectedDefault = pendingIds.length ? pendingIds : [project.id];
+                              setFilmingSetup(prev => ({
+                                ...prev,
+                                [setupKey]: {
+                                  date,
+                                  kierownikId: project.assignedKierownikId ?? '',
+                                  operatorId: project.assignedOperatorId ?? '',
+                                  selectedProjectIds: selectedDefault.includes(project.id) ? selectedDefault : [...selectedDefault, project.id],
+                                },
+                              }));
+                            }
+                          }}
+                          disabled={(date) => { const t = new Date(); t.setHours(0,0,0,0); return date < t; }}
+                          locale={pl}
+                          initialFocus
+                          className={cn('p-3 pointer-events-auto')}
+                        />
+                      );
+                    }
+                    const allClientFilmingIds = tasks
+                      .filter(t => {
+                        if (t.title !== 'Ustaw termin planu zdjęciowego') return false;
+                        const relatedProject = projects.find(p => p.id === t.projectId);
+                        return relatedProject?.clientId === project.clientId;
+                      })
+                      .map(t => t.projectId)
+                      .filter((id, i, a) => a.indexOf(id) === i);
+                    const projectIdsForSession = allClientFilmingIds.length ? allClientFilmingIds : [project.id];
+                    return (
+                      <div className="p-4 w-72 space-y-4 pointer-events-auto">
+                        <div className="flex items-center gap-2">
+                          <CalendarClock className="h-4 w-4 text-primary shrink-0" />
+                          <span className="text-sm font-semibold text-foreground">
+                            {format(setup.date, 'EEEE, dd.MM.yyyy', { locale: pl })}
+                          </span>
+                          <button
+                            type="button"
+                            className="ml-auto text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
+                            onClick={() => setFilmingSetup(prev => { const n = { ...prev }; delete n[setupKey]; return n; })}
+                          >
+                            Zmień datę
+                          </button>
+                        </div>
+                        {/* KP selector */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kierownik Planu</label>
+                          <Select
+                            value={setup.kierownikId || 'none'}
+                            onValueChange={v => setFilmingSetup(prev => ({ ...prev, [setupKey]: { ...prev[setupKey], kierownikId: v === 'none' ? '' : v } }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Wybierz..." /></SelectTrigger>
+                            <SelectContent className="bg-popover z-50">
+                              <SelectItem value="none">— Brak —</SelectItem>
+                              {kierownicy.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Operator selector */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Operator</label>
+                          <Select
+                            value={setup.operatorId || 'none'}
+                            onValueChange={v => setFilmingSetup(prev => ({ ...prev, [setupKey]: { ...prev[setupKey], operatorId: v === 'none' ? '' : v } }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Wybierz..." /></SelectTrigger>
+                            <SelectContent className="bg-popover z-50">
+                              <SelectItem value="none">— Brak —</SelectItem>
+                              {users.filter(u => u.role === 'operator').map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Project selection (other ideas same client w/ pending filming) */}
+                        {projectIdsForSession.length > 1 && (
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pomysły w tej sesji</label>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {projectIdsForSession.map(projId => {
+                                const proj = projects.find(p => p.id === projId);
+                                if (!proj) return null;
+                                const isChecked = setup.selectedProjectIds.includes(projId);
+                                const isCurrent = projId === project.id;
+                                return (
+                                  <label key={projId} className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" className="rounded" checked={isChecked} disabled={isCurrent}
+                                      onChange={e => setFilmingSetup(prev => ({
+                                        ...prev,
+                                        [setupKey]: {
+                                          ...prev[setupKey],
+                                          selectedProjectIds: e.target.checked
+                                            ? [...prev[setupKey].selectedProjectIds, projId]
+                                            : prev[setupKey].selectedProjectIds.filter(id => id !== projId),
+                                        },
+                                      }))}
+                                    />
+                                    <span className="text-xs truncate">{proj.name}{isCurrent && ' (ten pomysł)'}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" className="flex-1" disabled={!setup.selectedProjectIds?.length}
+                            onClick={() => {
+                              setup.selectedProjectIds.forEach(projId => {
+                                if (setup.kierownikId) assignToProject(projId, 'assignedKierownikId', setup.kierownikId);
+                                if (setup.operatorId) assignToProject(projId, 'assignedOperatorId', setup.operatorId);
+                                setFilmingDate(projId, setup.date.toISOString());
+                              });
+                              setFilmingSetup(prev => { const n = { ...prev }; delete n[setupKey]; return n; });
+                              setFilmingDateOpen(prev => ({ ...prev, [project.id]: false }));
+                            }}
+                          >
+                            <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
+                            Zatwierdź termin
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {filmingDateParsed && !filmingSetup[project.id] && (
                     <div className="border-t px-3 pb-3 pt-2">
                       <button
                         onClick={() => {
