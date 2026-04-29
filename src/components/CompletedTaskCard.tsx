@@ -325,10 +325,37 @@ const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
         try {
           const notes: Record<string, string> = JSON.parse(task.value);
           const entries = Object.entries(notes).filter(([, v]) => v);
-          if (!entries.length) return null;
+
+          // Pull operator's note from raw_footage task in same project
+          const rawTask = tasks.find(t => t.projectId === task.projectId && t.inputType === 'raw_footage' && t.status === 'done');
+          let operatorNote: { url?: string; notes?: string } | undefined;
+          try {
+            if (rawTask?.value) {
+              const parsed = JSON.parse(rawTask.value);
+              if (parsed?.notes || parsed?.url) operatorNote = parsed;
+            }
+          } catch { /* ignore */ }
+          const hasOperator = !!(operatorNote && (operatorNote.notes?.trim() || operatorNote.url?.trim()));
+
+          if (!entries.length && !hasOperator) return null;
           return (
             <div className="mb-4 rounded-lg border border-border bg-muted/50 p-4 space-y-3">
               <div className="text-xs font-medium text-muted-foreground">Uwagi przed montażem</div>
+              {hasOperator && (
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">
+                    Operator (surówka)
+                  </div>
+                  {operatorNote!.notes?.trim() && (
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{operatorNote!.notes}</p>
+                  )}
+                  {operatorNote!.url?.trim() && (
+                    <a href={operatorNote!.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      Otwórz surówkę
+                    </a>
+                  )}
+                </div>
+              )}
               {entries.map(([role, note]) => (
                 <div key={role}>
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">
