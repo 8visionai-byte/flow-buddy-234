@@ -2590,6 +2590,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
         </AlertDialog>
       )}
 
+      {!readOnly && (
+        <AlertDialog open={bulkDeleteConfirm} onOpenChange={open => !open && setBulkDeleteConfirm(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Usunąć {bulkSelected.size} pomysł{bulkSelected.size === 1 ? '' : bulkSelected.size < 5 ? 'y' : 'ów'}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Wszystkie zaznaczone pomysły oraz przypisane do nich zadania zostaną trwale usunięte. Tej akcji nie można cofnąć.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Anuluj</AlertDialogCancel>
+              <AlertDialogAction onClick={handleBulkDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Usuń ({bulkSelected.size})
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
     </div>
   );
 };
