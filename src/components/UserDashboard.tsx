@@ -1022,24 +1022,26 @@ const UserDashboard = () => {
                     >
                       {taskIcon(task.status)}
                       <div className="flex-1 truncate min-w-0">
-                        {/* Project name + step number */}
-                        <div className="mb-0.5 flex items-center gap-1 truncate">
-                          {project?.name && (
-                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight truncate">
+                        {/* Project name */}
+                        {project?.name && (
+                          <div className="mb-0.5 truncate">
+                            <span className="inline-flex max-w-full items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight truncate">
                               {project.name}
                             </span>
-                          )}
-                          <StepBadge order={task.order} variant="compact" />
-                        </div>
-                        {/* Task title */}
-                        <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
-                        {/* Time info */}
-                        {timeInfo && (
-                          <div className={`flex items-center gap-0.5 text-[11px] font-medium mt-0.5 ${timeInfo.isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-                            <Clock className="h-2.5 w-2.5" />
-                            {timeInfo.isOverdue ? 'Po terminie' : timeInfo.label}
                           </div>
                         )}
+                        {/* Task title */}
+                        <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
+                        {/* Time info + step badge */}
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          {timeInfo ? (
+                            <div className={`flex items-center gap-0.5 text-[11px] font-medium ${timeInfo.isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              <Clock className="h-2.5 w-2.5" />
+                              {timeInfo.isOverdue ? 'Po terminie' : timeInfo.label}
+                            </div>
+                          ) : <span />}
+                          <StepBadge order={task.order} variant="compact" className="shrink-0" />
+                        </div>
                       </div>
                       {ideaWithNotes && (
                         <span className="shrink-0 rounded-full bg-warning/20 px-1.5 py-px text-[10px] font-semibold text-warning leading-none">
@@ -1080,15 +1082,17 @@ const UserDashboard = () => {
                     >
                       <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                       <div className="flex-1 truncate min-w-0">
-                        <div className="mb-0.5 flex items-center gap-1 truncate">
-                          {project?.name && (
-                            <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight truncate">
+                        {project?.name && (
+                          <div className="mb-0.5 truncate">
+                            <span className="inline-flex max-w-full items-center rounded bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary leading-tight truncate">
                               {project.name}
                             </span>
-                          )}
-                          <StepBadge order={task.order} variant="compact" />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <div className="truncate text-sm font-medium leading-snug flex-1 min-w-0">{task.title}</div>
+                          <StepBadge order={task.order} variant="compact" className="shrink-0" />
                         </div>
-                        <div className="truncate text-sm font-medium leading-snug">{task.title}</div>
                         {task.value && (
                           <div className="truncate text-[11px] text-muted-foreground mt-0.5">
                             {task.inputType === 'actor_assignment' ? (() => {
