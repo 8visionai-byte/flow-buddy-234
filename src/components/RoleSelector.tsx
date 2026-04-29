@@ -50,7 +50,12 @@ const RoleSelector = () => {
         ).length;
 
     const campaignTaskCount = user.role === 'influencer'
-      ? campaigns.filter(c => c.assignedInfluencerId === user.id && c.status === 'awaiting_ideas').length
+      ? campaigns.filter(c => {
+          if (c.assignedInfluencerId !== user.id) return false;
+          if (c.status === 'completed' || c.status === 'cancelled') return false;
+          const total = ideas.filter(i => i.campaignId === c.id).length;
+          return total < c.targetIdeaCount;
+        }).length
       : 0;
 
     const clientReviewCount = user.role === 'klient'
