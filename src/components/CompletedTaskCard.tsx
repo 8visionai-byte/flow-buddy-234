@@ -3,6 +3,7 @@ import { useApp } from '@/context/AppContext';
 import { Task, ROLE_LABELS, UserRole, TaskHistoryEntry } from '@/types';
 import SocialDescriptionsDisplay, { tryParseSocialDescriptions } from '@/components/SocialDescriptionsDisplay';
 import { tryParseSocialDates } from '@/components/SocialDatesWidget';
+import StepBadge from '@/components/StepBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Clock, MessageSquare, Send, ThumbsDown, ThumbsUp, User as UserIcon, Pencil, Link as LinkIcon, X, Check, Film, Hash, FileText, CalendarDays, Facebook, Instagram, Youtube, BookOpen, RotateCcw } from 'lucide-react';
