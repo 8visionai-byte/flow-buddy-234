@@ -205,6 +205,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
     }
   };
 
+  const toggleBulkSelected = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const exitBulkMode = () => {
+    setBulkSelectMode(false);
+    setBulkSelected(new Set());
+  };
+
+  const handleBulkDeleteConfirm = () => {
+    bulkSelected.forEach(id => deleteProject(id));
+    setBulkDeleteConfirm(false);
+    exitBulkMode();
+  };
+
   const isNagrywkaTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     return task?.assignedRoles.includes('kierownik_planu');
