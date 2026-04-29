@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { User, Task, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
 import { INITIAL_USERS, INITIAL_PROJECTS, INITIAL_CLIENTS, INITIAL_CAMPAIGNS, INITIAL_IDEAS, getInitialTasks, createTasksForProject } from '@/data/mockData';
 import { sendWebhook, buildWebhookPayload, WebhookEvent, sendIdeaWebhook, buildIdeaWebhookPayload } from '@/lib/webhook';
+import { hydrateFromSupabase, useSupabaseSync, type HydratedState } from '@/integrations/supabase/sync';
 
 // localStorage helpers
 const STORAGE_KEYS = {
