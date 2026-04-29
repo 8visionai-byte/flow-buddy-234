@@ -850,15 +850,6 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
               rows={3}
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Notatka / opis surówki</label>
-            <Textarea
-              placeholder="Opis jakości materiału, uwagi dla montażysty..."
-              value={noteText}
-              onChange={e => setNoteText(e.target.value)}
-              rows={3}
-            />
-          </div>
           {otherRawFootageTasks.length > 0 && (
             <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
               <div className="flex items-center justify-between">
