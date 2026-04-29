@@ -89,18 +89,55 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadFromStorage(STORAGE_KEYS.currentUser, null));
-  const [users, setUsers] = useState<User[]>(() => {
-    const stored: User[] = loadFromStorage(STORAGE_KEYS.users, INITIAL_USERS);
-    // migrate: strip "(Role)" suffix from names added by old seed data
-    return stored.map(u => ({ ...u, name: u.name.replace(/\s*\([^)]+\)$/, '') }));
-  });
-  const [clients, setClients] = useState<Client[]>(() => loadFromStorage(STORAGE_KEYS.clients, INITIAL_CLIENTS));
-  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage(STORAGE_KEYS.projects, INITIAL_PROJECTS));
-  const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage(STORAGE_KEYS.tasks, getInitialTasks()));
-  const [recordings, setRecordings] = useState<Recording[]>(() => loadFromStorage(STORAGE_KEYS.recordings, []));
-  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>(() => loadFromStorage(STORAGE_KEYS.projectNotes, []));
-  const [ideas, setIdeas] = useState<Idea[]>(() => loadFromStorage(STORAGE_KEYS.ideas, INITIAL_IDEAS));
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() => loadFromStorage(STORAGE_KEYS.campaigns, INITIAL_CAMPAIGNS));
+  const [users, setUsers] = useState<User[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Hydrate from Supabase on mount (single source of truth — no localStorage fallback for entities)
+  useEffect(() => {
+    let cancelled = false;
+    hydrateFromSupabase().then(state => {
+      if (cancelled) return;
+      setUsers(state.users);
+      setClients(state.clients);
+      setProjects(state.projects);
+      setTasks(state.tasks);
+      setRecordings(state.recordings);
+      setProjectNotes(state.projectNotes);
+      setIdeas(state.ideas);
+      setCampaigns(state.campaigns);
+      setHydrated(true);
+    }).catch(e => {
+      console.error('[AppProvider] hydrate failed', e);
+      setHydrated(true); // fail open — allow UI to render empty
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Apply realtime updates from other tabs/users
+  const applyRemote = useCallback((next: Partial<HydratedState>) => {
+    if (next.users) setUsers(next.users);
+    if (next.clients) setClients(next.clients);
+    if (next.projects) setProjects(next.projects);
+    if (next.tasks) setTasks(next.tasks);
+    if (next.recordings) setRecordings(next.recordings);
+    if (next.projectNotes) setProjectNotes(next.projectNotes);
+    if (next.ideas) setIdeas(next.ideas);
+    if (next.campaigns) setCampaigns(next.campaigns);
+  }, []);
+
+  // Sync layer: write-through diff + realtime subscription
+  useSupabaseSync(
+    { users, clients, projects, tasks, recordings, projectNotes, ideas, campaigns },
+    applyRemote,
+    hydrated,
+  );
 
   // Ref always holds latest state — lets zero-dep callbacks access current values without stale closures
   const ctxRef = useRef({ projects, users, currentUser, tasks, clients, campaigns, ideas });
@@ -130,16 +167,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     sendWebhook(payload);
   }, []);
 
-  // Persist to localStorage on every change
+  // Persist only currentUser to localStorage (per-browser preference)
   useEffect(() => { saveToStorage(STORAGE_KEYS.currentUser, currentUser); }, [currentUser]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.users, users); }, [users]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.clients, clients); }, [clients]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.projects, projects); }, [projects]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.tasks, tasks); }, [tasks]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.recordings, recordings); }, [recordings]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.projectNotes, projectNotes); }, [projectNotes]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.ideas, ideas); }, [ideas]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.campaigns, campaigns); }, [campaigns]);
 
   // ── One-time migration: unify Client.contactName with klient app_users ───
   // Goal: avoid showing the same person twice in dropdowns and avoid creating
