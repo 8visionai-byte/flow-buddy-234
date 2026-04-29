@@ -251,6 +251,7 @@ export type Database = {
           assigned_influencer_id: string | null
           assigned_kierownik_id: string | null
           assigned_operator_id: string | null
+          assigned_publikator_id: string | null
           client_email: string
           client_id: string | null
           client_name: string
@@ -271,6 +272,7 @@ export type Database = {
           assigned_influencer_id?: string | null
           assigned_kierownik_id?: string | null
           assigned_operator_id?: string | null
+          assigned_publikator_id?: string | null
           client_email?: string
           client_id?: string | null
           client_name?: string
@@ -291,6 +293,7 @@ export type Database = {
           assigned_influencer_id?: string | null
           assigned_kierownik_id?: string | null
           assigned_operator_id?: string | null
+          assigned_publikator_id?: string | null
           client_email?: string
           client_id?: string | null
           client_name?: string
