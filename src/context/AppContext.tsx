@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { User, Task, Project, Client, UserRole, TaskHistoryEntry, Recording, ProjectNote, ProjectPriority, Idea, IdeaStatus, Campaign } from '@/types';
-import { INITIAL_USERS, INITIAL_PROJECTS, INITIAL_CLIENTS, INITIAL_CAMPAIGNS, INITIAL_IDEAS, getInitialTasks, createTasksForProject } from '@/data/mockData';
+import { createTasksForProject } from '@/data/mockData';
 import { sendWebhook, buildWebhookPayload, WebhookEvent, sendIdeaWebhook, buildIdeaWebhookPayload } from '@/lib/webhook';
+import { hydrateFromSupabase, useSupabaseSync, type HydratedState } from '@/integrations/supabase/sync';
 
 // localStorage helpers
 const STORAGE_KEYS = {
@@ -88,18 +89,55 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadFromStorage(STORAGE_KEYS.currentUser, null));
-  const [users, setUsers] = useState<User[]>(() => {
-    const stored: User[] = loadFromStorage(STORAGE_KEYS.users, INITIAL_USERS);
-    // migrate: strip "(Role)" suffix from names added by old seed data
-    return stored.map(u => ({ ...u, name: u.name.replace(/\s*\([^)]+\)$/, '') }));
-  });
-  const [clients, setClients] = useState<Client[]>(() => loadFromStorage(STORAGE_KEYS.clients, INITIAL_CLIENTS));
-  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage(STORAGE_KEYS.projects, INITIAL_PROJECTS));
-  const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage(STORAGE_KEYS.tasks, getInitialTasks()));
-  const [recordings, setRecordings] = useState<Recording[]>(() => loadFromStorage(STORAGE_KEYS.recordings, []));
-  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>(() => loadFromStorage(STORAGE_KEYS.projectNotes, []));
-  const [ideas, setIdeas] = useState<Idea[]>(() => loadFromStorage(STORAGE_KEYS.ideas, INITIAL_IDEAS));
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() => loadFromStorage(STORAGE_KEYS.campaigns, INITIAL_CAMPAIGNS));
+  const [users, setUsers] = useState<User[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Hydrate from Supabase on mount (single source of truth — no localStorage fallback for entities)
+  useEffect(() => {
+    let cancelled = false;
+    hydrateFromSupabase().then(state => {
+      if (cancelled) return;
+      setUsers(state.users);
+      setClients(state.clients);
+      setProjects(state.projects);
+      setTasks(state.tasks);
+      setRecordings(state.recordings);
+      setProjectNotes(state.projectNotes);
+      setIdeas(state.ideas);
+      setCampaigns(state.campaigns);
+      setHydrated(true);
+    }).catch(e => {
+      console.error('[AppProvider] hydrate failed', e);
+      setHydrated(true); // fail open — allow UI to render empty
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Apply realtime updates from other tabs/users
+  const applyRemote = useCallback((next: Partial<HydratedState>) => {
+    if (next.users) setUsers(next.users);
+    if (next.clients) setClients(next.clients);
+    if (next.projects) setProjects(next.projects);
+    if (next.tasks) setTasks(next.tasks);
+    if (next.recordings) setRecordings(next.recordings);
+    if (next.projectNotes) setProjectNotes(next.projectNotes);
+    if (next.ideas) setIdeas(next.ideas);
+    if (next.campaigns) setCampaigns(next.campaigns);
+  }, []);
+
+  // Sync layer: write-through diff + realtime subscription
+  useSupabaseSync(
+    { users, clients, projects, tasks, recordings, projectNotes, ideas, campaigns },
+    applyRemote,
+    hydrated,
+  );
 
   // Ref always holds latest state — lets zero-dep callbacks access current values without stale closures
   const ctxRef = useRef({ projects, users, currentUser, tasks, clients, campaigns, ideas });
@@ -129,16 +167,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     sendWebhook(payload);
   }, []);
 
-  // Persist to localStorage on every change
+  // Persist only currentUser to localStorage (per-browser preference)
   useEffect(() => { saveToStorage(STORAGE_KEYS.currentUser, currentUser); }, [currentUser]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.users, users); }, [users]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.clients, clients); }, [clients]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.projects, projects); }, [projects]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.tasks, tasks); }, [tasks]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.recordings, recordings); }, [recordings]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.projectNotes, projectNotes); }, [projectNotes]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.ideas, ideas); }, [ideas]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.campaigns, campaigns); }, [campaigns]);
 
   // ── One-time migration: unify Client.contactName with klient app_users ───
   // Goal: avoid showing the same person twice in dropdowns and avoid creating
@@ -151,6 +181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   //   3) Else (0 users for this client) → create a new user.
   const migratedRef = useRef(false);
   useEffect(() => {
+    if (!hydrated) return;
     if (migratedRef.current) return;
     if (clients.length === 0) return; // wait until clients are loaded
     migratedRef.current = true;
@@ -218,6 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // hides the campaign from every klient user.
   const reviewerBackfillRef = useRef(false);
   useEffect(() => {
+    if (!hydrated) return;
     if (reviewerBackfillRef.current) return;
     if (campaigns.length === 0) return;
     if (users.length === 0) return;
@@ -813,24 +845,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId' | 'assignedPublikatorId', userId: string | null) => {
-    setProjects(prev => {
-      const next = prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p);
-      // Persist immediately — same belt-and-suspenders as addUser,
-      // so HMR reloads in dev don't lose role assignments before the useEffect fires
-      saveToStorage(STORAGE_KEYS.projects, next);
-      return next;
-    });
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p));
   }, []);
 
   const addUser = useCallback((data: Omit<User, 'id'>): string => {
     const id = `u${Date.now()}`;
-    setUsers(prev => {
-      const next = [...prev, { ...data, id }];
-      // Persist immediately (belt-and-suspenders alongside the useEffect)
-      // so HMR reloads in dev don't lose newly created users before the effect fires
-      saveToStorage(STORAGE_KEYS.users, next);
-      return next;
-    });
+    setUsers(prev => [...prev, { ...data, id }]);
     return id;
   }, []);
 
@@ -1078,6 +1098,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { ...t, roleCompletions: { ...t.roleCompletions, [role]: note } };
     }));
   }, []);
+
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Ładowanie danych z chmury…</div>
+      </div>
+    );
+  }
 
   return (
     <AppContext.Provider value={{

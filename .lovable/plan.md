@@ -1,61 +1,70 @@
 ## Cel
+Przed spotkaniem z klientem: wszystkie zmiany (pomysły, zadania, kampanie, oceny, notatki) widoczne live na różnych przeglądarkach/urządzeniach. Bez migracji danych z localStorage — startujemy świeżo z danych już istniejących w Lovable Cloud.
 
-W zadaniu "Wnieś uwagi przed montażem" (multi-party notes — KP, DZ, Klient) ma się dodatkowo pojawiać **notatka od operatora** wpisana w polu „Notatka / opis surówki" przy zadaniu „Wgraj surówkę na serwer". Operator nie jest stroną piszącą w tym zadaniu — jego uwaga ma być widoczna jako informacja zaciągnięta z poprzedniego kroku tej samej fazy.
+## Stan obecny
+- Cały `AppContext.tsx` (1102 linie) trzyma stan w `useState` + zapisuje do `localStorage` (9 kluczy `yads_*`).
+- Tabele w Cloud już istnieją i mają dane testowe (102 tasks, 6 projects, 8 ideas, 4 campaigns, 4 clients, 13 app_users). RLS = permissive (USING true), więc anon key wystarczy.
+- Każda zakładka ma własny, izolowany stan — stąd brak synchronizacji.
 
-Dziś tę notatkę widzą tylko Admin, Montażysta i historia projektu. Influencer (który robi „Brief dla montażysty") oraz pozostałe strony przy panelu nie mają jej pod ręką.
+## Zakres (3 kroki, bez migracji danych)
 
-## Zakres zmian
+### Krok 1 — Zapisy do bazy (write-through)
+W `src/context/AppContext.tsx` każda mutacja stanu, która obecnie woła `setX(...)`, dodatkowo wykona odpowiedni `supabase.from('...').upsert(...)` / `.delete()`. Dotyczy:
+- `tasks` — completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask, setTaskDeadline, updatePartyNote, setFilmingDate
+- `projects` — addProject, deleteProject, toggleFreezeProject, assignToProject, setPublicationDate, setProjectPriority, setProjectSla
+- `ideas` — addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject (z bulk-insertem nowych tasks)
+- `campaigns` — addCampaign, updateCampaign, deleteCampaign (kaskada do ideas)
+- `clients` — add/update/delete
+- `app_users` — addUser/updateUser/deleteUser
+- `recordings`, `project_notes` — add/delete
 
-### 1) `src/components/MultiPartyNotesPanel.tsx`
+Stan lokalny aktualizujemy optymistycznie (jak teraz), a w tle leci zapis. Błędy logujemy do konsoli + toast (nie blokujemy UX podczas demo).
 
-- Dodać opcjonalny prop `operatorNote?: { url?: string; notes?: string; uploadedBy?: string }`.
-- Jeśli `operatorNote.notes` (lub url) istnieje, wyświetlić nową, wyróżnioną kartkę nad sekcją „Uwagi od zespołu":
-  - Etykieta: „Uwaga od operatora (surówka)" + ikona 🎥 / `Film`.
-  - Pokazać tekst notatki (`whitespace-pre-wrap`) i — jeśli jest — link do surówki jako mały link „Otwórz surówkę".
-  - Read-only, lekko inny kolor tła (np. `bg-muted/40 border-muted`) żeby nie mylić z notatkami stron.
-- Nie zmieniać logiki zapisu — operator nie wpisuje tu nic, jego uwaga przychodzi z innego zadania.
+### Krok 2 — Odczyt z bazy przy starcie
+Zamiast `loadFromStorage(...)` z fallbackiem do `INITIAL_*`, na mount `AppProvider` pobiera wszystkie tabele równolegle (`Promise.all` 8x `select('*')`). Do czasu załadowania pokazujemy krótki loader (spinner full-screen). 
 
-### 2) Helper do pobierania notatki operatora
+Wprowadzamy mappery DB ↔ aplikacja (snake_case → camelCase), bo nasze typy w `src/types/index.ts` używają camelCase, a kolumny w bazie snake_case. Jeden plik `src/integrations/supabase/mappers.ts` z funkcjami `taskFromRow/taskToRow`, `projectFromRow/projectToRow` itd.
 
-W każdym z trzech miejsc, gdzie używany jest `MultiPartyNotesPanel`, znajdujemy zadanie operatora dla tego samego `projectId`:
+`localStorage` zostawiamy tylko dla `currentUser` (wybór roli/użytkownika to preferencja przeglądarki, nie współdzielony stan). Pozostałe klucze `yads_*` przestają być używane — kod ładujący je usuwamy.
 
-```ts
-const rawTask = tasks.find(
-  t => t.projectId === task.projectId &&
-       t.inputType === 'raw_footage' &&
-       t.status === 'done'
-);
-let operatorNote;
-try {
-  if (rawTask?.value) {
-    const parsed = JSON.parse(rawTask.value);
-    if (parsed?.notes || parsed?.url) operatorNote = parsed;
-  }
-} catch {}
+### Krok 3 — Realtime między zakładkami
+W `AppProvider` jeden kanał Supabase Realtime nasłuchuje `postgres_changes` (event `*`, schema `public`) na 8 tabelach. Każde zdarzenie INSERT/UPDATE/DELETE aktualizuje odpowiednią tablicę w stanie React (merge po `id`). Dzięki temu zmiana w zakładce A pojawia się w zakładce B w <1s.
+
+Wymagane SQL (jednorazowa migracja schematu — włączenie tabel do publikacji realtime):
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.ideas;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.campaigns;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_users;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.recordings;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.project_notes;
+ALTER TABLE public.tasks REPLICA IDENTITY FULL;
+ALTER TABLE public.projects REPLICA IDENTITY FULL;
+ALTER TABLE public.ideas REPLICA IDENTITY FULL;
+ALTER TABLE public.campaigns REPLICA IDENTITY FULL;
+ALTER TABLE public.clients REPLICA IDENTITY FULL;
+ALTER TABLE public.app_users REPLICA IDENTITY FULL;
+ALTER TABLE public.recordings REPLICA IDENTITY FULL;
+ALTER TABLE public.project_notes REPLICA IDENTITY FULL;
 ```
 
-Przekazać `operatorNote` do `<MultiPartyNotesPanel ... operatorNote={operatorNote} />`.
+## Co się NIE zmienia
+- API `useApp()` — żaden komponent nie wymaga edycji. Wszystkie funkcje (`completeTask`, `addIdea`, itd.) zachowują tę samą sygnaturę.
+- Logika biznesowa (sekwencja 19 etapów, ping-pong, konsensus, SLA) — bez zmian.
+- Webhooks do Make.com — bez zmian.
+- Wybór użytkownika (role switcher) — nadal w localStorage tej przeglądarki.
 
-### 3) Miejsca wywołań do zaktualizowania
+## Uwagi techniczne
+- Pola JSONB (`history`, `role_completions`, `client_votes`, `evaluations`) — Supabase serializuje automatycznie, mapper tylko przekazuje obiekt.
+- Pola ARRAY (`assigned_roles`, `assigned_client_ids`, `reviewer_ids`) — natywne tablice Postgres.
+- `acceptIdeaAsProject` to złożona operacja (idea→accepted, campaign update, nowy project, ~17 nowych tasks). Zrobimy ją sekwencyjnie: upsert idea → upsert campaign → insert project → bulk insert tasks. Realtime zsynchronizuje pozostałe zakładki.
+- Bez migracji danych: jeśli w bazie brakuje encji, których używasz lokalnie, znikną po przeładowaniu strony. Świadoma decyzja — start od czystego stanu w Cloud.
 
-- `src/components/TaskCard.tsx` (linia ~829) — panel widoczny dla KP/DZ/Klient, gdy otwierają zadanie.
-- `src/components/UserDashboard.tsx` (linia ~411) — sekcja read-only przy zadaniu Montażysty „Wgraj zmontowany film".
-- `src/components/UserDashboard.tsx` (linia ~1209) — live panel u Influencera.
+## Po wdrożeniu — szybki test
+1. Otwórz aplikację w 2 zakładkach jako różni użytkownicy.
+2. W zakładce A dodaj pomysł / oceń pomysł / zatwierdź zadanie.
+3. W zakładce B (bez F5) zmiana powinna pojawić się w ciągu sekundy.
 
-W każdym miejscu mamy już dostęp do tablicy `tasks` z kontekstu, więc wyszukanie zadania `raw_footage` jest trywialne.
-
-### 4) `src/components/CompletedTaskCard.tsx` (opcjonalnie)
-
-Sekcja podsumowująca „Uwagi przed montażem" (linia ~323) — dla spójności dorzucić tę samą uwagę operatora jako pierwszy wpis (read-only), również wyciągając ją z zadania `raw_footage` tego projektu.
-
-## Czego NIE robimy
-
-- Nie dodajemy operatora do `assignedRoles` zadania „Wnieś uwagi przed montażem" — nie jest on uczestnikiem konsensusu i nie blokuje przejścia kroku.
-- Nie tworzymy nowego pola w bazie — używamy istniejącej notatki z `raw_footage.value` (klucz `notes`).
-- Nie ruszamy webhooków, historii, kolejności pipeline'u.
-
-## Efekt dla użytkownika
-
-- Influencer pisząc „Brief dla montażysty" widzi w jednym panelu: uwagę operatora z planu + uwagi KP/DZ/Klienta.
-- KP/DZ/Klient otwierając zadanie „Wnieś uwagi przed montażem" od razu widzą, co operator zanotował przy wgrywaniu surówki.
-- Montażysta w swoim widoku też ma tę uwagę pod ręką (już dziś widzi ją osobno, teraz będzie spójnie w panelu).
+Po Twojej akceptacji wykonuję wszystkie 3 kroki w jednym przebiegu (migracja SQL + refactor `AppContext.tsx` + nowy plik `mappers.ts`).
