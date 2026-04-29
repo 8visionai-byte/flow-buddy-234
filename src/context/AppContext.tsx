@@ -181,6 +181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   //   3) Else (0 users for this client) → create a new user.
   const migratedRef = useRef(false);
   useEffect(() => {
+    if (!hydrated) return;
     if (migratedRef.current) return;
     if (clients.length === 0) return; // wait until clients are loaded
     migratedRef.current = true;
