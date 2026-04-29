@@ -1182,7 +1182,10 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           {/* Filming date indicator */}
           {filmingUrgency !== 'none' && !isComplete && (
             <div className="mt-1.5" onClick={e => e.stopPropagation()}>
-              <Popover open={isFilmingDateOpen} onOpenChange={open => setFilmingDateOpen(prev => ({ ...prev, [project.id]: open }))}>
+              <Popover open={isFilmingDateOpen} onOpenChange={open => {
+                setFilmingDateOpen(prev => ({ ...prev, [project.id]: open }));
+                if (!open) setFilmingSetup(prev => { const n = { ...prev }; delete n[project.id]; return n; });
+              }}>
                 <PopoverTrigger asChild>
                   <button
                     className={cn(
