@@ -1,40 +1,61 @@
-## Przyczyna
+## Problem
 
-W `src/components/AdminDashboard.tsx` mamy DWA niezależne UI ustawiania terminu nagrania:
-
-1. **Popover na kafelku pomysłu** (linie 1185–1238) — przycisk „Ustaw termin nagrania!" / „Warto zaplanować termin nagrania". Po wyborze daty wywołuje TYLKO `setFilmingDate(project.id, date.toISOString())` i zamyka się. Brak kroku przypisania zespołu.
-2. **Popover w panelu zadań admina** (linie 1852–1997) — pełny 2-krokowy flow: data → wybór KP/Operator + checklista pomysłów w sesji → „Zatwierdź termin", który równocześnie wywołuje `assignToProject(..., 'assignedKierownikId', ...)`, `assignToProject(..., 'assignedOperatorId', ...)` oraz `setFilmingDate(...)`.
-
-Użytkownik kliknął czerwony, pulsujący przycisk na kafelku — pierwszy przepływ. Stąd po ustawieniu daty trzeba ręcznie wracać po Kierownika i Operatora.
+Operator obecnie musi otworzyć każdy pomysł osobno i wkleić ten sam link do surówki dla każdego z osobna (zadanie "Wgraj surówkę na serwer", `inputType: 'raw_footage'`). W praktyce jedno nagranie z planu zawiera materiał do kilku pomysłów, więc ten sam link powinien zostać przypisany do wielu zadań jednym kliknięciem — analogicznie do batchowego "Ustaw termin nagrania" w panelu Admina.
 
 ## Rozwiązanie
 
-Zastąpić uproszczony popover z kafelka (linie 1182–1240) tym samym 2-krokowym flow (data → KP/Operator → Zatwierdź), który jest już w panelu zadań admina (1852–1997). Wyodrębnić ten flow do jednego współdzielonego komponentu, żeby uniknąć duplikacji.
+Rozszerzyć panel zadania "Wgraj surówkę na serwer" w `TaskCard.tsx` o sekcję wyboru, do których innych pomysłów (tasków `raw_footage` w statusie `todo`) Operator chce zastosować ten sam link, numer nagrania i notatkę. Po kliknięciu "Wgraj surówkę" wszystkie zaznaczone zadania zostają oznaczone jako wykonane z tymi samymi danymi.
 
-### Konkretne zmiany w `src/components/AdminDashboard.tsx`
+### Zachowanie UI
 
-1. Wyodrębnić wewnętrzny komponent `FilmingDatePopover` (lub inline render-helper) zawierający:
-   - Krok 1: kalendarz wyboru daty (z blokadą dat przeszłych).
-   - Krok 2: pola Select „Kierownik Planu" i „Operator" pre-wypełnione obecnymi przypisaniami projektu, opcjonalna checklista innych pomysłów tego samego klienta z otwartym zadaniem „Ustaw termin planu zdjęciowego" (jak dziś w panelu zadań), przycisk „Zatwierdź termin" wykonujący równocześnie `assignToProject` (KP, Operator) + `setFilmingDate` dla wszystkich zaznaczonych pomysłów.
-   - Opcja „Wyczyść — do ustalenia" gdy data już ustawiona (zachowanie z obecnego popovera kafelka).
+W panelu zadania (sekcja `inputType === 'raw_footage'` w `TaskCard.tsx`, linie 816–858) pod polami "Link / Numer / Notatka" dodać blok:
 
-2. Użyć tego komponentu w obu miejscach:
-   - Kafelek pomysłu (linie 1185–1238) — zamiast obecnego prostego kalendarza.
-   - Panel zadań admina (linie 1852–1997) — refaktor, żeby usunąć duplikację.
+```text
+┌─ Zastosuj do innych pomysłów ────────────────┐
+│ ☑ Aktualny pomysł (zawsze, disabled)          │
+│ ☐ "Tytuł pomysłu B" — Klient X                │
+│ ☐ "Tytuł pomysłu C" — Klient X                │
+│ ☐ "Tytuł pomysłu D" — Klient Y                │
+└───────────────────────────────────────────────┘
+Wgrasz surówkę do: 3 pomysłów
+[ ✈ Wgraj surówkę do 3 pomysłów ]
+```
 
-3. Stan `filmingSetup` (już istniejący) wykorzystać wspólnie. Klucz pozostaje per-task (`ftId`); dla wywołania z kafelka, gdzie nie ma `ftId`, użyć `project.id` jako klucza.
+Reguły listy:
+- Pokazują się wszystkie inne taski Operatora typu `raw_footage` w statusie `todo` (czyli pozycje z lewej kolumny "Do zrobienia"), niezależnie od klienta — Operator sam decyduje, co należy do tej samej sesji nagraniowej.
+- Sortowanie: najpierw projekty tego samego klienta co bieżący, potem reszta. Pokazujemy tytuł pomysłu + nazwę firmy klienta dla rozróżnienia.
+- Jeżeli nie ma innych zadań `raw_footage todo`, sekcja w ogóle się nie renderuje (zachowanie identyczne jak dziś).
+- Bieżący task jest zawsze włączony i nie da się go odznaczyć.
+- Etykieta przycisku zmienia się dynamicznie: "Wgraj surówkę" (1 pomysł) lub "Wgraj surówkę do N pomysłów".
 
-### Efekt
+### Logika submit
 
-- Klik „Ustaw termin nagrania!" na kafelku → kalendarz → po wyborze daty od razu pokazują się pola KP + Operator (pre-wypełnione obecnymi wartościami) i checklista innych pomysłów klienta z tym samym otwartym zadaniem → „Zatwierdź termin" zapisuje wszystko jednym kliknięciem.
-- Brak konieczności ręcznego dosztywania KP/Operatora po ustawieniu daty.
-- Spójność z panelem zadań admina (ten sam UX w obu miejscach).
+W `handleSubmit` dla `raw_footage`:
+1. Zwalidować URL i numer nagrania (bez zmian).
+2. Zbudować jednolity `jsonValue = { url, recordingNumber, notes }`.
+3. Wywołać `completeTask(taskId, jsonValue, currentUser?.role)` dla bieżącego zadania **oraz** dla każdego zaznaczonego dodatkowego taska.
+4. Każde wywołanie przechodzi przez istniejące mechanizmy `AppContext` (historia, odblokowanie kolejnego etapu „Wgraj zmontowany film" dla każdego pomysłu, webhooki) — nie dotykamy logiki sekwencji.
 
-## Weryfikacja
+### Stan komponentu
 
-1. Pomysł 4 z aktywnym zadaniem „Ustaw termin planu zdjęciowego" → klik czerwonego przycisku na kafelku → wybór daty → pojawiają się pola KP/Operator → „Zatwierdź" → na karcie pomysłu od razu widać przypisanych KP i Operatora oraz datę nagrania.
-2. Zmiana już ustawionej daty → ten sam flow, pre-wypełnione pola.
-3. „Wyczyść — do ustalenia" działa jak dotychczas (czyści tylko datę, nie ruszamy przypisań).
-4. Panel zadań admina — bez regresji (ten sam komponent).
+Dodać w `TaskCard.tsx` nowy lokalny stan:
+- `additionalTaskIds: Set<string>` — początkowo pusty.
+- Wyliczana lista kandydatów: `tasks.filter(t => t.id !== task.id && t.inputType === 'raw_footage' && t.status === 'todo' && t.assignedRoles?.includes('operator'))`.
 
-Brak migracji DB. Zmiany w jednym pliku.
+Reset stanu po wykonaniu (komponent i tak się odmontowuje, gdy task znika z listy).
+
+## Pliki do zmiany
+
+- `src/components/TaskCard.tsx`
+  - dodać stan `additionalTaskIds`
+  - rozszerzyć `handleSubmit` o pętlę `completeTask` dla zaznaczonych
+  - rozszerzyć blok `raw_footage` (linie 816–858) o checklistę innych pomysłów i dynamiczną etykietę przycisku
+  - użyć `useApp()` do pobrania `tasks` i `projects` (już importowane)
+
+Brak zmian w bazie, kontekście, schemacie tasków ani w logice odblokowywania kolejnych etapów. Brak migracji.
+
+## Edge cases
+
+- Gdy Operator zaznaczy kilka pomysłów, ale walidacja URL/numeru zawiedzie → żaden task nie jest zapisany (walidacja przed pętlą).
+- Gdy dwa zaznaczone taski należą do różnych klientów — to świadomy wybór Operatora (np. jedno nagranie dla dwóch firm), dozwolony.
+- Numer nagrania jest ten sam dla wszystkich zaznaczonych pozycji — zgodne z user storym (jedno fizyczne nagranie = jeden numer).
