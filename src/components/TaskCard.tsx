@@ -826,7 +826,19 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
           </Button>
         </div>
       ) : task.inputType === 'multi_party_notes' ? (
-        <MultiPartyNotesPanel key={task.id} task={task} role={currentUser?.role ?? ''} onSubmit={(note) => completeTask(task.id, note, currentUser?.role)} onUpdate={(note) => updatePartyNote(task.id, currentUser?.role ?? '', note)} />
+        (() => {
+          const rawTask = tasks.find(t => t.projectId === task.projectId && t.inputType === 'raw_footage' && t.status === 'done');
+          let operatorNote: { url?: string; notes?: string } | undefined;
+          try {
+            if (rawTask?.value) {
+              const parsed = JSON.parse(rawTask.value);
+              if (parsed?.notes || parsed?.url) operatorNote = parsed;
+            }
+          } catch { /* ignore */ }
+          return (
+            <MultiPartyNotesPanel key={task.id} task={task} role={currentUser?.role ?? ''} operatorNote={operatorNote} onSubmit={(note) => completeTask(task.id, note, currentUser?.role)} onUpdate={(note) => updatePartyNote(task.id, currentUser?.role ?? '', note)} />
+          );
+        })()
       ) : task.inputType === 'raw_footage' ? (
         <div className="space-y-3">
           <div>
