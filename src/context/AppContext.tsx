@@ -845,24 +845,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId' | 'assignedPublikatorId', userId: string | null) => {
-    setProjects(prev => {
-      const next = prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p);
-      // Persist immediately — same belt-and-suspenders as addUser,
-      // so HMR reloads in dev don't lose role assignments before the useEffect fires
-      saveToStorage(STORAGE_KEYS.projects, next);
-      return next;
-    });
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p));
   }, []);
 
   const addUser = useCallback((data: Omit<User, 'id'>): string => {
     const id = `u${Date.now()}`;
-    setUsers(prev => {
-      const next = [...prev, { ...data, id }];
-      // Persist immediately (belt-and-suspenders alongside the useEffect)
-      // so HMR reloads in dev don't lose newly created users before the effect fires
-      saveToStorage(STORAGE_KEYS.users, next);
-      return next;
-    });
+    setUsers(prev => [...prev, { ...data, id }]);
     return id;
   }, []);
 
