@@ -162,13 +162,9 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
         setError('Podaj poprawny adres URL surówki (https://...)');
         return;
       }
-      if (!recordingNumber.trim()) {
-        setError('Podaj numer nagrania');
-        return;
-      }
-      const jsonValue = JSON.stringify({ url: noteUrl.trim(), recordingNumber: recordingNumber.trim(), notes: noteText.trim() });
+      const jsonValue = JSON.stringify({ url: noteUrl.trim(), notes: noteText.trim() });
       completeTask(task.id, jsonValue, currentUser?.role);
-      // Apply same link / number / note to additionally selected operator tasks
+      // Apply same link / note to additionally selected operator tasks
       additionalRawTaskIds.forEach(extraId => {
         completeTask(extraId, jsonValue, currentUser?.role);
       });
