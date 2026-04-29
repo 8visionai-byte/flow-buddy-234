@@ -19,6 +19,7 @@ import {
   Building2, Clock, LayoutList, Users, Phone, Mail, Lightbulb, UserPlus, Check, X, Eye,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import AddCampaignDialog from '@/components/AddCampaignDialog';
 import TeamManagementDialog from '@/components/TeamManagementDialog';
 import ClientManagementDialog from '@/components/ClientManagementDialog';
@@ -72,6 +73,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -199,6 +203,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
       deleteProject(deleteConfirm);
       setDeleteConfirm(null);
     }
+  };
+
+  const toggleBulkSelected = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const exitBulkMode = () => {
+    setBulkSelectMode(false);
+    setBulkSelected(new Set());
+  };
+
+  const handleBulkDeleteConfirm = () => {
+    bulkSelected.forEach(id => deleteProject(id));
+    setBulkDeleteConfirm(false);
+    exitBulkMode();
   };
 
   const isNagrywkaTask = (taskId: string) => {
@@ -2277,6 +2300,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
   const renderDetailsView = () => {
     const groups = getProjectGroups(filteredProjects);
 
+    const allVisibleIds = filteredProjects.map(p => p.id);
+    const allSelected = bulkSelectMode && allVisibleIds.length > 0 && allVisibleIds.every(id => bulkSelected.has(id));
+
     return (
       <div className="space-y-4">
         {/* Client filter bar (moved inside this view) */}
@@ -2303,6 +2329,46 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
           </div>
         )}
 
+        {/* Bulk-select toolbar */}
+        {!readOnly && filteredProjects.length > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2">
+            {!bulkSelectMode ? (
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => setBulkSelectMode(true)}>
+                <Check className="h-3.5 w-3.5" />
+                Zaznacz wiele
+              </Button>
+            ) : (
+              <>
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={checked => {
+                    if (checked) setBulkSelected(new Set(allVisibleIds));
+                    else setBulkSelected(new Set());
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Zaznaczono: <span className="font-semibold text-foreground">{bulkSelected.size}</span>
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={exitBulkMode}>
+                    Anuluj
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5"
+                    disabled={bulkSelected.size === 0}
+                    onClick={() => setBulkDeleteConfirm(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Usuń zaznaczone ({bulkSelected.size})
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Projects grouped by client */}
         {groups.map((group, groupIdx) => (
           <div key={group.key}>
@@ -2323,7 +2389,29 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
             </div>
 
             {/* Projects in this group */}
-            {group.projects.map(project => renderProjectSummaryCard(project, () => navigateToProject(project.id)))}
+            {group.projects.map(project => {
+              if (bulkSelectMode) {
+                const checked = bulkSelected.has(project.id);
+                return (
+                  <div
+                    key={project.id}
+                    className={cn(
+                      "mb-3 flex items-start gap-3 rounded-xl border p-2 transition-colors cursor-pointer",
+                      checked ? "border-primary/60 bg-primary/5" : "border-transparent hover:bg-muted/30"
+                    )}
+                    onClick={() => toggleBulkSelected(project.id)}
+                  >
+                    <div className="pt-4 pl-1" onClick={e => e.stopPropagation()}>
+                      <Checkbox checked={checked} onCheckedChange={() => toggleBulkSelected(project.id)} />
+                    </div>
+                    <div className="flex-1 min-w-0 pointer-events-none">
+                      {renderProjectSummaryCard(project, () => {})}
+                    </div>
+                  </div>
+                );
+              }
+              return renderProjectSummaryCard(project, () => navigateToProject(project.id));
+            })}
 
             {/* Spacer between groups */}
             {groupIdx < groups.length - 1 && <div className="mb-4" />}
@@ -2496,6 +2584,25 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
               <AlertDialogCancel>Anuluj</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Usuń pomysł
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {!readOnly && (
+        <AlertDialog open={bulkDeleteConfirm} onOpenChange={open => !open && setBulkDeleteConfirm(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Usunąć {bulkSelected.size} pomysł{bulkSelected.size === 1 ? '' : bulkSelected.size < 5 ? 'y' : 'ów'}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Wszystkie zaznaczone pomysły oraz przypisane do nich zadania zostaną trwale usunięte. Tej akcji nie można cofnąć.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Anuluj</AlertDialogCancel>
+              <AlertDialogAction onClick={handleBulkDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Usuń ({bulkSelected.size})
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
