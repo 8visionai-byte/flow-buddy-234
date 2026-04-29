@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Task } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Clock, MessageSquare, User as UserIcon, Send, CheckCircle2, Check } from 'lucide-react';
+import { Clock, MessageSquare, User as UserIcon, Send, CheckCircle2, Check, Film, ExternalLink } from 'lucide-react';
 
 export const NOTES_ROLE_LABELS: Record<string, string> = {
   kierownik_planu: 'Kierownik Planu',
@@ -23,11 +23,13 @@ function MultiPartyNotesPanel({
   role,
   onSubmit,
   onUpdate,
+  operatorNote,
 }: {
   task: Task;
   role: string;
   onSubmit: (note: string) => void;
   onUpdate: (note: string) => void;
+  operatorNote?: { url?: string; notes?: string };
 }) {
   const requiredRoles = task.assignedRoles; // ['kierownik_planu', 'admin', 'klient']
   const myNote = task.roleCompletions[role] ?? '';
@@ -54,8 +56,34 @@ function MultiPartyNotesPanel({
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const hasOperatorNote = !!(operatorNote && (operatorNote.notes?.trim() || operatorNote.url?.trim()));
+
   return (
     <div className="space-y-4">
+      {/* Operator's note from raw footage upload (read-only) */}
+      {hasOperatorNote && (
+        <div className="rounded-lg border border-muted bg-muted/40 p-3 space-y-1.5">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Film className="h-3 w-3" />
+            Uwaga od operatora (surówka)
+          </div>
+          {operatorNote!.notes?.trim() && (
+            <p className="text-sm text-foreground whitespace-pre-wrap pl-1">{operatorNote!.notes}</p>
+          )}
+          {operatorNote!.url?.trim() && (
+            <a
+              href={operatorNote!.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline pl-1"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Otwórz surówkę
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Others' submitted notes */}
       {othersNotes.length > 0 && (
         <div className="space-y-2">
