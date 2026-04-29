@@ -73,6 +73,9 @@ const AdminDashboard = ({ readOnly = false, allowedTaskIds }: AdminDashboardProp
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCampaignConfirm, setDeleteCampaignConfirm] = useState<string | null>(null);
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [adminLinkInputs, setAdminLinkInputs] = useState<Record<string, string>>({});
   const [adminTextInputs, setAdminTextInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
