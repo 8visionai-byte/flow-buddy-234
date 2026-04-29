@@ -246,7 +246,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   if (task.status === 'deferred') {
     return (
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="mb-2 flex items-center gap-2 flex-wrap"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
+        <div className="mb-2 flex items-center justify-between gap-2"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
         <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
           <Clock className="h-4 w-4 shrink-0" />
@@ -261,7 +261,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   if (task.status === 'rejected_final') {
     return (
       <div className="animate-fade-in rounded-xl border border-destructive/30 bg-card p-6 shadow-sm">
-        <div className="mb-2 flex items-center gap-2 flex-wrap"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
+        <div className="mb-2 flex items-center justify-between gap-2"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
         <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -281,8 +281,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     return (
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm space-y-5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap min-w-0"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
-          <SlaTimer assignedAt={task.assignedAt} compact />
+          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span>
+          <div className="flex items-center gap-2 shrink-0"><StepBadge order={task.order} className="shrink-0" /><SlaTimer assignedAt={task.assignedAt} compact /></div>
         </div>
         <h3 className="text-lg font-semibold text-foreground">{task.title}</h3>
 
@@ -370,8 +370,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap min-w-0"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
-          <SlaTimer assignedAt={task.assignedAt} compact />
+          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span>
+          <div className="flex items-center gap-2 shrink-0"><StepBadge order={task.order} className="shrink-0" /><SlaTimer assignedAt={task.assignedAt} compact /></div>
         </div>
         <h3 className="text-lg font-semibold text-foreground">{task.title}</h3>
 
@@ -459,8 +459,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     return (
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="mb-1 flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap min-w-0"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
-          <SlaTimer assignedAt={task.assignedAt} compact />
+          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span>
+          <div className="flex items-center gap-2 shrink-0"><StepBadge order={task.order} className="shrink-0" /><SlaTimer assignedAt={task.assignedAt} compact /></div>
         </div>
         <div className="mb-2 flex items-center gap-2">
           <h3 className="text-lg font-semibold text-foreground">{task.title}</h3>
@@ -637,8 +637,8 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
     return (
       <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="mb-1 flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap min-w-0"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
-          <SlaTimer assignedAt={task.assignedAt} compact />
+          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span>
+          <div className="flex items-center gap-2 shrink-0"><StepBadge order={task.order} className="shrink-0" /><SlaTimer assignedAt={task.assignedAt} compact /></div>
         </div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
 
@@ -775,7 +775,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   return (
     <div className="animate-fade-in rounded-xl border border-border bg-card p-6 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
-        <div className="flex items-center gap-2 flex-wrap min-w-0"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
+        <div className="flex items-center justify-between gap-2"><span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary tracking-wide truncate min-w-0 max-w-full">{projectName}</span><StepBadge order={task.order} className="shrink-0" /></div>
         {!usesDeadline && <SlaTimer assignedAt={task.assignedAt} compact />}
       </div>
       <h3 className="mb-2 text-lg font-semibold text-foreground">{task.title}</h3>
