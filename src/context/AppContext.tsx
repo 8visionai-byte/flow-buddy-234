@@ -249,6 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // hides the campaign from every klient user.
   const reviewerBackfillRef = useRef(false);
   useEffect(() => {
+    if (!hydrated) return;
     if (reviewerBackfillRef.current) return;
     if (campaigns.length === 0) return;
     if (users.length === 0) return;
