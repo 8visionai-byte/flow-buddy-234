@@ -131,8 +131,21 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
   );
   const [privateNotesSaved, setPrivateNotesSaved] = useState(false);
   const [recordingNumber, setRecordingNumber] = useState('');
+  const [additionalRawTaskIds, setAdditionalRawTaskIds] = useState<Set<string>>(new Set());
 
   const project = projects.find(p => p.id === task.projectId);
+
+  // Other "Wgraj surówkę na serwer" tasks for the operator that are still to-do
+  const otherRawFootageTasks = task.inputType === 'raw_footage' && task.status === 'todo'
+    ? tasks
+        .filter(t => t.id !== task.id && t.inputType === 'raw_footage' && t.status === 'todo' && (t.assignedRoles?.includes('operator') || t.assignedRole === 'operator'))
+        .map(t => {
+          const proj = projects.find(p => p.id === t.projectId);
+          const sameClient = proj?.clientId && project?.clientId && proj.clientId === project.clientId;
+          return { task: t, project: proj, sameClient: !!sameClient };
+        })
+        .sort((a, b) => Number(b.sameClient) - Number(a.sameClient))
+    : [];
 
   const handleSubmit = () => {
     if (task.inputType === 'filming_confirmation') {
