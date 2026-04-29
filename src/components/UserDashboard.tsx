@@ -350,6 +350,14 @@ const UserDashboard = () => {
     const notesTask = projectTasks.find(t => t.title === 'Wnieś uwagi przed montażem');
     const uploadTask = projectTasks.find(t => t.title === 'Wgraj zmontowany film');
     const poprawkiTask = projectTasks.find(t => t.title === 'Wgraj poprawki');
+    const rawFootageTask = projectTasks.find(t => t.inputType === 'raw_footage' && t.status === 'done');
+    let editorOperatorNote: { url?: string; notes?: string } | undefined;
+    try {
+      if (rawFootageTask?.value) {
+        const parsed = JSON.parse(rawFootageTask.value);
+        if (parsed?.notes || parsed?.url) editorOperatorNote = parsed;
+      }
+    } catch { /* ignore */ }
 
     // The active editing task (whichever is currently todo)
     const activeEditTask = [uploadTask, poprawkiTask].find(t => t && t.status === 'todo');
@@ -411,6 +419,7 @@ const UserDashboard = () => {
               <MultiPartyNotesPanel
                 task={notesTask}
                 role="montazysta"
+                operatorNote={editorOperatorNote}
                 onSubmit={() => {}}
                 onUpdate={() => {}}
               />
