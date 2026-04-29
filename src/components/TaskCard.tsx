@@ -912,7 +912,7 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
               ? `Wgraj surówkę do ${additionalRawTaskIds.size + 1} pomysłów`
               : 'Wgraj surówkę'}
           </Button>
-
+        </div>
       ) : task.inputType === 'boolean' ? (
         <Button onClick={handleSubmit} className="w-full" size="lg">
           <CheckCircle2 className="mr-2 h-5 w-5" />
