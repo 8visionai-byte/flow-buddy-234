@@ -842,12 +842,12 @@ const TaskCard = ({ task, projectName }: TaskCardProps) => {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Numer nagrania *</label>
-            <Input
-              placeholder="np. 001, 002..."
-              value={recordingNumber}
-              onChange={e => { setRecordingNumber(e.target.value); setError(''); }}
-              className="font-mono"
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Notatka / opis surówki</label>
+            <Textarea
+              placeholder="Opis jakości materiału, uwagi dla montażysty..."
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              rows={3}
             />
           </div>
           <div>
