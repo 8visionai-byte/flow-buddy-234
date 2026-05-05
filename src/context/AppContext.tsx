@@ -3,6 +3,8 @@ import { User, Task, Project, Client, UserRole, TaskHistoryEntry, Recording, Pro
 import { createTasksForProject } from '@/data/mockData';
 import { sendWebhook, buildWebhookPayload, WebhookEvent, sendIdeaWebhook, buildIdeaWebhookPayload } from '@/lib/webhook';
 import { hydrateFromSupabase, useSupabaseSync, type HydratedState } from '@/integrations/supabase/sync';
+import { supabase } from '@/integrations/supabase/client';
+import { campaignToRow, ideaToRow } from '@/integrations/supabase/mappers';
 
 // localStorage helpers
 const STORAGE_KEYS = {
@@ -102,16 +104,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from Supabase on mount (single source of truth — no localStorage fallback for entities)
   useEffect(() => {
     let cancelled = false;
-    hydrateFromSupabase().then(state => {
+    hydrateFromSupabase().then(dbState => {
       if (cancelled) return;
-      setUsers(state.users);
-      setClients(state.clients);
-      setProjects(state.projects);
-      setTasks(state.tasks);
-      setRecordings(state.recordings);
-      setProjectNotes(state.projectNotes);
-      setIdeas(state.ideas);
-      setCampaigns(state.campaigns);
+      // Helper: merge local-only records (created before hydration completed) with DB records.
+      // DB is authoritative for existing IDs; purely local IDs (not yet in DB) are preserved.
+      // This prevents race-condition data loss when the user mutates state before hydration finishes.
+      const mergeLocal = <T extends { id: string }>(local: T[], remote: T[]): T[] => {
+        const remoteIds = new Set(remote.map(x => x.id));
+        const localOnly = local.filter(x => !remoteIds.has(x.id));
+        return [...remote, ...localOnly];
+      };
+      setUsers(dbState.users);
+      setClients(dbState.clients);
+      setProjects(dbState.projects);
+      setTasks(dbState.tasks);
+      setRecordings(dbState.recordings);
+      setProjectNotes(dbState.projectNotes);
+      // Campaigns and ideas use merge strategy — they are the most likely entities to be
+      // created before hydration completes (a user could start adding immediately after page load).
+      setCampaigns(prev => mergeLocal(prev, dbState.campaigns));
+      setIdeas(prev => mergeLocal(prev, dbState.ideas));
       setHydrated(true);
     }).catch(e => {
       console.error('[AppProvider] hydrate failed', e);
@@ -943,6 +955,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clientNotes: null, reviewedAt: null, reviewedByUserId: null,
     };
     setIdeas(prev => [...prev, idea]);
+    // Direct persist — same race-condition safety as addCampaign
+    supabase.from('ideas').upsert(ideaToRow(idea))
+      .then(({ error }) => { if (error) console.error('[addIdea] Supabase persist failed:', error); });
 
     // Webhook: notify client that a new idea awaits review
     const { users, clients, campaigns } = ctxRef.current;
@@ -957,11 +972,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateIdea = useCallback((ideaId: string, title: string, description: string) => {
-    setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, title, description } : i));
+    setIdeas(prev => {
+      const updated = prev.map(i => i.id === ideaId ? { ...i, title, description } : i);
+      const updatedIdea = updated.find(i => i.id === ideaId);
+      if (updatedIdea) {
+        supabase.from('ideas').upsert(ideaToRow(updatedIdea))
+          .then(({ error }) => { if (error) console.error('[updateIdea] Supabase persist failed:', error); });
+      }
+      return updated;
+    });
   }, []);
 
   const deleteIdea = useCallback((ideaId: string) => {
     setIdeas(prev => prev.filter(i => i.id !== ideaId));
+    supabase.from('ideas').delete().eq('id', ideaId)
+      .then(({ error }) => { if (error) console.error('[deleteIdea] Supabase delete failed:', error); });
   }, []);
 
   const reviewIdea = useCallback((ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => {
@@ -1081,15 +1106,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       status: 'awaiting_ideas',
     };
     setCampaigns(prev => [...prev, campaign]);
+    // Direct persist — bypasses the diff mechanism to avoid race condition where
+    // hydration (setCampaigns from DB) can overwrite React state before the diff fires.
+    supabase.from('campaigns').upsert(campaignToRow(campaign))
+      .then(({ error }) => { if (error) console.error('[addCampaign] Supabase persist failed:', error); });
   }, []);
 
   const updateCampaign = useCallback((id: string, data: Partial<Omit<Campaign, 'id' | 'createdAt'>>) => {
-    setCampaigns(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...data } : c);
+      const updatedCampaign = updated.find(c => c.id === id);
+      if (updatedCampaign) {
+        // Direct persist — same race-condition safety as addCampaign
+        supabase.from('campaigns').upsert(campaignToRow(updatedCampaign))
+          .then(({ error }) => { if (error) console.error('[updateCampaign] Supabase persist failed:', error); });
+      }
+      return updated;
+    });
   }, []);
 
   const deleteCampaign = useCallback((id: string) => {
     setCampaigns(prev => prev.filter(c => c.id !== id));
     setIdeas(prev => prev.filter(i => i.campaignId !== id));
+    // Direct delete — bypasses diff to ensure immediate removal from DB
+    supabase.from('campaigns').delete().eq('id', id)
+      .then(({ error }) => { if (error) console.error('[deleteCampaign] Supabase delete failed:', error); });
+    supabase.from('ideas').delete().eq('campaign_id', id)
+      .then(({ error }) => { if (error) console.error('[deleteCampaign] Supabase ideas delete failed:', error); });
   }, []);
 
   const updatePartyNote = useCallback((taskId: string, role: string, note: string) => {
