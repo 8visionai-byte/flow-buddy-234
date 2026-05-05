@@ -60,35 +60,45 @@ function formatTimestamp(iso: string | null): string {
 
 const URL_REGEX = /^https?:\/\/.+\..+/;
 
-interface RawFootagePayload { url: string; recordingNumber: string; notes?: string; }
+interface RawFootagePayload { url: string; recordingNumber?: string; notes?: string; }
 function tryParseRawFootage(val: string): RawFootagePayload | null {
+  if (!val) return null;
   try {
     const p = JSON.parse(val);
-    if (p && typeof p === 'object' && !Array.isArray(p) && p.url && p.recordingNumber !== undefined) return p as RawFootagePayload;
+    if (p && typeof p === 'object' && !Array.isArray(p) && typeof p.url === 'string' && p.url.trim()) {
+      return p as RawFootagePayload;
+    }
   } catch {}
   return null;
 }
 
-const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => (
-  <div className="space-y-2">
-    <div className="flex items-center gap-2 text-sm">
-      <Film className="h-4 w-4 text-primary shrink-0" />
-      <a href={payload.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{payload.url}</a>
+const RawFootageDisplay = ({ payload }: { payload: RawFootagePayload }) => {
+  const notes = (payload.notes ?? '').trim();
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 text-sm">
+        <Film className="h-4 w-4 text-primary shrink-0" />
+        <a
+          href={payload.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 hover:underline break-all"
+        >
+          {payload.url}
+        </a>
+      </div>
+      {payload.recordingNumber && (
+        <div className="flex items-center gap-2 text-sm text-foreground">
+          <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          Nr nagrania: <span className="font-medium ml-1">{payload.recordingNumber}</span>
+        </div>
+      )}
+      {notes && (
+        <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{notes}</p>
+      )}
     </div>
-    {payload.recordingNumber && (
-      <div className="flex items-center gap-2 text-sm text-foreground">
-        <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        Nr nagrania: <span className="font-medium ml-1">{payload.recordingNumber}</span>
-      </div>
-    )}
-    {payload.notes && (
-      <div className="flex items-start gap-2 text-sm text-foreground">
-        <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-        <span className="whitespace-pre-wrap">{payload.notes}</span>
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 const CompletedTaskCard = ({ task, projectName }: CompletedTaskCardProps) => {
   const { currentUser, updateTaskValue, tasks, reopenTask, clients, users, projects } = useApp();
