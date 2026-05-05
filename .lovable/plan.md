@@ -1,70 +1,38 @@
-## Cel
-Przed spotkaniem z klientem: wszystkie zmiany (pomysły, zadania, kampanie, oceny, notatki) widoczne live na różnych przeglądarkach/urządzeniach. Bez migracji danych z localStorage — startujemy świeżo z danych już istniejących w Lovable Cloud.
+# Naprawa renderu „Wgraj surówkę na serwer"
 
-## Stan obecny
-- Cały `AppContext.tsx` (1102 linie) trzyma stan w `useState` + zapisuje do `localStorage` (9 kluczy `yads_*`).
-- Tabele w Cloud już istnieją i mają dane testowe (102 tasks, 6 projects, 8 ideas, 4 campaigns, 4 clients, 13 app_users). RLS = permissive (USING true), więc anon key wystarczy.
-- Każda zakładka ma własny, izolowany stan — stąd brak synchronizacji.
+## Diagnoza
 
-## Zakres (3 kroki, bez migracji danych)
+W `src/components/CompletedTaskCard.tsx`:
 
-### Krok 1 — Zapisy do bazy (write-through)
-W `src/context/AppContext.tsx` każda mutacja stanu, która obecnie woła `setX(...)`, dodatkowo wykona odpowiedni `supabase.from('...').upsert(...)` / `.delete()`. Dotyczy:
-- `tasks` — completeTask, rejectTask, resubmitTask, updateTaskValue, saveDraftValue, deferTask, rejectFinalTask, reopenTask, setTaskDeadline, updatePartyNote, setFilmingDate
-- `projects` — addProject, deleteProject, toggleFreezeProject, assignToProject, setPublicationDate, setProjectPriority, setProjectSla
-- `ideas` — addIdea, updateIdea, deleteIdea, reviewIdea, acceptIdeaAsProject (z bulk-insertem nowych tasks)
-- `campaigns` — addCampaign, updateCampaign, deleteCampaign (kaskada do ideas)
-- `clients` — add/update/delete
-- `app_users` — addUser/updateUser/deleteUser
-- `recordings`, `project_notes` — add/delete
+- Funkcja `tryParseRawFootage` (linia 64-70) wymaga jednocześnie `p.url` **i** `p.recordingNumber !== undefined`.
+- Aktualny formularz w `src/components/TaskCard.tsx` (linia 166) zapisuje payload jako `JSON.stringify({ url, notes })` — **bez** `recordingNumber`.
+- W rezultacie parser zwraca `null`, fallback dalej próbuje rozpoznać format aktorów i ostatecznie renderuje surowy JSON jako tekst.
 
-Stan lokalny aktualizujemy optymistycznie (jak teraz), a w tle leci zapis. Błędy logujemy do konsoli + toast (nie blokujemy UX podczas demo).
+Zapis do bazy nie jest ruszany — naprawa wyłącznie w warstwie odczytu.
 
-### Krok 2 — Odczyt z bazy przy starcie
-Zamiast `loadFromStorage(...)` z fallbackiem do `INITIAL_*`, na mount `AppProvider` pobiera wszystkie tabele równolegle (`Promise.all` 8x `select('*')`). Do czasu załadowania pokazujemy krótki loader (spinner full-screen). 
+## Zmiany (plik: `src/components/CompletedTaskCard.tsx`)
 
-Wprowadzamy mappery DB ↔ aplikacja (snake_case → camelCase), bo nasze typy w `src/types/index.ts` używają camelCase, a kolumny w bazie snake_case. Jeden plik `src/integrations/supabase/mappers.ts` z funkcjami `taskFromRow/taskToRow`, `projectFromRow/projectToRow` itd.
+1. **`RawFootagePayload`** — `recordingNumber` staje się opcjonalny:
+   ```ts
+   interface RawFootagePayload { url: string; recordingNumber?: string; notes?: string; }
+   ```
 
-`localStorage` zostawiamy tylko dla `currentUser` (wybór roli/użytkownika to preferencja przeglądarki, nie współdzielony stan). Pozostałe klucze `yads_*` przestają być używane — kod ładujący je usuwamy.
+2. **`tryParseRawFootage`** — akceptuje każdy obiekt JSON, który ma string `url` zaczynający się od `http`:
+   ```ts
+   if (p && typeof p === 'object' && !Array.isArray(p) && typeof p.url === 'string' && /^https?:\/\//.test(p.url)) {
+     return p as RawFootagePayload;
+   }
+   ```
+   Blok `try/catch` zostaje — przy niepoprawnym JSON zwraca `null`, więc istniejący fallback na końcu (linia 583: `<p className="text-sm ... whitespace-pre-wrap break-all">{displayValue}</p>`) zadziała jako bezpieczne wyświetlenie surowego tekstu bez crasha.
 
-### Krok 3 — Realtime między zakładkami
-W `AppProvider` jeden kanał Supabase Realtime nasłuchuje `postgres_changes` (event `*`, schema `public`) na 8 tabelach. Każde zdarzenie INSERT/UPDATE/DELETE aktualizuje odpowiednią tablicę w stanie React (merge po `id`). Dzięki temu zmiana w zakładce A pojawia się w zakładce B w <1s.
+3. **`RawFootageDisplay`** — link i uwagi zgodnie z wytycznymi:
+   - Link: `<a href={payload.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{payload.url}</a>` (zamiast obecnego `truncate` + `text-primary`, zostaje ikona `Film`).
+   - Sekcja `Nr nagrania` renderowana tylko gdy `payload.recordingNumber` jest niepustym stringiem (już tak jest, ale teraz w praktyce po prostu się nie pojawi dla nowych payloadów bez tego pola).
+   - Notes: warunek `payload.notes && payload.notes.trim()` → `<p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{payload.notes}</p>` zamiast obecnego rzędu z ikoną (lub zachowujemy ikonę FileText — do decyzji; w planie minimalnie zmieniamy tylko styl tekstu).
 
-Wymagane SQL (jednorazowa migracja schematu — włączenie tabel do publikacji realtime):
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.ideas;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.campaigns;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.app_users;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.recordings;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.project_notes;
-ALTER TABLE public.tasks REPLICA IDENTITY FULL;
-ALTER TABLE public.projects REPLICA IDENTITY FULL;
-ALTER TABLE public.ideas REPLICA IDENTITY FULL;
-ALTER TABLE public.campaigns REPLICA IDENTITY FULL;
-ALTER TABLE public.clients REPLICA IDENTITY FULL;
-ALTER TABLE public.app_users REPLICA IDENTITY FULL;
-ALTER TABLE public.recordings REPLICA IDENTITY FULL;
-ALTER TABLE public.project_notes REPLICA IDENTITY FULL;
-```
+## Co pozostaje bez zmian
 
-## Co się NIE zmienia
-- API `useApp()` — żaden komponent nie wymaga edycji. Wszystkie funkcje (`completeTask`, `addIdea`, itd.) zachowują tę samą sygnaturę.
-- Logika biznesowa (sekwencja 19 etapów, ping-pong, konsensus, SLA) — bez zmian.
-- Webhooks do Make.com — bez zmian.
-- Wybór użytkownika (role switcher) — nadal w localStorage tej przeglądarki.
-
-## Uwagi techniczne
-- Pola JSONB (`history`, `role_completions`, `client_votes`, `evaluations`) — Supabase serializuje automatycznie, mapper tylko przekazuje obiekt.
-- Pola ARRAY (`assigned_roles`, `assigned_client_ids`, `reviewer_ids`) — natywne tablice Postgres.
-- `acceptIdeaAsProject` to złożona operacja (idea→accepted, campaign update, nowy project, ~17 nowych tasks). Zrobimy ją sekwencyjnie: upsert idea → upsert campaign → insert project → bulk insert tasks. Realtime zsynchronizuje pozostałe zakładki.
-- Bez migracji danych: jeśli w bazie brakuje encji, których używasz lokalnie, znikną po przeładowaniu strony. Świadoma decyzja — start od czystego stanu w Cloud.
-
-## Po wdrożeniu — szybki test
-1. Otwórz aplikację w 2 zakładkach jako różni użytkownicy.
-2. W zakładce A dodaj pomysł / oceń pomysł / zatwierdź zadanie.
-3. W zakładce B (bez F5) zmiana powinna pojawić się w ciągu sekundy.
-
-Po Twojej akceptacji wykonuję wszystkie 3 kroki w jednym przebiegu (migracja SQL + refactor `AppContext.tsx` + nowy plik `mappers.ts`).
+- Logika zapisu (`TaskCard.tsx` `submitRawFootage`).
+- Schema bazy, statusy, mechanizmy akceptacji, historia.
+- Obsługa starszych payloadów z `recordingNumber` — nadal działa, pole będzie pokazane.
+- Pozostałe gałęzie renderowania (social descriptions, actor entries, boolean) — bez zmian.
