@@ -4,7 +4,40 @@ import { createTasksForProject } from '@/data/mockData';
 import { sendWebhook, buildWebhookPayload, WebhookEvent, sendIdeaWebhook, buildIdeaWebhookPayload } from '@/lib/webhook';
 import { hydrateFromSupabase, useSupabaseSync, type HydratedState } from '@/integrations/supabase/sync';
 import { supabase } from '@/integrations/supabase/client';
-import { campaignToRow, ideaToRow } from '@/integrations/supabase/mappers';
+import {
+  campaignToRow, ideaToRow, taskToRow, projectToRow,
+  clientToRow, userToRow, recordingToRow, projectNoteToRow,
+} from '@/integrations/supabase/mappers';
+
+// ── Direct-persist helpers ──────────────────────────────────────────────────
+// Diff prev vs next and upsert/delete changed records in Supabase immediately.
+// Used inside setState callbacks so every mutation reaches the DB regardless of
+// whether the diff-based useSupabaseSync snapshot has been initialised yet
+// (race condition: user mutates state before hydration finishes).
+
+function persistTasksDiff(prev: Task[], next: Task[], caller = 'tasks') {
+  const prevMap = new Map(prev.map(t => [t.id, t]));
+  const changed = next.filter(t => JSON.stringify(prevMap.get(t.id)) !== JSON.stringify(t));
+  const deletedIds = prev.filter(t => !next.find(n => n.id === t.id)).map(t => t.id);
+  if (changed.length > 0)
+    supabase.from('tasks').upsert(changed.map(taskToRow))
+      .then(({ error }) => { if (error) console.error(`[${caller}] tasks upsert:`, error); });
+  if (deletedIds.length > 0)
+    supabase.from('tasks').delete().in('id', deletedIds)
+      .then(({ error }) => { if (error) console.error(`[${caller}] tasks delete:`, error); });
+}
+
+function persistProjectsDiff(prev: Project[], next: Project[], caller = 'projects') {
+  const prevMap = new Map(prev.map(p => [p.id, p]));
+  const changed = next.filter(p => JSON.stringify(prevMap.get(p.id)) !== JSON.stringify(p));
+  const deletedIds = prev.filter(p => !next.find(n => n.id === p.id)).map(p => p.id);
+  if (changed.length > 0)
+    supabase.from('projects').upsert(changed.map(projectToRow))
+      .then(({ error }) => { if (error) console.error(`[${caller}] projects upsert:`, error); });
+  if (deletedIds.length > 0)
+    supabase.from('projects').delete().in('id', deletedIds)
+      .then(({ error }) => { if (error) console.error(`[${caller}] projects delete:`, error); });
+}
 
 // localStorage helpers
 const STORAGE_KEYS = {
@@ -320,6 +353,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const completeTask = useCallback((taskId: string, value: string, byRole?: UserRole) => {
     setTasks(prev => {
+      const next = (() => {
       const now = new Date().toISOString();
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
@@ -594,6 +628,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       return updated;
+      })();
+      persistTasksDiff(prev, next, 'completeTask');
+      return next;
     });
 
     // Fire webhook — uses ctxRef snapshot (state before React processes setTasks)
@@ -614,7 +651,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const entry: TaskHistoryEntry = { action: 'rejected', by: task.assignedRole, feedback, timestamp: now };
 
-      return prev.map(t => {
+      const next = prev.map(t => {
         if (t.id === taskId) {
           return { ...t, status: 'locked' as const, clientFeedback: feedback, assignedAt: null, history: [...t.history, entry] };
         }
@@ -631,6 +668,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return t;
       });
+      persistTasksDiff(prev, next, 'rejectTask');
+      return next;
     });
 
     const taskSnap = ctxRef.current.tasks.find(t => t.id === taskId);
@@ -642,7 +681,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
       const entry: TaskHistoryEntry = { action: 'deferred', by: 'klient', timestamp: new Date().toISOString() };
-      return prev.map(t => t.id === taskId ? { ...t, status: 'deferred' as const, history: [...t.history, entry] } : t);
+      const next = prev.map(t => t.id === taskId ? { ...t, status: 'deferred' as const, history: [...t.history, entry] } : t);
+      persistTasksDiff(prev, next, 'deferTask');
+      return next;
     });
 
     const taskSnap = ctxRef.current.tasks.find(t => t.id === taskId);
@@ -654,7 +695,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
       const entry: TaskHistoryEntry = { action: 'rejected_final', by: 'klient', feedback: reason || undefined, timestamp: new Date().toISOString() };
-      return prev.map(t => t.id === taskId ? { ...t, status: 'rejected_final' as const, clientFeedback: reason || null, history: [...t.history, entry] } : t);
+      const next = prev.map(t => t.id === taskId ? { ...t, status: 'rejected_final' as const, clientFeedback: reason || null, history: [...t.history, entry] } : t);
+      persistTasksDiff(prev, next, 'rejectFinalTask');
+      return next;
     });
 
     const taskSnap = ctxRef.current.tasks.find(t => t.id === taskId);
@@ -674,7 +717,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         t => t.projectId === task.projectId && t.order === task.order + 1
       );
 
-      return prev.map(t => {
+      const next = prev.map(t => {
         if (t.id === taskId) {
           return { ...t, status: 'done' as const, value: newValue, completedAt: now, completedBy: t.assignedRole, clientFeedback: null, history: [...t.history, entry] };
         }
@@ -683,6 +726,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return t;
       });
+      persistTasksDiff(prev, next, 'resubmitTask');
+      return next;
     });
 
     const taskSnap = ctxRef.current.tasks.find(t => t.id === taskId);
@@ -692,6 +737,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Influencer resubmits AND marks the next client approval as auto-approved (skips client review).
   const resubmitTaskAndAutoApprove = useCallback((taskId: string, newValue: string) => {
     setTasks(prev => {
+      const next = (() => {
       const now = new Date().toISOString();
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
@@ -768,6 +814,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return t;
       });
+      })();
+      persistTasksDiff(prev, next, 'resubmitTaskAndAutoApprove');
+      return next;
     });
 
     const taskSnap = ctxRef.current.tasks.find(t => t.id === taskId);
@@ -783,57 +832,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         t => t.projectId === task.projectId && t.order === task.order + 1 &&
           (t.status === 'pending_client_approval' || t.status === 'todo')
       );
-      return prev.map(t => {
+      const next = prev.map(t => {
         if (t.id === taskId) return { ...t, value: newValue, completedAt: now };
         if (nextApproval && t.id === nextApproval.id) return { ...t, previousValue: newValue };
         return t;
       });
+      persistTasksDiff(prev, next, 'updateTaskValue');
+      return next;
     });
   }, []);
 
   // Save partial data to task.value without changing status or completedAt (used for social description drafts)
   const saveDraftValue = useCallback((taskId: string, value: string) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, value } : t));
+    setTasks(prev => {
+      const next = prev.map(t => t.id === taskId ? { ...t, value } : t);
+      persistTasksDiff(prev, next, 'saveDraftValue');
+      return next;
+    });
   }, []);
 
   const reopenTask = useCallback((taskId: string) => {
     setTasks(prev => {
-      const task = prev.find(t => t.id === taskId);
-      if (!task || task.status !== 'done') return prev;
+      const next = (() => {
+        const task = prev.find(t => t.id === taskId);
+        if (!task || task.status !== 'done') return prev;
 
-      if (task.inputType === 'script_review' && task.value === 'approved_with_file_notes') {
-        const now = new Date().toISOString();
-        const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
+        if (task.inputType === 'script_review' && task.value === 'approved_with_file_notes') {
+          const now = new Date().toISOString();
+          const scriptTask = prev.find(t => t.projectId === task.projectId && t.order === task.order - 1);
+          return prev.map(t => {
+            if (t.id === taskId) {
+              return {
+                ...t,
+                status: 'pending_client_approval' as const,
+                value: null,
+                completedAt: null,
+                completedBy: null,
+                assignedAt: now,
+                previousValue: scriptTask?.value || t.previousValue,
+              };
+            }
+            if (scriptTask && t.id === scriptTask.id && t.status === 'needs_influencer_revision') {
+              return { ...t, status: 'done' as const, completedAt: now, completedBy: t.assignedRole, clientFeedback: null };
+            }
+            return t;
+          });
+        }
+
+        // If this task has a next approval task, lock it
         return prev.map(t => {
           if (t.id === taskId) {
-            return {
-              ...t,
-              status: 'pending_client_approval' as const,
-              value: null,
-              completedAt: null,
-              completedBy: null,
-              assignedAt: now,
-              previousValue: scriptTask?.value || t.previousValue,
-            };
+            return { ...t, status: 'todo' as const, completedAt: null, completedBy: null, value: null, assignedAt: new Date().toISOString() };
           }
-          if (scriptTask && t.id === scriptTask.id && t.status === 'needs_influencer_revision') {
-            return { ...t, status: 'done' as const, completedAt: now, completedBy: t.assignedRole, clientFeedback: null };
+          // Lock any subsequent task that was unlocked by this one
+          if (t.projectId === task.projectId && t.order === task.order + 1 && t.status !== 'done') {
+            return { ...t, status: 'locked' as const, assignedAt: null };
           }
           return t;
         });
-      }
-
-      // If this task has a next approval task, lock it
-      return prev.map(t => {
-        if (t.id === taskId) {
-          return { ...t, status: 'todo' as const, completedAt: null, completedBy: null, value: null, assignedAt: new Date().toISOString() };
-        }
-        // Lock any subsequent task that was unlocked by this one
-        if (t.projectId === task.projectId && t.order === task.order + 1 && t.status !== 'done') {
-          return { ...t, status: 'locked' as const, assignedAt: null };
-        }
-        return t;
-      });
+      })();
+      persistTasksDiff(prev, next, 'reopenTask');
+      return next;
     });
   }, []);
 
@@ -843,105 +902,169 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjects(prev => [...prev, newProject]);
     const newTasks = createTasksForProject(id, 0);
     setTasks(prev => [...prev, ...newTasks]);
+    supabase.from('projects').upsert(projectToRow(newProject))
+      .then(({ error }) => { if (error) console.error('[addProject] projects upsert:', error); });
+    supabase.from('tasks').upsert(newTasks.map(taskToRow))
+      .then(({ error }) => { if (error) console.error('[addProject] tasks upsert:', error); });
   }, []);
 
   const deleteProject = useCallback((projectId: string) => {
     setProjects(prev => prev.filter(p => p.id !== projectId));
     setTasks(prev => prev.filter(t => t.projectId !== projectId));
+    supabase.from('projects').delete().eq('id', projectId)
+      .then(({ error }) => { if (error) console.error('[deleteProject] projects delete:', error); });
+    supabase.from('tasks').delete().eq('project_id', projectId)
+      .then(({ error }) => { if (error) console.error('[deleteProject] tasks delete:', error); });
   }, []);
 
   const toggleFreezeProject = useCallback((projectId: string) => {
-    setProjects(prev => prev.map(p =>
-      p.id === projectId ? { ...p, status: p.status === 'frozen' ? 'active' as const : 'frozen' as const } : p
-    ));
+    setProjects(prev => {
+      const next = prev.map(p =>
+        p.id === projectId ? { ...p, status: p.status === 'frozen' ? 'active' as const : 'frozen' as const } : p
+      );
+      persistProjectsDiff(prev, next, 'toggleFreezeProject');
+      return next;
+    });
   }, []);
 
   const assignToProject = useCallback((projectId: string, field: 'assignedInfluencerId' | 'assignedEditorId' | 'assignedClientId' | 'assignedKierownikId' | 'assignedOperatorId' | 'assignedPublikatorId', userId: string | null) => {
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p));
+    setProjects(prev => {
+      const next = prev.map(p => p.id === projectId ? { ...p, [field]: userId } : p);
+      persistProjectsDiff(prev, next, 'assignToProject');
+      return next;
+    });
   }, []);
 
   const addUser = useCallback((data: Omit<User, 'id'>): string => {
     const id = `u${Date.now()}`;
-    setUsers(prev => [...prev, { ...data, id }]);
+    const newUser: User = { ...data, id };
+    setUsers(prev => [...prev, newUser]);
+    supabase.from('app_users').upsert(userToRow(newUser))
+      .then(({ error }) => { if (error) console.error('[addUser] upsert:', error); });
     return id;
   }, []);
 
   const updateUser = useCallback((id: string, data: Partial<Omit<User, 'id'>>) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+    setUsers(prev => {
+      const next = prev.map(u => u.id === id ? { ...u, ...data } : u);
+      const updated = next.find(u => u.id === id);
+      if (updated) supabase.from('app_users').upsert(userToRow(updated))
+        .then(({ error }) => { if (error) console.error('[updateUser] upsert:', error); });
+      return next;
+    });
   }, []);
 
   const deleteUser = useCallback((id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
+    supabase.from('app_users').delete().eq('id', id)
+      .then(({ error }) => { if (error) console.error('[deleteUser] delete:', error); });
   }, []);
 
   const addClient = useCallback((data: Omit<Client, 'id' | 'createdAt'>): string => {
     const id = `c${Date.now()}`;
-    setClients(prev => [...prev, { ...data, id, createdAt: new Date().toISOString() }]);
+    const newClient: Client = { ...data, id, createdAt: new Date().toISOString() };
+    setClients(prev => [...prev, newClient]);
+    supabase.from('clients').upsert(clientToRow(newClient))
+      .then(({ error }) => { if (error) console.error('[addClient] upsert:', error); });
     return id;
   }, []);
 
   const updateClient = useCallback((id: string, data: Partial<Omit<Client, 'id' | 'createdAt'>>) => {
-    setClients(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    setClients(prev => {
+      const next = prev.map(c => c.id === id ? { ...c, ...data } : c);
+      const updated = next.find(c => c.id === id);
+      if (updated) supabase.from('clients').upsert(clientToRow(updated))
+        .then(({ error }) => { if (error) console.error('[updateClient] upsert:', error); });
+      return next;
+    });
   }, []);
 
   const deleteClient = useCallback((id: string) => {
     setClients(prev => prev.filter(c => c.id !== id));
+    supabase.from('clients').delete().eq('id', id)
+      .then(({ error }) => { if (error) console.error('[deleteClient] delete:', error); });
   }, []);
 
   const setTaskDeadline = useCallback((taskId: string, date: string | null) => {
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, deadlineDate: date } : t
-    ));
+    setTasks(prev => {
+      const next = prev.map(t => t.id === taskId ? { ...t, deadlineDate: date } : t);
+      persistTasksDiff(prev, next, 'setTaskDeadline');
+      return next;
+    });
   }, []);
 
   // Set (or clear) filming date on a project at any time — works regardless of task status
   const setFilmingDate = useCallback((projectId: string, date: string | null) => {
-    setTasks(prev => prev.map(t => {
-      if (t.projectId !== projectId) return t;
-      if (t.title === 'Określ rekwizyty') return { ...t, deadlineDate: date };
-      if (t.title === 'Potwierdź nagranie') return { ...t, deadlineDate: date };
-      if (t.title === 'Ustaw termin planu zdjęciowego') {
-        if (date === null) {
-          // Clear: revert to locked if was done via this quick-set, otherwise keep done
-          return { ...t, value: null };
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (t.projectId !== projectId) return t;
+        if (t.title === 'Określ rekwizyty') return { ...t, deadlineDate: date };
+        if (t.title === 'Potwierdź nagranie') return { ...t, deadlineDate: date };
+        if (t.title === 'Ustaw termin planu zdjęciowego') {
+          if (date === null) {
+            // Clear: revert to locked if was done via this quick-set, otherwise keep done
+            return { ...t, value: null };
+          }
+          if (t.status === 'todo') {
+            return { ...t, value: date, status: 'done' as const, completedAt: new Date().toISOString(), completedBy: 'admin' };
+          }
+          return { ...t, value: date };
         }
-        if (t.status === 'todo') {
-          return { ...t, value: date, status: 'done' as const, completedAt: new Date().toISOString(), completedBy: 'admin' };
-        }
-        return { ...t, value: date };
-      }
-      return t;
-    }));
+        return t;
+      });
+      persistTasksDiff(prev, next, 'setFilmingDate');
+      return next;
+    });
   }, []);
 
   const addRecording = useCallback((projectId: string, url: string, note: string) => {
     const newRec: Recording = { id: `rec${Date.now()}`, projectId, url, note, createdAt: new Date().toISOString() };
     setRecordings(prev => [...prev, newRec]);
+    supabase.from('recordings').upsert(recordingToRow(newRec))
+      .then(({ error }) => { if (error) console.error('[addRecording] upsert:', error); });
   }, []);
 
   const deleteRecording = useCallback((recordingId: string) => {
     setRecordings(prev => prev.filter(r => r.id !== recordingId));
+    supabase.from('recordings').delete().eq('id', recordingId)
+      .then(({ error }) => { if (error) console.error('[deleteRecording] delete:', error); });
   }, []);
 
   const addProjectNote = useCallback((projectId: string, content: string) => {
     const newNote: ProjectNote = { id: `note${Date.now()}`, projectId, content, createdAt: new Date().toISOString() };
     setProjectNotes(prev => [...prev, newNote]);
+    supabase.from('project_notes').upsert(projectNoteToRow(newNote))
+      .then(({ error }) => { if (error) console.error('[addProjectNote] upsert:', error); });
   }, []);
 
   const deleteProjectNote = useCallback((noteId: string) => {
     setProjectNotes(prev => prev.filter(n => n.id !== noteId));
+    supabase.from('project_notes').delete().eq('id', noteId)
+      .then(({ error }) => { if (error) console.error('[deleteProjectNote] delete:', error); });
   }, []);
 
   const setPublicationDate = useCallback((projectId: string, date: string | null) => {
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, publicationDate: date } : p));
+    setProjects(prev => {
+      const next = prev.map(p => p.id === projectId ? { ...p, publicationDate: date } : p);
+      persistProjectsDiff(prev, next, 'setPublicationDate');
+      return next;
+    });
   }, []);
 
   const setProjectPriority = useCallback((projectId: string, priority: ProjectPriority) => {
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, priority } : p));
+    setProjects(prev => {
+      const next = prev.map(p => p.id === projectId ? { ...p, priority } : p);
+      persistProjectsDiff(prev, next, 'setProjectPriority');
+      return next;
+    });
   }, []);
 
   const setProjectSla = useCallback((projectId: string, hours: number | null) => {
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, slaHours: hours } : p));
+    setProjects(prev => {
+      const next = prev.map(p => p.id === projectId ? { ...p, slaHours: hours } : p);
+      persistProjectsDiff(prev, next, 'setProjectSla');
+      return next;
+    });
   }, []);
 
   const addIdea = useCallback((campaignId: string, title: string, description: string, createdByUserId: string) => {
@@ -991,10 +1114,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reviewIdea = useCallback((ideaId: string, status: IdeaStatus, clientNotes: string | null, reviewedByUserId: string) => {
     const now = new Date().toISOString();
-    setIdeas(prev => prev.map(i => i.id === ideaId
-      ? { ...i, status, clientNotes, reviewedAt: now, reviewedByUserId }
-      : i
-    ));
+    setIdeas(prev => {
+      const next = prev.map(i => i.id === ideaId
+        ? { ...i, status, clientNotes, reviewedAt: now, reviewedByUserId }
+        : i
+      );
+      const updated = next.find(i => i.id === ideaId);
+      if (updated) supabase.from('ideas').upsert(ideaToRow(updated))
+        .then(({ error }) => { if (error) console.error('[reviewIdea] upsert:', error); });
+      return next;
+    });
 
     // Webhook: idea reviewed by client
     const { users, clients, campaigns, ideas } = ctxRef.current;
@@ -1054,6 +1183,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               slaHours: camp.slaHours || 48,
             };
             setProjects(p => [...p, newProject]);
+            supabase.from('projects').upsert(projectToRow(newProject))
+              .then(({ error }) => { if (error) console.error('[acceptIdeaAsProject] project upsert:', error); });
 
             const ideaText = [idea.title, idea.description].filter(Boolean).join('\n\n');
             const baseTasks = createTasksForProject(newProjectId, SCRIPT_STAGE);
@@ -1080,6 +1211,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             });
 
             setTasks(t => [...t, ...patchedTasks]);
+            supabase.from('tasks').upsert(patchedTasks.map(taskToRow))
+              .then(({ error }) => { if (error) console.error('[acceptIdeaAsProject] tasks upsert:', error); });
           }
           return prevCamps;
         });
@@ -1093,7 +1226,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           sendIdeaWebhook(buildIdeaWebhookPayload('idea_accepted_as_project', idea, campaign, users, clients, admin, influencer));
         }
 
-        return prevIdeas.map(i => i.id === ideaId ? { ...i, resultingProjectId: newProjectId } : i);
+        const updatedIdeas = prevIdeas.map(i => i.id === ideaId ? { ...i, resultingProjectId: newProjectId } : i);
+        const updatedIdea = updatedIdeas.find(i => i.id === ideaId);
+        if (updatedIdea) supabase.from('ideas').upsert(ideaToRow(updatedIdea))
+          .then(({ error }) => { if (error) console.error('[acceptIdeaAsProject] idea upsert:', error); });
+        return updatedIdeas;
       });
     }, 0);
   }, []);
@@ -1136,10 +1273,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updatePartyNote = useCallback((taskId: string, role: string, note: string) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== taskId) return t;
-      return { ...t, roleCompletions: { ...t.roleCompletions, [role]: note } };
-    }));
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (t.id !== taskId) return t;
+        return { ...t, roleCompletions: { ...t.roleCompletions, [role]: note } };
+      });
+      persistTasksDiff(prev, next, 'updatePartyNote');
+      return next;
+    });
   }, []);
 
   if (!hydrated) {
