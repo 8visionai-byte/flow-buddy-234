@@ -6,6 +6,7 @@ import type {
   TaskStatus, InputType, UserRole, TaskHistoryEntry, ProjectPriority, ProjectStatus,
   IdeaStatus, CampaignStatus,
 } from '@/types';
+import type { Json } from '@/integrations/supabase/types';
 
 // ── Tasks ───────────────────────────────────────────────────────────────────
 export type TaskRow = {
