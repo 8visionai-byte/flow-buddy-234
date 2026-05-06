@@ -493,6 +493,7 @@ export type Database = {
         | "multi_party_notes"
         | "frameio_review"
         | "script_review"
+        | "actor_approval"
       project_priority: "low" | "medium" | "high" | "urgent"
       project_status: "active" | "frozen"
       task_status:
@@ -667,6 +668,7 @@ export const Constants = {
         "multi_party_notes",
         "frameio_review",
         "script_review",
+        "actor_approval",
       ],
       project_priority: ["low", "medium", "high", "urgent"],
       project_status: ["active", "frozen"],

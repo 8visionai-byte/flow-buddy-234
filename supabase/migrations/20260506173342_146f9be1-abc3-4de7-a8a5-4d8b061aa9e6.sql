@@ -1,0 +1,1 @@
+ALTER TYPE input_type ADD VALUE IF NOT EXISTS 'actor_approval';
