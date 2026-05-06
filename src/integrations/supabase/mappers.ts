@@ -6,6 +6,7 @@ import type {
   TaskStatus, InputType, UserRole, TaskHistoryEntry, ProjectPriority, ProjectStatus,
   IdeaStatus, CampaignStatus,
 } from '@/types';
+import type { Json } from '@/integrations/supabase/types';
 
 // ── Tasks ───────────────────────────────────────────────────────────────────
 export type TaskRow = {
@@ -17,8 +18,8 @@ export type TaskRow = {
   client_feedback: string | null;
   assigned_at: string | null; completed_at: string | null; completed_by: string | null;
   deadline_date: string | null;
-  history: TaskHistoryEntry[]; role_completions: Record<string, string>;
-  client_votes: Record<string, unknown>;
+  history: Json; role_completions: Json;
+  client_votes: Json;
 };
 
 export const taskFromRow = (r: TaskRow): Task => ({
@@ -30,7 +31,7 @@ export const taskFromRow = (r: TaskRow): Task => ({
   clientFeedback: r.client_feedback,
   assignedAt: r.assigned_at, completedAt: r.completed_at, completedBy: r.completed_by,
   deadlineDate: r.deadline_date,
-  history: r.history ?? [], roleCompletions: r.role_completions ?? {},
+  history: (r.history ?? []) as unknown as TaskHistoryEntry[], roleCompletions: (r.role_completions ?? {}) as unknown as Record<string, string>,
 });
 
 export const taskToRow = (t: Task): TaskRow => ({
@@ -42,8 +43,8 @@ export const taskToRow = (t: Task): TaskRow => ({
   client_feedback: t.clientFeedback,
   assigned_at: t.assignedAt, completed_at: t.completedAt, completed_by: t.completedBy,
   deadline_date: t.deadlineDate,
-  history: t.history ?? [], role_completions: t.roleCompletions ?? {},
-  client_votes: {},
+  history: (t.history ?? []) as unknown as Json, role_completions: (t.roleCompletions ?? {}) as unknown as Json,
+  client_votes: {} as Json,
 });
 
 // ── Projects ────────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ export type IdeaRow = {
   created_by_user_id: string; created_at: string;
   status: IdeaStatus; client_notes: string | null;
   reviewed_at: string | null; reviewed_by_user_id: string | null;
-  evaluations: Record<string, unknown>;
+  evaluations: Json;
 };
 export const ideaFromRow = (r: IdeaRow): Idea => ({
   id: r.id, campaignId: r.campaign_id, resultingProjectId: r.resulting_project_id,
@@ -152,7 +153,7 @@ export const ideaToRow = (i: Idea): IdeaRow => ({
   created_by_user_id: i.createdByUserId, created_at: i.createdAt,
   status: i.status, client_notes: i.clientNotes,
   reviewed_at: i.reviewedAt, reviewed_by_user_id: i.reviewedByUserId,
-  evaluations: {},
+  evaluations: {} as Json,
 });
 
 // ── Campaigns ───────────────────────────────────────────────────────────────
